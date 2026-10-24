@@ -29,7 +29,7 @@ func _run() -> void:
 	for frame: int in range(8):
 		await process_frame
 	var actual: Node = game._screen
-	var expected := "launcher.gd" if cache_check else "android_content_setup.gd"
+	var expected := "launcher_android.gd" if cache_check else "android_content_setup.gd"
 	check(is_instance_valid(actual) and actual.get_script().resource_path.get_file() == expected,
 		"actual boot reaches " + expected)
 	if not cache_check and is_instance_valid(actual) and actual.get_script().resource_path.get_file() == expected:
@@ -42,7 +42,7 @@ func _run() -> void:
 			for frame: int in range(4):
 				await process_frame
 			check(paths.has_data() and paths.content_pack_persistent, "real selected PCK persists and mounts")
-			check(game._screen.get_script().resource_path.get_file() == "launcher.gd", "real first-run import reaches game launcher")
+			check(game._screen.get_script().resource_path.get_file() == "launcher_android.gd", "real first-run import reaches game launcher")
 			check(root.get_node("CardDB").cards.size() >= 771, "real first-run import loads card database")
 	if cache_check:
 		check(paths.has_data() and paths.content_pack_persistent, "second boot reuses persisted PCK without importing")

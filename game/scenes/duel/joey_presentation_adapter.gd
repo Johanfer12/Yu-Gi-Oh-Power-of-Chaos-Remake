@@ -142,6 +142,7 @@ func start_normal(decks: Array[Dictionary], opts: int, rand_seed: int, mode := G
 	_native_event_pos = 0
 	_native_record_pos = 0
 	_mail_stamp = ""
+	_scenario = {}
 	_done = false
 	for p in 2:
 		var address := 0xa54e60 + p * 0xe2
@@ -223,8 +224,63 @@ func _view_card(word: int) -> int:
 	return word ^ (local_native_player << 12) if word & 0xfff else word
 
 
-func apply_scenario(_scenario: Dictionary) -> PackedStringArray:
-	return PackedStringArray(["El motor nativo no aplica escenarios del núcleo común; usar mazos nativos reproducibles."])
+## Herramienta --scenario (DuelScenario): mano y LP iniciales sobre el reparto nativo. Se
+## aplica en la primera espera del jugador; sin escenario el duelo no cambia.
+var _scenario: Dictionary = {}
+
+
+func apply_scenario(scenario: Dictionary) -> PackedStringArray:
+	var warnings := PackedStringArray()
+	for key in ["field", "grave"]:
+		for row: Variant in scenario.get(key, []):
+			if row is Array and not (row as Array).is_empty():
+				warnings.append("El motor nativo de Joey solo aplica mano y LP del escenario; se ignora %s." % key)
+				break
+	_scenario = scenario.duplicate(true)
+	return warnings
+
+
+## Coloca las cartas pedidas en los primeros huecos de la mano intercambiando su número con
+## el de otra entrada de la mano o del mazo; cada hueco conserva su identidad y propietario.
+func _apply_pending_scenario() -> void:
+	if _scenario.is_empty() or not waiting_for_player(): return
+	var scenario := _scenario
+	_scenario = {}
+	var hands: Array = scenario.get("hands", [])
+	for p in mini(hands.size(), 2):
+		var pl := JoeyMem.pl(p)
+		var hand_n := engine.m.u8(pl + JoeyMem.P_HAND_N)
+		var deck_n := engine.m.u8(pl + JoeyMem.P_DECK_N)
+		var slot := 0
+		for wanted: Variant in hands[p]:
+			if slot >= hand_n: break
+			var target := pl + JoeyMem.P_HAND + slot * 4
+			var source := -1
+			for k in range(slot, hand_n):
+				if engine.f4022e0(engine.m.u32(pl + JoeyMem.P_HAND + k * 4) & 0xfff) & 0xffff == int(wanted):
+					source = pl + JoeyMem.P_HAND + k * 4
+					break
+			if source < 0:
+				for k in deck_n:
+					if engine.f4022e0(engine.m.u32(pl + JoeyMem.P_DECK + k * 4) & 0xfff) & 0xffff == int(wanted):
+						source = pl + JoeyMem.P_DECK + k * 4
+						break
+			if source < 0: continue
+			var a := engine.m.u32(target)
+			var b := engine.m.u32(source)
+			engine.m.set_u32(target, (a & ~0xfff) | (b & 0xfff))
+			engine.m.set_u32(source, (b & ~0xfff) | (a & 0xfff))
+			slot += 1
+	var lp: Array = scenario.get("lp", [])
+	if not lp.is_empty():
+		var projection := engine.lp_projection_state()
+		for p in mini(lp.size(), 2):
+			engine.m.set_u16(JoeyMem.pl(p) + JoeyMem.P_LP, int(lp[p]))
+			_lp_targets[p] = int(lp[p])
+			if p < projection.size(): projection[p]["visual"] = int(lp[p])
+			_emit("lp_set", {"p": p, "value": int(lp[p])})
+		engine.set_lp_projection_state(projection)
+	synchronize_view()
 
 
 func set_frame_input(pressed: int, held: int, hover: Dictionary, phase_hover: int) -> void:
@@ -337,7 +393,7 @@ func frame() -> bool:
 			# executes the chosen discards/materials. Never reenter a phase here.
 			engine.events.clear()
 			_native_event_pos = 0
-			_translate_mail()
+			_dispatch_mail()
 			if engine.f40cf20() == 0: engine.f5b9ca0()
 			engine.flush_projection()
 			native_ticks += 1
@@ -346,16 +402,13 @@ func frame() -> bool:
 		return true
 	engine.events.clear()
 	_native_event_pos = 0
-	var active_mail := engine.m.u16(0xa5506a)
-	if active_mail & 1 and active_mail >> 8 == 0:
-		_translate_mail()
-	elif active_mail & 1 == 0:
-		_mail_stamp = ""
+	_dispatch_mail()
 	_done = engine.f5bc700() != 0
 	engine.flush_projection()
 	native_ticks += 1
 	synchronize_view()
 	_collect_native_events()
+	_apply_pending_scenario()
 	for address in engine.unported_calls:
 		unported_calls[address] = engine.unported_calls[address]
 	return not _done
@@ -411,13 +464,15 @@ func synchronize_view() -> void:
 		joey_next_identity[view_p] = engine.m.u16(source + 6)
 	m.set_u16(0xa133f2, engine.m.u16(JoeyMem.TURN) ^ local_native_player)
 	m.set_u16(0xa133f0, engine.m.u16(0xa577f8))
-	# Vista táctil de solo lectura: acciones y estado del selector nativo.
-	var native_action := engine.m.u32(0xa57804)
-	m.set_u32(0xa13408, (native_action & 3) | (((native_action >> 3) & 15) << 2))
-	m.set_u16(0xa1340a, engine.m.u16(0xa57806))
-	m.set_u8(0xa1340d, engine.m.u8(0xa57809))
-	for action_i in 12:
-		m.set_u8(0x59df1c + action_i * 4, engine.m.u8(0x5dd980 + action_i * 4))
+	# Sin el autoload Paths: las pruebas pueden precargar el adaptador antes de crearlo.
+	if OS.has_feature("mobile") or "--mobile-controls=true" in OS.get_cmdline_user_args():
+		# Vista táctil de solo lectura: acciones y estado del selector nativo (mobile_pointer).
+		var native_action := engine.m.u32(0xa57804)
+		m.set_u32(0xa13408, (native_action & 3) | (((native_action >> 3) & 15) << 2))
+		m.set_u16(0xa1340a, engine.m.u16(0xa57806))
+		m.set_u8(0xa1340d, engine.m.u8(0xa57809))
+		for action_i in 12:
+			m.set_u8(0x59df1c + action_i * 4, engine.m.u8(0x5dd980 + action_i * 4))
 	m.set_u8(0xa16180, engine.m.u8(0xa577fd))
 	m.set_u16(DuelMem.QUEUE_COUNT, engine.m.u16(JoeyMem.QUEUE_COUNT))
 	m.set_u32(DuelMem.CMD_STATE, DuelMem.CMD_RUNNING if is_running() else 0)
@@ -442,6 +497,9 @@ func _emit(kind: String, data: Dictionary = {}) -> void:
 			if data.has("detached_key"):
 				var parts: PackedStringArray = str(data.detached_key).split(":")
 				data.detached_key = "%d:%s" % [_view_player(int(parts[0])), parts[1]]
+		if kind == "cmd84":
+			data.a = int(data.a) ^ 1
+			data.b = int(data.b) ^ 1
 		if kind == "cmd" and int(data.get("op", 0)) == 0x33 and data.get("native_battle", false):
 			data.args[2] = 3 - int(data.args[2])
 		if kind == "cmd" and int(data.get("op", 0)) == 0x31 and data.get("native_impact", false):
@@ -477,6 +535,20 @@ func _collect_native_events() -> void:
 		_native_event_pos += 1
 		var args: Array = event.get("args", [])
 		match str(event.get("kind", "")):
+			"native_hand_shuffle":
+				var before := {}
+				for i in event.before:
+					before[i] = engine.f4022e0(int(event.before[i])) & 0xffff
+				_emit("joey_hand_shuffle", {"p": int(event.p), "objects": before.keys(), "before": before})
+			"native_field_shuffle":
+				_emit("joey_field_shuffle", {"p": int(event.p), "objects": event.objects.duplicate(),
+					"visual_flags": event.visual_flags.duplicate()})
+			"43c730":
+				var object := int(args[0])
+				if object != 0:
+					var ref := engine.m.u16(object + 0x24)
+					_emit("pile_top", {"p": ref & 1, "loc": (ref >> 1) & 31,
+						"card": engine.f4022e0(int(args[1])) & 0xffff})
 			"native_text_clear": _text_templates[int(args[0])] = {"literal": "", "msg": -1, "subs": []}
 			"5bde30", "5bde70":
 				var text: Dictionary = event.native_text
@@ -539,7 +611,13 @@ func _collect_native_events() -> void:
 				var area := (ref >> 1) & 31
 				var index := (ref >> 6) & 255
 				var zone := area + index if area + index < 11 else area
-				if area >= 11:
+				if str(event.kind) == "450c30" and area in [11, 12, 13, 14, 15]:
+					# 404b40 also destroys hand/deck copies (Chain Destruction).
+					# These references name a visual object, never a field zone.
+					_emit("destroy_effect", {"p": ref & 1, "loc": area, "slot": index,
+						"flags": int(ref & 0x4000 != 0) | (int(ref & 0x8000 != 0) << 1),
+						"card": engine.f4022e0(int(args[1])) & 0xffff, "native_pile_destroy": true})
+				elif area >= 11:
 					# Estas variantes fuera del campo requieren su geometría original.
 					_unported(("0x" + str(event.kind)).hex_to_int())
 				else:
@@ -547,6 +625,10 @@ func _collect_native_events() -> void:
 						"flags": int(ref & 0x4000 != 0) | (int(ref & 0x8000 != 0) << 1),
 						"card": engine.f4022e0(int(args[1])) & 0xffff}
 					if str(event.kind) == "44f630": effect["native_base_visible"] = true
+					# a5 (40a3c0) escribe la zona en el paso0 y crea su objeto con el buzón5 tras
+					#8 ticks que en el original transcurren durante el efecto.
+					if str(event.kind) == "44fcc0" and engine.m.u16(JoeyMem.CMD) & 0x7fff == 0xa5:
+						effect["native_object_pending"] = true
 					_emit(kinds[str(event.kind)], effect)
 			"450260":
 				var ref := engine.m.u16(int(args[2]))
@@ -566,6 +648,13 @@ func _collect_native_events() -> void:
 				var index := (ref >> 6) & 255
 				var zone := area + index if area + index < 11 else area
 				_emit("cmd7a", {"p": ref & 1, "zone": zone, "card": engine.f4022e0(int(args[1])) & 0xffff})
+			"456490":
+				var target := engine.m.u16(int(args[2]))
+				var source := engine.m.u16(int(args[3]))
+				var from_zone := ((source >> 1) & 31) + ((source >> 6) & 255)
+				var to_zone := ((target >> 1) & 31) + ((target >> 6) & 255)
+				_emit("cmd84", {"p": source & 1, "a": (from_zone << 8) | (source & 1),
+					"b": (to_zone << 8) | (target & 1), "card": engine.f4022e0(int(args[1])) & 0xffff})
 			"5bf490": cursor_action = int(args[0]) + 1
 			"5bf4b0": cursor_action = 0
 			"5bf800":
@@ -614,6 +703,7 @@ func _collect_native_events() -> void:
 				elif int(args[3]) & 255:
 					_lp_started[side] = _lp_popup_start(side)
 					_lp_held[side] = JoeyBase._s32(int(args[1]))
+					_emit("lp_popup", {"p": side, "amount": JoeyBase._s32(int(args[1]))})
 				else:
 					_lp_started[side] = _presentation_tick()
 					_lp_release(side, JoeyBase._s32(int(args[1])))
@@ -621,7 +711,10 @@ func _collect_native_events() -> void:
 				var side := _lp_side(int(args[0]))
 				_lp_targets[side] = clampi(JoeyBase._s32(int(args[1])), 0, 0xffff)
 				_emit("lp_set", {"p": side, "value": int(_lp_targets[side])})
-			"47c550": _lp_held.erase(_lp_side(int(args[0])))
+			"47c550":
+				var side := _lp_side(int(args[0]))
+				_lp_held.erase(side)
+				_emit("lp_popup_clear", {"p": side})
 			"4532c0": _emit("shuffle", {"p": int(args[1])})
 			"4516a0": _emit("cmd", {"op": 0x14, "p": (engine.m.u16(JoeyMem.CMD) >> 15) & 1, "args": [0, 0, 0]})
 			"451b80": _emit("cmd", {"op": 4, "p": (engine.m.u16(JoeyMem.CMD) >> 15) & 1, "args": [int(args[1]), 0, 0]})
@@ -735,9 +828,37 @@ func _packed_location(native_ref: int) -> int:
 	return (native_ref & 1) | ((area & 15) << 1) | (index << 5) | (native_ref & 0xc000)
 
 
+## 40cf20 atiende el buzón una sola vez: activo (bit0) y aún sin despachar (byte alto0). El
+## motor lo marca después como terminado (0x1106) y una retraducción duplicaría el movimiento.
+func _dispatch_mail() -> void:
+	var active_mail := engine.m.u16(0xa5506a)
+	if active_mail & 1 and active_mail >> 8 == 0:
+		_translate_mail()
+	elif active_mail & 1 == 0:
+		_mail_stamp = ""
+
+
+func _mail_key() -> String:
+	return "%d:%d:%d:%d" % [engine.m.u8(0xa5506a), engine.m.u32(0xa5506c), engine.m.u16(0xa55070), engine.m.u16(0xa55072)]
+
+
+## 40cf20 despacha el buzón al tick siguiente de escribirlo (antes de la cola5b9ca0); hasta
+## entonces la memoria proyectada ya tiene la carta en su zona, pero el objeto de la mesa no
+## existe todavía: la tabla no debe adoptarla o aparece antes de su vuelo.
+func pending_mail_destination(view_p: int, z: int) -> bool:
+	var flag := engine.m.u8(0xa5506a)
+	if flag & 1 == 0 or engine.m.u8(0xa5506b) != 0 or (flag >> 1) not in [3, 4, 5]: return false
+	if _mail_key() == _mail_stamp: return false
+	var dest := engine.m.u16(0xa55072)
+	var area := (dest >> 1) & 31
+	var index := (dest >> 6) & 255
+	if area >= 11 or index == 255: return false
+	return _view_player(dest & 1) == view_p and (area + index if area + index < 11 else area) == z
+
+
 func _translate_mail() -> void:
 	var flag := engine.m.u8(0xa5506a)
-	var stamp := "%d:%d:%d:%d" % [flag, engine.m.u32(0xa5506c), engine.m.u16(0xa55070), engine.m.u16(0xa55072)]
+	var stamp := _mail_key()
 	if stamp == _mail_stamp: return
 	_mail_stamp = stamp
 	var kind := flag >> 1
@@ -768,8 +889,12 @@ func _translate_mail() -> void:
 		if (source >> 1) & 31 == 11: data["hand_i"] = (source >> 6) & 255
 		_emit("move", data)
 	elif kind == 5:
-		_emit("tutorial_place", {"p": dest & 1, "zone": (dest >> 1) & 31,
-			"card": engine.f4022e0(index) & 0xffff, "c": int(dest & 0x4000 != 0) + 10 * int(dest & 0x8000 == 0)})
+		# 40d840 -> 41d160: crea el objeto en su ubicación, sin vuelo (fichas de a5, por ejemplo).
+		var area := (dest >> 1) & 31
+		var slot := (dest >> 6) & 255
+		if area < 11:
+			_emit("joey_object_place", {"p": dest & 1, "zone": area + slot if area + slot < 11 else area,
+				"card": engine.f4022e0(index) & 0xffff, "face": dest & 0x8000 != 0, "defense": dest & 0x4000 != 0})
 
 
 ## Lecturas de presentación que deben consultar la disposición nativa.

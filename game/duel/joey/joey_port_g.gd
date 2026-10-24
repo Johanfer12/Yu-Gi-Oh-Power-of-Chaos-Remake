@@ -461,21 +461,24 @@ func f406060() -> int:
 			# Espera a la lista de efectos mediante visual_busy.
 			rng.srand((m.u16(_JG_B) << 16) | m.u16(_JG_A))  # 5c3bf5 (srand del CRT)
 			if f56d460(p) != 0:
+				var before := {}
 				var count := JoeyMem.pl(p) + JoeyMem.P_HAND_N
 				var i := 0
 				if m.u8(count) != 0:
 					while true:
 						var obj := f41cee0(p, 0xb, i)
 						if obj != 0:
-							pass  # obj + 0x18 = 5 y obj + 0x1c = 0x200 (presentacion, omitido)
+							before[i] = m.u32(obj + 0x10)
 						i += 1
 						if i >= m.u8(count):
 							break
+				if not before.is_empty():
+					present("native_hand_shuffle", {"p": p, "before": before})
 			var flags := JoeyMem.pl(p) + 0x6d0
 			m.set_u32(flags, m.u32(flags) & 0xffffffef)
 			cmd_advance()
 		1:
-			if f41d050(m.u32(_JG_FIELD_OBJ)) == 0:
+			if not visual_busy("effects") and f41d050(m.u32(_JG_FIELD_OBJ)) == 0:
 				cmd_finish()
 	return 0
 

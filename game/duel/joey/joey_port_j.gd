@@ -202,6 +202,10 @@ func f40afc0() -> int:
 				slots[k] = slots[r]
 				slots[r] = t
 				k -= 1
+			# Pose previa de cada objeto: 418b60 gira el objeto sin cambiar su cara/posicion.
+			var visual_flags: Array[int] = []
+			for z in 5:
+				visual_flags.append(m.u16(JoeyMem.zone(p, z) + JoeyMem.Z_FLAGS))
 			var p2 := (p + 2) & 0xff
 			for j in n:
 				var from := slots[5 + j] << 8
@@ -213,15 +217,19 @@ func f40afc0() -> int:
 				m.copy(JoeyMem.zone(p, slots[j]), buf + slots[5 + j] * JoeyMem.ZONE_SIZE, JoeyMem.ZONE_SIZE)
 			for j in n:
 				f56b360((slots[5 + j] << 8) | p2, (slots[j] << 8) | p)
+			# Metodo +0x10 (imagen de la carta que ahora ocupa la zona) y obj+0x18 = 5,
+			# obj+0x1c = 0x200 (418b60, 32 ticks) en cada objeto existente de la mascara.
+			var objects: Array[int] = []
 			for i in 5:
 				if (c >> i) & 1:
 					var obj := f41cee0(p, 0, i)
-					# Metodo +0x10 (imagen) y obj+0x18 = 5, obj+0x1c = 0x200 omitidos.
 					if obj != 0:
-						pass
+						objects.append(i)
+			if not objects.is_empty():
+				present("native_field_shuffle", {"p": p, "objects": objects, "visual_flags": visual_flags})
 			cmd_advance()
 		1:
-			if f41d050(m.u32(_JJ_HAND_OBJ)) & 0xff == 0:
+			if not visual_busy("effects") and f41d050(m.u32(_JJ_HAND_OBJ)) & 0xff == 0:
 				cmd_finish()
 	return 0
 

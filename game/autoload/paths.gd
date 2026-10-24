@@ -174,6 +174,13 @@ static func cmdline_value(name: String) -> String:
 	return ""
 
 
+## Interfaz de la versión Android (launcher, importador, actualizador). En PC las pruebas y la
+## compilación del APK la simulan con --platform=android; el almacenamiento real del
+## dispositivo sigue dependiendo solo de OS.has_feature("android").
+static func android_platform() -> bool:
+	return OS.has_feature("android") or cmdline_value("platform") == "android"
+
+
 func user_content_pack_path() -> String:
 	return storage_dir.path_join("content/bundled_data.pck")
 

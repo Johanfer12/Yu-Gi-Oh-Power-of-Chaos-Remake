@@ -38,7 +38,8 @@ static func normalize(event: Dictionary, duel: Duel) -> Dictionary:
 	elif mode == "special":
 		var z: int = clampi(int(d.get("zone", 0)), 0, 10 if d.get("kind", "") == "joey_relocate_appear" else 4)
 		d["zone"] = z
-		var flags := duel.m.u8(DuelMem.zone(p, z) + 6)
+		# 44fcc0 carries the destination orientation before the rules place the card.
+		var flags := int(d.get("flags", duel.m.u8(DuelMem.zone(p, z) + 6)))
 		if d.get("kind", "") in ["special_summon", "joey_relocate_appear"]:
 			flags = ((int(d.get("a", 0)) >> 9) & 1) | (((int(d.get("a", 0)) >> 8) & 1) << 1)
 		d["flags"] = flags
@@ -148,13 +149,16 @@ static func normalize(event: Dictionary, duel: Duel) -> Dictionary:
 		d["deck_pos"] = Geometry.DECK[p]
 	elif mode == "destroy_effect":
 		var z: int = d.get("zone", 0)
-		var flags := duel.m.u8(DuelMem.zone(p, z) + 6)
+		var off_field: bool = d.get("native_pile_destroy", false)
+		var hand: bool = off_field and int(d.get("loc", 0)) == 11
+		var flags: int = int(d.flags) if off_field else duel.m.u8(DuelMem.zone(p, z) + 6)
 		if not d.has("card"): d["card"] = duel.cards.id_of(duel.m.u16(DuelMem.zone(p, z)) & 0xfff)
 		d["flags"] = flags
 		d["hide"] = [d["center"]]
-		var texture: Texture2D = CardDB.card_texture(d["card"], true) if flags & 2 else Assets.texture("common/mini/card_ura.png")
+		var texture: Texture2D = CardDB.card_texture(d["card"], not hand) if flags & 2 else Assets.texture("common/card/card_ura.png" if hand else "common/mini/card_ura.png")
 		if texture:
 			var image := texture.get_image().duplicate() as Image
+			if hand: image.resize(int(Geometry.HAND_SIZE.x), int(Geometry.HAND_SIZE.y), Image.INTERPOLATE_NEAREST)
 			for turn in (flags & 1) + p * 2: image.rotate_90(CLOCKWISE)
 			d["break_texture"] = ImageTexture.create_from_image(image)
 		if _break_noise.is_empty():
@@ -221,6 +225,17 @@ static func timings(event: Dictionary) -> int:
 static func render(owner: Node2D, event: Dictionary, frame: int) -> bool:
 	match event.get("mode", ""):
 		"joey_hand_shuffle", "joey_field_shuffle": _joey_shuffle(owner, event, frame)
+		"pile_top":
+			# 43c730 -> 43c870 state7: +32 per tick, commit at256.
+			# 43c980 slides the selected card out and back; draw order flips at128.
+			var counter := frame * 32
+			var offset := ((counter if counter < 128 else 256 - counter) * 50) >> 7
+			if event.center.x < 400: offset = -offset
+			var target: Vector2 = event.center - Vector2(offset, Math.trunc_div(offset, 4))
+			var angle := int(event.p) * 256
+			if counter >= 128: _card(owner, {"card":event.before}, event.center, Geometry.FIELD_SIZE, 256, angle)
+			_card(owner, event, target, Geometry.FIELD_SIZE, 256, angle)
+			if counter < 128: _card(owner, {"card":event.before}, event.center, Geometry.FIELD_SIZE, 256, angle)
 		"summon": _summon(owner, event, frame * 8)
 		"special": _special(owner, event, frame * 8)
 		"hand_shuffle": _hand_shuffle(owner, event, frame)

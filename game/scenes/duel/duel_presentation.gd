@@ -165,6 +165,21 @@ func pile_object_position(p: int, loc: int, index: int) -> Vector2:
 func enqueue(e: Dictionary, duel: Duel) -> void:
 	var kind: String = e.get("kind", "")
 	var p: int = int(e.get("p", 0)) & 1
+	if kind == "lp_popup":
+		if not _lp_number.has(p):
+			_lp_number[p] = {"zone": -1, "amount": int(e.amount), "start": visual_tick}
+		return
+	if kind == "lp_popup_clear":
+		_lp_number.erase(p)
+		return
+	if kind == "pile_top":
+		var loc := int(e["loc"])
+		if table.piles[p].has(loc):
+			var center := pile_object_position(p, loc, 1)
+			pending.append({"kind":kind, "mode":kind, "p":p, "loc":loc, "card":int(e.card),
+				"before":int(table.piles[p][loc].top), "center":center, "hide":[center], "frames":8})
+			if active.is_empty(): _begin()
+		return
 	# Setter absoluto de LP del objeto nativo; no inicia una cuenta animada.
 	if kind == "lp_set":
 		displayed_lp[p] = int(e["value"])
@@ -184,6 +199,13 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			for z in e["objects"]:
 				if int(z) < 11 and not table.field[p][int(z)].is_empty():
 					table.field[p][int(z)]["card"] = duel.f401a70(duel.m.u32(DuelMem.zone(p, int(z))) & 0xfff)
+		else:
+			# C6 changes images in the existing slot objects. Moving those objects
+			# by card ID would make the hand reflow cross unrelated positions.
+			for i in e["objects"]:
+				if int(i) < table.hand[p].size():
+					table.hand[p][int(i)]["card"] = duel.f401a70(duel.m.u32(duel.f5419b0(p, 11, int(i))) & 0xfff)
+			table.revision += 1
 		_render_frame()
 		return
 	if kind == "card_replace":
@@ -212,6 +234,14 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 		if int(pile["count"]) > 0:
 			pile["top"] = int(e.get("card", pile["top"]))
 			table.revision += 1
+		return
+	if kind == "joey_object_place":
+		# Joey 40d840 -> 41d160 (buzón tipo 5): el objeto aparece en su zona, sin vuelo.
+		var z := int(e["zone"])
+		var obj := DuelCardTable.memory_zone(duel, p, z)
+		if obj.is_empty():
+			obj = {"card": int(e["card"]), "face": bool(e["face"]), "defense": z < 5 and bool(e["defense"]), "owner": p}
+		table.place(p, z, 0, obj)
 		return
 	if kind == "special_summon_place":
 		_place_special(e)
@@ -441,11 +471,15 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			d["frames"] = 33
 			d["center"] = hand(p, 0, 1)
 		"set", "summon", "special":
-			pass # Constructores P nativos; BasicEffects conserva sus formulas y duraciones.
+			# Constructores P nativos; BasicEffects conserva sus formulas y duraciones.
+			if e.get("native_object_pending", false): table.awaiting[p][int(e.get("zone", 0))] = int(e.get("card", 0))
 		"monster_appear", "special_summon", "token":
 			d["mode"] = "summon" if kind != "special_summon" else "special"
 			d["frames"] = 33 # 438c40: +8, vivo mientras contador <0x101.
 		"destroy_effect":
+			if e.get("native_pile_destroy", false):
+				d["center"] = packed_position((int(e.loc) << 1) | (int(e.slot) << 5) | p, duel)
+				if int(e.loc) == 11: d["hand_slot"] = int(e.slot)
 			d["frames"] = 26 # 439930: explosión hasta contador 0xd0, +8.
 		"card_effect":
 			d["frames"] = 33
@@ -1184,7 +1218,10 @@ func _finish_objects() -> void:
 	var mode: String = active.get("mode", "")
 	var placed: Dictionary = active.get("placed", {})
 	placed.erase("moving")
-	if mode in ["move", "exclusion"] and active.has("dst"):
+	if mode == "pile_top":
+		table.piles[active.p][active.loc]["top"] = int(active.card)
+		table.revision += 1
+	elif mode in ["move", "exclusion"] and active.has("dst"):
 		var dst: Array = active["dst"]
 		if dst[1] in DuelCardTable.PILES:
 			table.land(dst[0], dst[1], dst[1] != DuelMem.LOC_DECK or int(dst[2]) == 0)
@@ -1460,7 +1497,7 @@ func _render() -> void:
 	var shade_progress := _shade_draw_c if start_shade_draw else _shade_c
 	# La ilustracion exterior vive en otro viewport; comparte el estado del dibujo.
 	var margin_alpha := 0.5 * shade_progress / 256.0
-	if active.get("mode", "") == "fusion": margin_alpha = 1.0 - (1.0 - margin_alpha) * 0.5
+	if active.get("mode", "") in ["fusion", "exodia"]: margin_alpha = 1.0 - (1.0 - margin_alpha) * 0.5
 	background_shade_changed.emit(margin_alpha, shade_progress if start_shade_draw else -1)
 	if shade_progress > 0:
 		var shade := ColorRect.new()

@@ -1,6 +1,7 @@
 """Build the tablet APK using the existing Spanish/WebP/OGG data copy.
 
-Run from PortTesting-Android: python tools/android/build_apk.py
+PC and Android share main: run from PortTesting with python tools/android/build_apk.py.
+The staged project gets the Android-only project settings; the PC project is unchanged.
 The original PC data is never converted or changed by this command.
 """
 import argparse
@@ -13,7 +14,11 @@ import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
+# Optimized data, previous APKs and build evidence are unversioned; until main has its own
+# store they stay in the former Android checkout next to it.
 OUT = ROOT / "artifacts/android"
+if not (OUT / "spanish-data").is_dir() and (ROOT.parent / "PortTesting-Android/artifacts/android/spanish-data").is_dir():
+    OUT = ROOT.parent / "PortTesting-Android/artifacts/android"
 STAGE = OUT / "v22-project"
 DATA = OUT / "spanish-data"
 
@@ -29,6 +34,21 @@ def run(command, log, cwd=None, bootstrap=False):
         raise RuntimeError(f"{log}: {text[-5000:]}")
     print("PASS", log, flush=True)
     return text
+
+
+def android_project(text):
+    """Project settings that only the Android export needs (ETC2/ASTC import, landscape)."""
+    additions = {"rendering": "textures/vram_compression/import_etc2_astc=true",
+                 "display": "window/handheld/orientation=0"}
+    lines = text.splitlines()
+    for section, setting in additions.items():
+        if setting in lines:
+            continue
+        if f"[{section}]" in lines:
+            lines.insert(lines.index(f"[{section}]") + 2, setting)
+        else:
+            lines += ["", f"[{section}]", "", setting]
+    return "\n".join(lines) + "\n"
 
 
 def digest(path):
@@ -120,6 +140,7 @@ def main():
     # El empaquetado solo necesita Paths, sin arrancar los autoloads del juego.
     # Permite compilar recursos nuevos incluso sin una importación previa local.
     project = STAGE / "project.godot"
+    project.write_text(android_project((ROOT / "game/project.godot").read_text(encoding="utf8")), encoding="utf8", newline="\n")
     original_project = project.read_bytes()
     if not args.engine_only:
         project.write_text('config_version=5\n[autoload]\nPaths="*res://autoload/paths.gd"\n', encoding='utf8')
@@ -141,7 +162,7 @@ def main():
          str(ROOT / ("game/tests/android_engine_bundle_test.gd" if args.engine_only else "game/tests/android_bundle_test.gd")), "--",
          f"--save={(validation / 'bundle-save').as_posix()}",
          f"--storage={(validation / 'bundle-save').as_posix()}",
-         f"--report={(validation / 'bundle.json').as_posix()}"], "v22-bundle.log")
+         f"--report={(validation / 'bundle.json').as_posix()}", "--platform=android"], "v22-bundle.log")
     # Conservar el certificado existente aunque cambie el Godot instalado.
     run([str(tools / "apksigner.bat"), "sign", "--ks", str(args.debug_keystore.resolve()),
          "--ks-key-alias", "androiddebugkey", "--ks-pass", "pass:android",
@@ -166,7 +187,11 @@ def main():
     for path in sorted(STAGE.rglob('*')):
         if path.is_file() and '.godot' not in path.relative_to(STAGE).parts and path.suffix in ['.gd', '.cfg', '.godot', '.svg']:
             source = ROOT / 'game' / path.relative_to(STAGE)
-            assert digest(path) == digest(source), f"Stale source: {path}"
+            if source.name == "project.godot" and source.parent == ROOT / "game":
+                expected = hashlib.sha256(android_project(source.read_text(encoding="utf8")).encode("utf8")).hexdigest()
+            else:
+                expected = digest(source)
+            assert digest(path) == expected, f"Stale source: {path}"
             source_hashes[source.relative_to(ROOT).as_posix()] = digest(path)
     data_files = [] if args.engine_only else [p for p in data.rglob('*') if p.is_file()]
     report = dict(version=22, engine_only=args.engine_only, original_game_data_included=not args.engine_only, apk=apk.as_posix(), bytes=apk.stat().st_size,

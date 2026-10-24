@@ -10,14 +10,17 @@ config_version=5
 
 [application]
 
-config/name="Yu-Gi-Oh! Power of Chaos Remake"
+config/name="Power of Chaos Remake"
 config/version="0.1.0-alpha.18"
 config/icon="res://assets/icons/launcher.svg"
-config/description="Remake todo en uno de Yu-Gi-Oh! Power of Chaos (Yugi, Kaiba y Joey) con los assets originales."
+config/windows_native_icon="res://assets/icons/launcher.ico"
+config/description="Reimplementación en Godot de Power of Chaos (Yugi, Kaiba y Joey). Requiere los recursos de las copias del usuario."
 run/main_scene="res://scenes/boot/boot.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/use_custom_user_dir=true
 config/custom_user_dir_name="PoCRemake"
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0.03, 0.03, 0.08, 1)
 
 [autoload]
 
@@ -41,23 +44,23 @@ file_logging/enable_file_logging.pc=false
 
 [display]
 
+window/handheld/orientation=0
 window/size/viewport_width=800
 window/size/viewport_height=600
+window/size/mode=2
 window/size/window_width_override=1200
 window/size/window_height_override=900
 window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"
-window/handheld/orientation=0
-
-[rendering]
-
-textures/vram_compression/import_etc2_astc=true
-
-renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
-textures/canvas_textures/default_texture_filter=1
-environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 
 [input_devices]
 
 pointing/emulate_mouse_from_touch=false
+
+[rendering]
+
+textures/vram_compression/import_etc2_astc=true
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/canvas_textures/default_texture_filter=1
+environment/defaults/default_clear_color=Color(0, 0, 0, 1)

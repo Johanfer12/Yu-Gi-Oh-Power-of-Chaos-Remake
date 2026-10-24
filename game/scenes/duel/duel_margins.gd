@@ -1,9 +1,9 @@
 extends Node2D
 ## Ilustracion exterior al viewport nativo: el duelo conserva800x600 e input local.
 const BACKGROUNDS := {
-	"kaiba": preload("res://assets/backgrounds/kaiba_duel.png"),
-	"yugi": preload("res://assets/backgrounds/yugi_duel.jpg"),
-	"joey": preload("res://assets/backgrounds/joey_duel.png"),
+	"kaiba": "res://assets/backgrounds/kaiba_duel.png",
+	"yugi": "res://assets/backgrounds/yugi_duel.jpg",
+	"joey": "res://assets/backgrounds/joey_duel.png",
 }
 var _duel: Node
 var _background := TextureRect.new()
@@ -19,7 +19,9 @@ func _init(duel: Node) -> void:
 func _ready() -> void:
 	_window = get_tree().root
 	_window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
-	_background.texture = BACKGROUNDS[_duel.game]
+	var path: String = BACKGROUNDS.get(_duel.game, "")
+	if path != "" and ResourceLoader.exists(path):
+		_background.texture = load(path)
 	_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -40,6 +42,8 @@ func _ready() -> void:
 	_process(0.0)
 
 func _process(_delta: float) -> void:
+	# El duelo puede liberarse antes que este envoltorio (cambio de escena o prueba).
+	if not is_instance_valid(_duel): return
 	# El visor puede crear su presentacion despues de cargar una repeticion.
 	if _duel._visual != null and not _duel._visual.background_shade_changed.is_connected(_sync_shade):
 		_duel._visual.background_shade_changed.connect(_sync_shade)

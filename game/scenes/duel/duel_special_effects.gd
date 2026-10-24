@@ -11,6 +11,7 @@ const VisualMath := preload("res://scenes/duel/duel_visual_math.gd")
 static var _board_shader: Shader
 static var _reflection_shader: Shader
 static var _ball_shader: Shader
+static var _exodia_wipe_shader: Shader
 
 ## 5325a0: tabla coseno de512 entradas, escala65536 y truncado ftoi585f5c.
 static func cosine(index: int) -> int:
@@ -216,7 +217,8 @@ static func exodia_particles(event: Dictionary, frame: int) -> void:
 static func _exodia(owner: Node2D, event: Dictionary, frame: int) -> void:
 	var counter := maxi(0, frame * 4)
 	exodia_particles(event, frame)
-	_background(owner)
+	# 43bff0 copies surface2 (the shaded duel), never a black clear.
+	_background(owner, Color(0, 0, 0, 0.5))
 	if counter < 572:
 		for n in 5:
 			var pos := exodia_card_position(n)
@@ -249,12 +251,53 @@ static func _exodia(owner: Node2D, event: Dictionary, frame: int) -> void:
 					sprite.frame=age
 		return
 	if counter >= 1060: return
+	var first_part := owner.get_child_count()
+	# 43c633..43c95a keeps pose1 in surface1 and overlays pose2 on alternate
+	# ticks. The small luminous pieces are highlights, not replacement limbs.
+	var stage := 3 if counter >= 836 else 1
+	_exodia_pose(owner, stage, counter)
+	if counter >= 644 and counter < 836 and ((counter - 644) / 8 % 2) != 0:
+		_exodia_pose(owner, 2, counter)
+	var drop := int((255-clampi((counter-572)*4,0,255))/4) if counter<644 else 0
+	if counter >= 836:
+		# 43c249..43c34a stores pose3 AND the original-size ball in surface1.
+		# The four clipped enlarged copies are drawn onto that retained image.
+		owner._asset("exo_ball",Vector2(400,409),1,1,0,"exodia")
+	else:
+		var ball := exodia_ball_state(counter)
+		owner._asset("exo_ball",Vector2(400,409+drop),ball.scale,ball.alpha,0,"exodia")
+	if counter >= 836:
+		if _ball_shader == null:
+			_ball_shader = Shader.new()
+			_ball_shader.code = "shader_type canvas_item; varying vec2 screen_pos; uniform float hole_radius; void vertex(){screen_pos=(MODEL_MATRIX*vec4(VERTEX,0.0,1.0)).xy;} void fragment(){vec2 d=abs(screen_pos-vec2(400.0,409.0)); if(d.x<hole_radius && d.y<hole_radius){discard;} COLOR=texture(TEXTURE,UV)*COLOR; }"
+		# Surface1 is NOT cleared between attack ticks. Reconstruct its retained
+		# draws, or the growing clip exposes a rectangular hole in the attack.
+		for birth in range(836, mini(counter, 1024) + 1, 4):
+			var ball := exodia_ball_state(birth)
+			var sprite: Sprite2D = owner._asset("exo_ball",Vector2(400,409),ball.scale,1,0,"exodia")
+			if sprite == null: continue
+			sprite.set_meta("blend_key", ["exodia-ball", birth])
+			var material := ShaderMaterial.new()
+			material.shader = _ball_shader
+			material.set_shader_parameter("hole_radius",int(ball.hole_radius))
+			sprite.material = material
 	if counter >= 1028:
-		_background(owner,Color(1,1,1,clampf((1060-counter)*8/256.0,0,1)))
-		return
-	var stage := 1
-	if counter >= 644: stage = 1 + ((counter - 644) / 8 % 2)
-	if counter >= 836: stage = 3
+		# 43c0f0 -> 4160a0: close the retained attack toward the centre with
+		# two 32-row feathered bands, revealing surface2; no white flash.
+		if _exodia_wipe_shader == null:
+			_exodia_wipe_shader = Shader.new()
+			_exodia_wipe_shader.code = "shader_type canvas_item; render_mode unshaded; uniform sampler2D retained : hint_screen_texture, repeat_disable, filter_nearest; varying float logical_y; uniform float wipe_half_height; void vertex(){logical_y=(MODEL_MATRIX*vec4(VERTEX,0.0,1.0)).y;} void fragment(){vec4 c=textureLod(retained,SCREEN_UV,0.0); if(c.a>0.0001){c.rgb/=c.a;} COLOR*=c; COLOR.a*=clamp((wipe_half_height+32.0-abs(logical_y-300.0))/32.0,0.0,1.0); }"
+		# Blend the retained surface once, including the overlapping ball draws.
+		var parts := owner.get_children().slice(first_part)
+		var group := CanvasGroup.new()
+		var material := ShaderMaterial.new()
+		material.shader = _exodia_wipe_shader
+		material.set_shader_parameter("wipe_half_height", (1060-counter)*300/32.0)
+		group.material = material
+		owner.add_child(group)
+		for part in parts: part.reparent(group)
+
+static func _exodia_pose(owner: Node2D, stage: int, counter: int) -> void:
 	var face := Vector2(400+(2 if stage==2 else 1),271 if stage==2 else 178)
 	var arm_x := 101 if stage==2 else 233 if stage==3 else 167
 	var arm_y := 370 if stage==2 else 315 if stage==3 else 289
@@ -263,18 +306,6 @@ static func _exodia(owner: Node2D, event: Dictionary, frame: int) -> void:
 	owner._asset("exo_arm%d"%stage,Vector2(400-arm_x,arm_y+drop),1,alpha/256.0,0,"exodia")
 	owner._asset("exo_arml%d"%stage,Vector2(400+arm_x,arm_y),1,alpha/256.0,0,"exodia")
 	owner._asset("exo_face%d"%stage,face+Vector2(0,drop),1,alpha/256.0,0,"exodia")
-	var ball := exodia_ball_state(counter)
-	var ball_sprite: Sprite2D = owner._asset("exo_ball",Vector2(400,409+drop),ball.scale,ball.alpha,0,"exodia")
-	if ball_sprite and counter >= 836:
-		# 43c41a/43c48a/43c531/43c5a8: cuatro RECT complementarios.
-		# Conservan el cuadrado central de la captura mientras crece la bola.
-		if _ball_shader == null:
-			_ball_shader = Shader.new()
-			_ball_shader.code = "shader_type canvas_item; varying vec2 screen_pos; uniform float hole_radius; void vertex(){screen_pos=(MODEL_MATRIX*vec4(VERTEX,0.0,1.0)).xy;} void fragment(){vec2 d=abs(screen_pos-vec2(400.0,409.0)); if(d.x<hole_radius && d.y<hole_radius){discard;} COLOR=texture(TEXTURE,UV)*COLOR;}"
-		var material := ShaderMaterial.new()
-		material.shader = _ball_shader
-		material.set_shader_parameter("hole_radius",int(ball.hole_radius))
-		ball_sprite.material = material
 
 static func _coin(owner: Node2D, event: Dictionary, frame: int) -> void:
 	var args: Array = event.get("args", [])
@@ -282,8 +313,8 @@ static func _coin(owner: Node2D, event: Dictionary, frame: int) -> void:
 	var result := int(event.get("result", 0))
 	var choice := 1
 	if not args.is_empty():
-		result = ~int(args[1]) if count == 3 else int(int(args[0]) == 0)
-		choice = int(int(args[0]) == 0) if count == 3 else int(int(args[1]) == 0)
+		result = ~int(args[1]) if count == 3 else int(int(args[1]) == 0)
+		choice = int(int(args[0]) == 0)
 	var origin: Vector2 = event.get("source_pos", event.get("center", Vector2(525, 300)))
 	var counter := -128 + frame * 8
 	for n in count:
