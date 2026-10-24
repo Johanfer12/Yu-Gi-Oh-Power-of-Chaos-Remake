@@ -36,7 +36,6 @@ jobs:
           python -m unittest discover -s tools/tests -p 'test_*import.py' -v
           python -m unittest discover -s tools/tests -p test_android_builder.py -v
           python -m unittest discover -s tools/tests -p test_android_toolchain.py -v
-          python -m unittest discover -s tools/tests -p test_android_sync.py -v
           python -m unittest discover -s tools/tests -p test_updater.py -v
           python -m unittest discover -s tools/tests -p test_card_translations.py -v
           python -m unittest discover -s tools/tests -p test_reviewed_card_pack.py -v

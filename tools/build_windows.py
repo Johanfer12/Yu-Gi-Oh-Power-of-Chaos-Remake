@@ -18,8 +18,6 @@ GODOT_VERSION = "4.7.2"
 
 
 def audit() -> None:
-    from check_android_sync import audit as audit_android_sync
-    audit_android_sync(ROOT)
     raw = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT)
     unexpected = [name for name in raw.decode().split("\0") if name and
                   name not in {".gitignore", "PUBLICATION_MANIFEST.json"} and not allowed(Path(name))]

@@ -121,6 +121,7 @@ func resolve(rel_path: String) -> String:
 
 func _lookup(rel: String) -> String:
 	var path: String = _index.get(rel, "")
+	# La copia optimizada conserva los nombres WAV en scripts y tablas nativas.
 	if path == "" and rel.ends_with(".wav"):
 		path = _index.get(rel.trim_suffix(".wav") + ".ogg", "")
 	if path == "" and rel.ends_with(".png"):

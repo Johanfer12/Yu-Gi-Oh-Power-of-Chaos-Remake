@@ -38,11 +38,15 @@ func _spanish() -> bool:
 
 func hint() -> String:
 	match Updates.state:
-		"checking": return "Buscando actualizaciones…" if _spanish() else "Checking for updates…"
+		"validating", "checking": return "Buscando actualizaciones…" if _spanish() else "Checking for updates…"
 		"available": return ("Disponible %s · Pulsa actualizar" if _spanish() else "%s available · Press update") % Updates.available
 		"current": return "Tienes la versión más reciente" if _spanish() else "You have the latest version"
 		"downloading": return "Descargando y verificando…" if _spanish() else "Downloading and verifying…"
 		"installing": return "Actualizando…" if _spanish() else "Installing update…"
+		# Android: el sistema confirma la instalación del APK descargado.
+		"ready": return "Actualización descargada · Pulsa actualizar para instalar" if _spanish() else "Update downloaded · Press update to install"
+		"opened": return "Confirma la instalación en Android" if _spanish() else "Confirm installation in Android"
+		"manual": return "Actualización con otra firma: consulta el aviso" if _spanish() else "Different signing key: see details"
 		"error": return "No se pudo comprobar o completar la actualización" if _spanish() else "Could not check or complete the update"
 	return "Actualizaciones desde GitHub" if _spanish() else "Updates from GitHub"
 
@@ -69,12 +73,19 @@ func open_update() -> void:
 	if not Updates.supported():
 		OS.shell_open(Updates.REPOSITORY + "/releases")
 		return
+	if Paths.android_platform() and Updates.state in ["ready", "opened"]:
+		Updates.download() # Reabre el instalador con el APK ya verificado.
+		return
 	if Updates.state != "available":
 		Updates.check()
 		return
 	_dialog.title = "Actualizar" if _spanish() else "Update"
-	_dialog.dialog_text = (("Descargar %s y reiniciar el juego?\nSe conservan tus recursos, partidas y ajustes." if _spanish()
-		else "Download %s and restart the game?\nYour resources, saves and settings are preserved.") % Updates.available)
+	if Paths.android_platform():
+		_dialog.dialog_text = (("Descargar %s aquí?\nAndroid te pedirá confirmar la instalación. No desinstales la aplicación.\nSe conservan tus recursos, partidas y ajustes." if _spanish()
+			else "Download %s here?\nAndroid will ask you to confirm installation. Do not uninstall the app.\nYour resources, saves and settings are preserved.") % Updates.available)
+	else:
+		_dialog.dialog_text = (("Descargar %s y reiniciar el juego?\nSe conservan tus recursos, partidas y ajustes." if _spanish()
+			else "Download %s and restart the game?\nYour resources, saves and settings are preserved.") % Updates.available)
 	_dialog.get_ok_button().text = "Actualizar" if _spanish() else "Update"
 	_dialog.get_ok_button().show()
 	_dialog.get_cancel_button().text = "Cancelar" if _spanish() else "Cancel"
@@ -92,12 +103,14 @@ func _confirm() -> void:
 func _process(_delta: float) -> void:
 	if Updates.state == "downloading":
 		var mb: float = Updates._http.get_downloaded_bytes() / 1048576.0
-		_dialog.dialog_text = hint() + " (%.1f MB)" % mb
+		var fraction: float = Updates.progress()
+		_dialog.dialog_text = hint() + (" (%d %%, %.1f MB)" % [roundi(fraction * 100.0), mb] if fraction >= 0.0 else " (%.1f MB)" % mb)
 	elif _dialog.visible and not _dialog.get_ok_button().visible:
 		_dialog.hide()
 		_dialog.hide_on_ok = true
 
 
 func _open_licenses() -> void:
-	var directory := BundledTools.prepare(true)
+	# Android no lleva las herramientas de escritorio: abre los avisos publicados.
+	var directory := "" if Paths.android_platform() else BundledTools.prepare(true)
 	OS.shell_open(directory if directory != "" else Updates.REPOSITORY + "/blob/main/THIRD_PARTY_NOTICES.md")

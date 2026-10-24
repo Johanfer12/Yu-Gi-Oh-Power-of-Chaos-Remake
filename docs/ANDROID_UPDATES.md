@@ -7,15 +7,27 @@ copy of the public APK and prepares a separate private PCK locally. Android impo
 the PCK once into app storage and retains it, saves and preferences across APK updates.
 Repacking an APK would invalidate its signature.
 
+## In-app update
+
+The Android launcher downloads `PowerOfChaos-Android.apk` into app storage
+(`user://updates`, exposed by Godot's FileProvider) with progress, verifies its SHA-256
+against the validated `ANDROID_RELEASE.json` (package, version code, signing certificate)
+and opens the system installer with `OS.shell_open`. Android always asks the user to
+confirm; the first time it also asks to allow installs from this app
+(`REQUEST_INSTALL_PACKAGES`, declared in the preset's custom permissions). Pressing
+Update again reopens the installer without downloading. A failed download, checksum or
+installer launch falls back to the browser download. Old downloads are removed at start.
+`android_updates_test.gd` covers the flow on desktop with an injected installer.
+
 ## Release procedure
 
-1. Review shared PC changes in the separate Android checkout, preserving touch,
-   WebP/OGG readers and app storage. Record the review in `docs/ANDROID_SYNC.json`.
-   `tools/check_android_sync.py`, called by the public Windows audit, rejects changed
-   shared source hashes and unreviewed new files. Do not regenerate the record simply
-   to bypass this failure; review and test the corresponding Android changes first.
+1. PC and Android share `main`: game fixes need no port. Check that Android-only
+   behaviour stays behind its platform checks or files (`docs/ANDROID.md`) and run the
+   Android desktop tests with `--platform=android --mobile-controls=true`, plus
+   `desktop_pointer_test` for PC.
 2. Increment Android versionCode and set its build version to the intended PC release.
-   Export a fresh allowlisted Android source snapshot. Build its engine-only APK using
+   Export a fresh allowlisted Android source snapshot (`tools/prepare_android_public.py`,
+   source `main` by default). Build its engine-only APK using
    `tools/android/build_apk.py --engine-only`, the established local signing key and
    the previous APK for certificate comparison. Keep signing keys outside Git/GitHub.
 3. Verify signature, certificate continuity, 16 KB alignment, ZIP integrity and absence

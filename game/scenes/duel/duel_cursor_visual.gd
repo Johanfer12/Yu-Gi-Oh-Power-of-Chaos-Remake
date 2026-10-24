@@ -27,9 +27,11 @@ static var _mouse_owners := 0
 static var _original_mouse_mode := Input.MOUSE_MODE_VISIBLE
 var _owns_mouse := false
 var hide_system_mouse := true
+var show_pointer := not OS.has_feature("mobile")
 
 func _ready() -> void:
 	z_index = 4000
+	visible = show_pointer
 	_sprite.centered = false
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_child(_sprite)
@@ -91,10 +93,11 @@ func move_to(pos: Vector2) -> void:
 	_move_tick = 0
 	_scripted = true
 	_tick_driven = true
-	visible = true
+	visible = show_pointer
 	_refresh()
 
 func click(pos: Vector2 = pointer_position, from_input := false) -> void:
+	if not show_pointer: return
 	var sprite := Sprite2D.new()
 	sprite.centered = false
 	# 460120 dibuja las ondas existentes antes del puntero.

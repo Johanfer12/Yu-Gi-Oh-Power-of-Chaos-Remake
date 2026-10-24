@@ -68,6 +68,8 @@ func _notification(what: int) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if (event is InputEventScreenTouch or event is InputEventScreenDrag) and is_instance_valid(Game._mobile_pointer):
+		return
 	if event is InputEventMouseMotion and event.device != InputEvent.DEVICE_ID_EMULATION:
 		_pointer.hide()
 		cursor = _touch_position(event.position)

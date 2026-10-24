@@ -122,7 +122,7 @@ func f406b20() -> int:
 					f43c730(f41cf60(p, 0xe), card)
 			cmd_advance()
 		1:
-			if f41d050(m.u32(_JH_HAND_OBJ)) & 0xff == 0:
+			if not visual_busy("effects") and f41d050(m.u32(_JH_HAND_OBJ)) & 0xff == 0:
 				if f402690(card) != 0:
 					f403bf0(p, f4022e0(card) & 0xffff)
 				cmd_advance()

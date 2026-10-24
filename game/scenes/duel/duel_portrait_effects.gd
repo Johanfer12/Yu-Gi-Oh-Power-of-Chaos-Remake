@@ -20,7 +20,7 @@ static func native_cos(angle: int) -> int:
 static func voice_ms(path: String) -> int:
 	if not _voice_ms.has(path):
 		var resolved: String = Assets.resolve(path)
-		var stream := AudioStreamWAV.load_from_file(resolved) if resolved != "" else null
+		var stream: AudioStream = Audio._load(resolved) if resolved != "" else null
 		_voice_ms[path] = int(stream.get_length() * 1000) if stream != null else 0
 	return _voice_ms[path]
 
@@ -179,13 +179,13 @@ static func _portrait(d: Dictionary, layout: String, voice: String) -> Dictionar
 	var sound_path: String = Assets.resolve(d["sound"])
 	var frames := 33 # 40e920: contador>255 y voz terminada; 40d6c0 suma ocho.
 	if sound_path != "":
-		var stream := AudioStreamWAV.load_from_file(sound_path)
+		var stream: AudioStream = Audio._load(sound_path)
 		if stream != null: frames = maxi(frames, int(ceil(NativeClock.ticks(stream.get_length()))))
 	if d.has("sound_after"):
 		d["sound_after_frame"] = maxi(1, int(ceil(NativeClock.ticks(d["voice_duration_ms"] / 1000.0))))
 		var after_path: String = Assets.resolve(d["sound_after"])
 		if after_path != "":
-			var stream := AudioStreamWAV.load_from_file(after_path)
+			var stream: AudioStream = Audio._load(after_path)
 			if stream != null: frames = maxi(33, d["sound_after_frame"] + int(ceil(NativeClock.ticks(stream.get_length()))))
 	d["frames"] = frames
 	return d

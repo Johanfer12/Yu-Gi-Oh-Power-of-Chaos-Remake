@@ -36,6 +36,7 @@ const SVG_UPDATE := SVG_HEAD + "<path d='M20 7a9 9 0 1 0 1 9'/><polyline points=
 const DEFAULT_VOLUME := 0.5
 var volume := DEFAULT_VOLUME
 var muted := false
+var pointer_mode := "menu"
 var panel_open := false
 
 var _icons := {}             # nombre -> {tex, offset} (offset = centrado optico medido)
@@ -58,6 +59,7 @@ func _ready() -> void:
 	var saved: Dictionary = SaveData.data.get("launcher", {})
 	volume = clampf(float(saved.get("music_volume", DEFAULT_VOLUME)), 0.0, 1.0)
 	muted = bool(saved.get("music_muted", false))
+	pointer_mode = str(saved.get("pointer_mode", "menu"))
 	for pair in [["sound", SVG_SOUND], ["muted", SVG_MUTED], ["gear", SVG_GEAR],
 			["close", SVG_CLOSE], ["exit", SVG_EXIT], ["update", SVG_UPDATE]]:
 		_icons[pair[0]] = _rasterize(pair[1])
@@ -98,7 +100,22 @@ func _settings_center() -> Vector2:
 
 
 func _panel_rect() -> Rect2:
-	return Rect2((_screen() - PANEL_SIZE) / 2.0, PANEL_SIZE)
+	var panel_size := Vector2(540, 540) if _mobile_controls() else PANEL_SIZE
+	return Rect2((_screen() - panel_size) / 2.0, panel_size)
+
+
+func _mobile_controls() -> bool:
+	return OS.has_feature("mobile") or Paths.cmdline_value("mobile-controls") == "true"
+
+
+func _mode_rect(mode: String) -> Rect2:
+	var box := _control_rect(6)
+	var width := (box.size.x - 8.0) / 2.0
+	return Rect2(box.position + Vector2(width + 8.0 if mode == "menu" else 0.0, 0), Vector2(width, box.size.y))
+
+
+func _reset_row() -> int:
+	return 7 if _mobile_controls() else 6
 
 
 func _close_center() -> Vector2:
@@ -130,8 +147,12 @@ func _option_rect(row: int) -> Rect2:
 
 func _hit(pos: Vector2) -> String:
 	if panel_open:
-		if _control_rect(6).has_point(pos):
+		if _control_rect(_reset_row()).has_point(pos):
 			return "reset"
+		if _mobile_controls():
+			for mode in ["hold", "menu"]:
+				if _mode_rect(mode).has_point(pos):
+					return mode
 		if pos.distance_to(_close_center()) <= 16:
 			return "close"
 		if _slider_rect().grow_individual(8, 12, 8, 12).has_point(pos):
@@ -186,8 +207,12 @@ func _input(event: InputEvent) -> void:
 			"update":
 				update_requested.emit()
 			"reset":
-				_focused_row = 6
+				_focused_row = _reset_row()
 				_request_reset()
+			"hold", "menu":
+				pointer_mode = _hit(local_pos)
+				_focused_row = 6
+				_save()
 			"close", "outside":
 				_open_panel(false)
 			"slider":
@@ -209,18 +234,18 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		_open_panel(false)
 	elif event.is_action_pressed("ui_up"):
-		_focused_row = wrapi(_focused_row - 1, 0, 7)
+		_focused_row = wrapi(_focused_row - 1, 0, _reset_row() + 1)
 	elif event.is_action_pressed("ui_down"):
-		_focused_row = wrapi(_focused_row + 1, 0, 7)
+		_focused_row = wrapi(_focused_row + 1, 0, _reset_row() + 1)
 	elif event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right"):
 		var step := -1 if event.is_action_pressed("ui_left") else 1
 		if _focused_row == 0:
 			_set_volume(volume + KEY_STEP * step)
 			_save()
-		elif _focused_row < 6:
+		elif _focused_row < _reset_row():
 			_cycle_option(_focused_row - 1, step)
 	elif event.is_action_pressed("ui_accept"):
-		if _focused_row == 6:
+		if _focused_row == _reset_row():
 			_request_reset()
 		elif _focused_row >= 1:
 			_cycle_option(_focused_row - 1, 1)
@@ -247,6 +272,9 @@ func _confirm_reset() -> void:
 		Assets.set_language(Assets.preferred_language())
 		volume = DEFAULT_VOLUME
 		muted = false
+		pointer_mode = "menu"
+		if is_instance_valid(Game._mobile_pointer):
+			Game._mobile_pointer.cancel()
 		_dragging = false
 		_focused_row = 0
 		changed.emit()
@@ -269,6 +297,9 @@ func _cycle_option(row: int, step: int) -> void:
 			LauncherSettings.fast_play = not LauncherSettings.fast_play
 		4:
 			LauncherSettings.improved_card_texts = not LauncherSettings.improved_card_texts
+		5:
+			pointer_mode = "hold" if pointer_mode == "menu" else "menu"
+			_save()
 	LauncherSettings.save_preferences()
 	if row == 4 and LauncherSettings.improved_card_texts:
 		CardTranslations.ensure_spanish_pack()
@@ -300,7 +331,9 @@ func _set_volume(v: float) -> void:
 
 
 func _save() -> void:
-	SaveData.data["launcher"] = {"music_volume": volume, "music_muted": muted}
+	var saved: Dictionary = SaveData.data.get("launcher", {})
+	saved.merge({"music_volume": volume, "music_muted": muted, "pointer_mode": pointer_mode}, true)
+	SaveData.data["launcher"] = saved
 	if Paths.has_data():
 		SaveData.save()
 	changed.emit()
@@ -401,8 +434,17 @@ func _draw_panel() -> void:
 			_draw_slider()
 		else:
 			_draw_selector(box, values[row - 1], hot)
-	var reset_box := _control_rect(6)
-	var reset_hot := _hover == "reset" or _focused_row == 6
+	if _mobile_controls():
+		_label_mid("Control táctil" if spanish else "Touch controls", Vector2(r.position.x + 36, _control_rect(6).get_center().y), 17, GOLD_LIGHT)
+		for mode in ["hold", "menu"]:
+			var box := _mode_rect(mode)
+			var selected: bool = pointer_mode == mode
+			_round_rect(box, Color(GOLD, 0.16) if selected else STONE, 7, GOLD if selected else Color(GOLD, 0.35))
+			var label := ("Mantener" if spanish else "Hold") if mode == "hold" else ("Menú" if spanish else "Menu")
+			var width := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+			_label_mid(label, box.get_center() - Vector2(width / 2.0, 0), 16, GOLD_LIGHT if selected else GOLD)
+	var reset_box := _control_rect(_reset_row())
+	var reset_hot := _hover == "reset" or _focused_row == _reset_row()
 	_label_mid("Partida" if spanish else "Save data", Vector2(r.position.x + 36, reset_box.get_center().y), 17, GOLD_LIGHT)
 	_round_rect(reset_box, Color(0.20, 0.035, 0.03), 7, GOLD if reset_hot else Color(GOLD, 0.35))
 	_label_mid("Reiniciar juego…" if spanish else "Reset game…", reset_box.position + Vector2(16, 17), 16, GOLD_LIGHT)

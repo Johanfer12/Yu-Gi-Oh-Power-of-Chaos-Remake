@@ -1,4 +1,7 @@
-"""Exporta fuentes Android a una rama pública independiente, sin historia privada."""
+"""Exporta fuentes Android a una rama pública independiente, sin historia privada.
+
+PC y Android comparten main: por defecto la fuente es este mismo repositorio.
+"""
 import argparse
 import hashlib
 import json
@@ -28,7 +31,7 @@ def prepare_android(source: Path, output: Path) -> dict:
                 "game/tests/android_bundle_test.gd", "game/tests/android_engine_bundle_test.gd"}:
             if path.is_symlink() or not path.resolve().is_relative_to(source):
                 raise ValueError("Enlace no publicable: " + name)
-            if name in OWN_ASSETS:
+            if name in OWN_ASSETS or name in LAUNCHER_ART:
                 if path.read_bytes() != (ROOT / relative).read_bytes():
                     raise ValueError("Recurso distinto al aprobado: " + name)
             else:
@@ -45,8 +48,13 @@ def prepare_android(source: Path, output: Path) -> dict:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, dest)
     project = output / "game/project.godot"
-    project.write_text(project.read_text(encoding="utf8").replace(
-        'config/icon="res://assets/icon.svg"', 'config/icon="res://assets/icons/launcher.svg"'), encoding="utf8")
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("build_apk", ROOT / "tools/android/build_apk.py")
+    build_apk = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(build_apk)
+    # El APK se exporta con los ajustes Android del proyecto; la instantánea los refleja.
+    project.write_text(build_apk.android_project(project.read_text(encoding="utf8").replace(
+        'config/icon="res://assets/icon.svg"', 'config/icon="res://assets/icons/launcher.svg"')), encoding="utf8")
     for name in ("README.md", "README.es.md"):
         shutil.copyfile(ROOT / "tools/public_android" / name, output / name)
     shutil.copyfile(ROOT / "THIRD_PARTY_NOTICES.md", output / "THIRD_PARTY_NOTICES.md")
@@ -69,7 +77,7 @@ def prepare_android(source: Path, output: Path) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--android-root", type=Path, required=True)
+    parser.add_argument("--android-root", type=Path, default=ROOT)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     print(len(prepare_android(args.android_root, args.out)["files"]), "archivos publicables")

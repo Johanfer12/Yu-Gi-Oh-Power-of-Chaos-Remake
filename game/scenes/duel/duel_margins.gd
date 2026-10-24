@@ -42,6 +42,8 @@ func _ready() -> void:
 	_process(0.0)
 
 func _process(_delta: float) -> void:
+	# El duelo puede liberarse antes que este envoltorio (cambio de escena o prueba).
+	if not is_instance_valid(_duel): return
 	# El visor puede crear su presentacion despues de cargar una repeticion.
 	if _duel._visual != null and not _duel._visual.background_shade_changed.is_connected(_sync_shade):
 		_duel._visual.background_shade_changed.connect(_sync_shade)

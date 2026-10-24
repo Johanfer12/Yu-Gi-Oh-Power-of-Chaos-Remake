@@ -35,6 +35,9 @@ var arrivals: Array = [{}, {}]
 var ahead: Array = [{}, {}]
 ## Salidas visuales anteriores a su escritura lógica; no reconstruirlas durante una espera.
 var behind: Array = [{}, {}]
+## Zonas cuya carta ya esta en memoria pero cuyo objeto creara un buzon posterior (Joey a5:
+## 40ce70 llega tras la pausa de8 ticks); fuera del descanso no se adoptan.
+var awaiting: Array = [{}, {}]
 ## Diferencias con la memoria que `follow_memory` corrigio (para localizar eventos que faltan).
 var corrections: Array = []
 ## Sube con cada cambio de la tabla (la mesa se redibuja cuando cambia).
@@ -58,6 +61,7 @@ func clear() -> void:
 		arrivals[p] = {}
 		ahead[p] = {}
 		behind[p] = {}
+		awaiting[p] = {}
 	corrections.clear()
 
 
@@ -130,6 +134,9 @@ func follow_memory(duel: Duel, rest: bool, retained: Dictionary = {}) -> void:
 			# El objeto cambia antes que la memoria (0x80 voltea y luego escribe las banderas; 0xc4
 			# llega y luego escribe la zona): fuera del descanso nunca se corrige un objeto.
 			if not rest and (mem.is_empty() or not obj.is_empty()): continue
+			# Joey: la zona destino de un buzón aún sin despachar espera a su vuelo.
+			if obj.is_empty() and duel.has_method("pending_mail_destination") and duel.call("pending_mail_destination", p, z): continue
+			if obj.is_empty() and not rest and awaiting[p].has(z): continue
 			if not _same(obj, mem):
 				revision += 1
 				corrections.append({"where": "campo", "p": p, "z": z, "tabla": obj.duplicate(), "memoria": mem, "descanso": rest})
@@ -228,6 +235,7 @@ func place(p: int, loc: int, i: int, obj: Dictionary) -> void:
 	if loc < 11:
 		field[p][_field_slot(loc, i)] = obj
 		departed[p].erase(_field_slot(loc, i))
+		awaiting[p].erase(_field_slot(loc, i))
 		if not obj.is_empty(): arrivals[p][_field_slot(loc, i)] = int(obj["card"])
 	elif loc == DuelMem.LOC_HAND:
 		hand[p].insert(hand[p].size() if i < 0 else clampi(i, 0, hand[p].size()), obj)

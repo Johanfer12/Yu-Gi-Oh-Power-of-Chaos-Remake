@@ -20,14 +20,16 @@ def configuration(launcher: Path) -> dict:
     if getattr(sys, "frozen", False):
         from .android_toolchain import prepare
         return prepare(launcher)
-    # Desarrollo: buscar la copia hermana, incluso desde artifacts/.../windows.
+    # Desarrollo: PC y Android comparten main; el compilador está en este repositorio. Los APK
+    # anteriores siguen en el almacén artifacts/android de la copia Android (no versionado).
+    repo = Path(__file__).resolve().parents[2]
     for parent in (launcher, *launcher.parents):
-        root = parent / "PortTesting-Android"
-        if (root / "tools/android/build_apk.py").is_file():
+        root = repo if (repo / "tools/android/build_apk.py").is_file() else parent / "PortTesting-Android"
+        if (root / "tools/android/build_apk.py").is_file() and (parent / "Herramientas").is_dir():
             return dict(root=root, godot=parent / "Herramientas/Godot/godot_console.exe",
                         sdk=parent / "Herramientas/AndroidSdk", java=parent / "Herramientas/JDK21",
                         keystore=parent / "FirmaAndroid/debug.keystore",
-                        previous=root / "artifacts/android/PowerOfChaos-tablet-v17.apk")
+                        previous=parent / "PortTesting-Android/artifacts/android/PowerOfChaos-tablet-v17.apk")
     from .android_toolchain import prepare
     return prepare(launcher)
 

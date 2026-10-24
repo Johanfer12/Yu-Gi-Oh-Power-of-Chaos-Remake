@@ -3,9 +3,15 @@ extends Node2D
 
 
 func _ready() -> void:
+	# Herramienta de desarrollo Android: prueba de compartir sin abrir el juego.
+	if Paths.cmdline_value("share-smoke") == "true":
+		get_tree().root.add_child.call_deferred(load("res://share_smoke.gd").new())
+		queue_free()
+		return
 	_apply_window_override()
+	# Sin recursos: el importador de la plataforma (PC: copias del usuario; Android: PCK).
 	if not Paths.has_data() or Paths.storage_error:
-		Game.goto(load("res://scenes/launcher/content_setup.gd").new())
+		Game.open_launcher()
 		queue_free()
 		return
 	var start := Debug.start_override()

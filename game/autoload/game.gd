@@ -24,6 +24,7 @@ class WindowShortcuts:
 				window.mode = Window.MODE_FULLSCREEN
 
 var _window_shortcuts := WindowShortcuts.new()
+var _mobile_pointer: CanvasLayer
 
 const DUEL_VIEWER_PATH := "res://scenes/duel/replay_viewer.gd"
 
@@ -90,6 +91,9 @@ func _ready() -> void:
 	if language == "":
 		language = Assets.preferred_language()
 	Assets.set_language(language)
+	if OS.has_feature("mobile") or Paths.cmdline_value("mobile-controls") == "true":
+		_mobile_pointer = preload("res://core/mobile_pointer.gd").new()
+		get_tree().root.add_child.call_deferred(_mobile_pointer)
 	get_tree().root.add_child.call_deferred(_window_shortcuts)
 	# 0x40c66a: el MT de interfaz se siembra una vez al arrancar con GetTickCount (Debug lo
 	# resiembra despues si hay --ui-seed o --ui-replay con semilla).
@@ -121,7 +125,7 @@ func goto(screen: Node) -> void:
 	# El launcher es propio del port; el primer arranque no tiene snapshot previo.
 	if not LauncherSettings.fast_play and current_game != "" and DisplayServer.get_name() != "headless" \
 			and is_instance_valid(_screen) and _screen.is_inside_tree() \
-			and _screen.get_script().resource_path.get_file() not in ["launcher.gd", "content_setup.gd"]:
+			and _screen.get_script().resource_path.get_file() not in ["launcher.gd", "launcher_android.gd", "content_setup.gd"]:
 		var old_image := _screen.get_viewport().get_texture().get_image()
 		if old_image != null and not old_image.is_empty():
 			old_frame = ImageTexture.create_from_image(old_image)
@@ -138,6 +142,9 @@ func goto(screen: Node) -> void:
 		get_tree().root.add_child.call_deferred(_screen_host)
 	else:
 		get_tree().root.add_child.call_deferred(screen)
+	if is_instance_valid(_mobile_pointer):
+		_mobile_pointer.cancel()
+		get_tree().root.move_child.call_deferred(_mobile_pointer, -1)
 	get_tree().root.move_child.call_deferred(_window_shortcuts, -1)
 	if old_frame != null:
 		_start_scene_wipe.call_deferred(old_frame, screen, effect)
@@ -151,7 +158,7 @@ func _scene_wipe_mode(previous: Node, following: Node) -> int:
 	var source := script.resource_path.get_file()
 	var target: Script = following.get_script()
 	var target_name := target.resource_path.get_file() if target != null else ""
-	if source in ["bust_up_scene.gd", "bust_up_rival.gd", "launcher.gd", "content_setup.gd"]:
+	if source in ["bust_up_scene.gd", "bust_up_rival.gd", "launcher.gd", "launcher_android.gd", "content_setup.gd"]:
 		return 0x4b
 	if source in ["tutorial_menu.gd", "tutorial_menu_kaiba.gd"] and target_name == "title_screen.gd":
 		return 0x4b
@@ -192,7 +199,12 @@ func _start_scene_wipe(old_frame: Texture2D, screen: Node, effect := 0x13) -> vo
 
 func open_launcher() -> void:
 	current_game = ""
-	goto(load("res://scenes/launcher/content_setup.gd").new())
+	# Android: biblioteca instalada o importador del PCK privado. PC: biblioteca e importador
+	# de las copias del usuario (content_setup amplía el launcher de escritorio).
+	if Paths.android_platform():
+		goto(load("res://scenes/launcher/launcher_android.gd").new() if Paths.has_data() else load("res://scenes/launcher/android_content_setup.gd").new())
+	else:
+		goto(load("res://scenes/launcher/content_setup.gd").new())
 
 
 ## Al volver de otra pantalla (`focus` = opcion de la que se viene) no se repite la portada

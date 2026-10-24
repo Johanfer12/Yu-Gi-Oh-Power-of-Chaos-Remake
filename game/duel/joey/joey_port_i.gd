@@ -462,7 +462,7 @@ func f40a0d0() -> int:
 		f456490(0, card, to, from)
 		# Insercion en la lista de efectos omitida.
 		return 0
-	# Espera de la lista de efectos omitida.
+	if visual_busy("effects"): return 0
 	f56ab60(cmd_b(), cmd_a(), 1)
 	cmd_finish()
 	return 0
@@ -486,7 +486,7 @@ func f40a230() -> int:
 		f456490(0, card, to, from)
 		# Insercion en la lista de efectos omitida.
 		return 0
-	# Espera de la lista de efectos omitida.
+	if visual_busy("effects"): return 0
 	f56ab60(cmd_b(), a, cmd_c())
 	cmd_finish()
 	return 0
