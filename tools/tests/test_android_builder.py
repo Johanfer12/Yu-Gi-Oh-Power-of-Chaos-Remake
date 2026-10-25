@@ -24,52 +24,47 @@ class AndroidBuilderTests(unittest.TestCase):
             (root / "android-builder.json").write_text(json.dumps({"root": "kit/source"}))
             self.assertEqual(configuration(root)["root"], root / "kit/source")
 
-    def test_public_configuration_keeps_hash_as_text(self):
+    def test_content_configuration_keeps_version_as_text(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
-            expected = "a" * 64
-            (root / "android-builder.json").write_text(json.dumps({"public_apk": "official.apk", "public_apk_sha256": expected}))
-            self.assertEqual(configuration(root)["public_apk_sha256"], expected)
-            self.assertEqual(configuration(root)["public_apk"], root / "official.apk")
+            (root / "android-builder.json").write_text(json.dumps({"root": "source", "godot": "godot.exe",
+                                                                  "version": "v0.1.0-alpha.19"}))
+            self.assertEqual(configuration(root)["version"], "v0.1.0-alpha.19")
+            self.assertEqual(configuration(root)["root"], root / "source")
 
-    def test_public_bad_apk_hash_fails_before_extracting_private_games(self):
+    def test_content_missing_packer_fails_before_extracting_private_games(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "tools/android").mkdir(parents=True)
             (root / "tools/android/build_apk.py").touch()
             (root / "game").mkdir()
             (root / "game/project.godot").touch()
-            (root / "godot.exe").touch()
-            (root / "public.apk").write_bytes(b"tampered APK")
-            config = dict(root=root, godot=root / "godot.exe", public_apk=root / "public.apk", public_apk_sha256="0" * 64)
+            config = dict(root=root, godot=root / "absent-godot.exe")
             with patch("pocx.android_builder.configuration", return_value=config), \
                  patch("pocx.import_games.import_games") as importer:
-                with self.assertRaisesRegex(ValueError, "SHA-256"):
+                with self.assertRaisesRegex(ValueError, "Falta una herramienta"):
                     create_apk({"yugi": root / "private.iso"}, root)
                 importer.assert_not_called()
             self.assertFalse((root / "PoC Data/android/builds").exists())
 
-    def _public_build(self, failure=None):
+    def _content_build(self, failure=None):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             original = root / "pc-resources"
             original.mkdir()
             original_text = '{"games":{"yugi":{}}}'
             (original / "inventory.json").write_text(original_text)
-            apk = root / "official.apk"
-            apk.write_bytes(b"official stable signed APK, unchanged")
-            config = dict(root=root / "source", godot=root / "godot.exe", public_apk=apk,
-                          public_apk_sha256=hashlib.sha256(apk.read_bytes()).hexdigest())
+            config = dict(root=root / "source", godot=root / "godot.exe", version="v0.1.0-alpha.19")
             (config["root"] / "tools/android").mkdir(parents=True)
             (config["root"] / "tools/android/build_apk.py").touch()
             (config["root"] / "game").mkdir()
             (config["root"] / "game/project.godot").touch()
             config["godot"].touch()
-            preflight(config)  # No SDK, Java, signing key or license exists.
-            outputs = root / "PoC Data/android/apks"
+            preflight(config)  # No SDK, Java, signing key, license or APK exists.
+            outputs = root / "PoC Data/android/pck"
             outputs.mkdir(parents=True)
-            old_apk = outputs / "existing-personal.apk"
-            old_apk.write_bytes(b"preserve earlier private build")
+            old_pack = outputs / "existing-resources.pck"
+            old_pack.write_bytes(b"preserve earlier private pack")
             key = root / "PoC Data/android/signing/debug.keystore"
             key.parent.mkdir()
             key.write_bytes(b"preserve personal signing key")
@@ -81,11 +76,12 @@ class AndroidBuilderTests(unittest.TestCase):
                 self.assertIn("--content-only", args)
                 self.assertNotIn("--debug-keystore", args)
                 self.assertNotIn("--sdk", args)
+                self.assertNotIn("--output", args)
                 target = Path(args[args.index("--content-output") + 1])
                 target.write_bytes(content)
                 work = Path(args[args.index("--work") + 1])
                 work.mkdir()
-                self.assertEqual(list(outputs.iterdir()), [old_apk])
+                self.assertEqual(list(outputs.iterdir()), [old_pack])
                 if failure == "build":
                     raise RuntimeError("packing failed")
                 report = {"content_pack": str(target), "sha256": hashlib.sha256(content).hexdigest()}
@@ -96,8 +92,8 @@ class AndroidBuilderTests(unittest.TestCase):
             before_env = dict(os.environ)
             real_rename = Path.rename
             def rename(source, target):
-                if failure == "publish" and source.suffix == ".apk":
-                    raise OSError("APK destination unavailable")
+                if failure == "publish" and source.suffix == ".pck":
+                    raise OSError("PCK destination unavailable")
                 return real_rename(source, target)
 
             with patch("pocx.android_builder.configuration", return_value=config), \
@@ -107,32 +103,34 @@ class AndroidBuilderTests(unittest.TestCase):
                 if failure:
                     with self.assertRaises((RuntimeError, ValueError, OSError)):
                         create_apk({}, root, base=original)
-                    self.assertEqual(list(outputs.iterdir()), [old_apk])
+                    self.assertEqual(list(outputs.iterdir()), [old_pack])
                 else:
                     target = create_apk({}, root, base=original)
-                    self.assertEqual(target.read_bytes(), apk.read_bytes())
+                    self.assertEqual(target.suffix, ".pck")
+                    self.assertEqual(target.read_bytes(), content)
+                    self.assertEqual(sorted(p.suffix for p in outputs.iterdir()), [".json", ".pck", ".pck"])
                     report = json.loads(target.with_suffix(".json").read_text())
-                    self.assertEqual(Path(report["content_pack"]).read_bytes(), content)
-                    self.assertEqual(report["apk_sha256"], config["public_apk_sha256"])
-                    self.assertTrue(report["public_apk_unchanged"])
-                    self.assertFalse(report["apk_original_game_data_included"])
+                    self.assertEqual(report["content_pack_sha256"], hashlib.sha256(content).hexdigest())
+                    self.assertEqual(report["public_apk_version"], "v0.1.0-alpha.19")
+                    self.assertNotIn("apk", report)
+                    self.assertFalse((root / "PoC Data/android/apks").exists())
             self.assertEqual(dict(os.environ), before_env)
             self.assertEqual((original / "inventory.json").read_text(), original_text)
             self.assertEqual(key.read_bytes(), b"preserve personal signing key")
-            self.assertEqual(old_apk.read_bytes(), b"preserve earlier private build")
+            self.assertEqual(old_pack.read_bytes(), b"preserve earlier private pack")
             self.assertFalse(list(root.rglob("resources-*")))
 
-    def test_public_pair_preserves_official_apk_hash_and_personal_key(self):
-        self._public_build()
+    def test_content_pack_only_and_personal_key_untouched(self):
+        self._content_build()
 
-    def test_public_pack_failure_publishes_neither_file(self):
-        self._public_build("build")
+    def test_content_pack_failure_publishes_nothing(self):
+        self._content_build("build")
 
-    def test_public_pack_bad_hash_publishes_neither_file(self):
-        self._public_build("hash")
+    def test_content_pack_bad_hash_publishes_nothing(self):
+        self._content_build("hash")
 
-    def test_public_pair_publication_failure_rolls_back_both_files(self):
-        self._public_build("publish")
+    def test_content_pack_publication_failure_rolls_back(self):
+        self._content_build("publish")
 
     def _build(self, fail, first=False):
         with tempfile.TemporaryDirectory() as temporary:

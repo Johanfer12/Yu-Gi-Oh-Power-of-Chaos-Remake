@@ -71,9 +71,10 @@ Actívalo con conexión para preparar el paquete local. La primera descarga es d
 Selecciona los ISO o las carpetas instaladas de tus juegos y elige:
 
 - **Extraer para PC** para preparar los juegos en Windows.
-- **Crear APK** para preparar dos archivos: el APK público Android sin modificar y un **paquete privado de recursos `.pck`** generado desde tus juegos. Ambos archivos y su informe de validación quedan en **`PoC Data/android/apks/`**. También puedes reutilizar los juegos ya preparados.
+- **Crear recursos .pck** para preparar un **paquete privado de recursos `.pck`** generado desde tus juegos, que queda con su informe de validación en **`PoC Data/android/pck/`**. También puedes reutilizar los juegos ya preparados.
+- **Descargar APK** para bajar de GitHub el APK público Android de esta versión.
 
-**Android se prepara desde el launcher.** Verifica el APK público y genera el paquete de recursos en tu equipo. El flujo normal no requiere cuentas, SDK Android, JDK, configurar una firma ni acceder a la clave del autor. Instala el APK, ábrelo y selecciona tu `.pck` una vez. Las actualizaciones compatibles posteriores conservan esos recursos y tus partidas. [Preparar tus archivos Android](#crear-tu-apk-android).
+**Android se prepara desde el launcher.** El APK público lo compila y firma GitHub Actions; el launcher genera el paquete de recursos en tu equipo. El flujo normal no requiere cuentas, SDK Android, JDK, configurar una firma ni acceder a la clave del autor. Instala el APK, ábrelo y selecciona tu `.pck` una vez. Las actualizaciones compatibles posteriores conservan esos recursos y tus partidas. [Preparar tus archivos Android](#crear-tu-apk-android).
 
 Tus ISO y recursos convertidos permanecen en tu equipo; la descarga no incluye datos originales del juego. La conexión de Joey ya se probó entre **PC y PC**, y entre **PC y Android**. El proyecto continúa en alfa: agradecemos comentarios, errores y pruebas con otras ediciones y equipos.
 
@@ -85,7 +86,7 @@ Tus ISO y recursos convertidos permanecen en tu equipo; la descarga no incluye d
 
 **Importa tus recursos y elige extraer para PC o crear un APK Android**
 
-![Pantalla de importación en inglés con selección de ISO y carpeta y botones Extract for PC y Create APK](docs/images/launcher-import-en.png)
+![Pantalla de importación en inglés con selección de ISO y carpeta y botones Extract for PC, Create .pck resources y Download APK](docs/images/launcher-import-en.png)
 
 Las capturas muestran el launcher Windows. Los logos aparecen después de importar tus propias copias compatibles.
 
@@ -229,8 +230,8 @@ Cada componente de terceros conserva su licencia. Consulta [THIRD_PARTY_NOTICES.
 ## Crear tu APK Android
 
 1. Selecciona tus ISO/carpetas o reutiliza la biblioteca preparada para PC.
-2. Pulsa **Crear APK**. Cuando hacen falta, el launcher descarga una versión fija del APK público y el empaquetador Godot, verifica sus SHA-256 y prepara tus recursos privados en tu equipo.
-3. El launcher abre **`PoC Data/android/apks/`**, donde quedan el **APK**, su **`-resources.pck`** y el informe JSON. Copia el APK y el PCK a tu Android.
+2. Pulsa **Crear recursos .pck**. Cuando hace falta, el launcher descarga el empaquetador Godot, verifica su SHA-256 y prepara tus recursos privados en tu equipo. Después abre **`PoC Data/android/pck/`**, donde quedan el **`.pck`** y el informe JSON.
+3. Pulsa **Descargar APK** para bajar de GitHub el APK público de esta versión. Copia el APK y el PCK a tu Android.
 4. Instala el APK. Al abrirlo por primera vez, pulsa **Seleccionar paquete .pck** y elige ese archivo. Basta con importarlo una vez; la aplicación guarda su propia copia junto a tus partidas.
 
 El flujo normal no requiere cuentas, SDK, JDK, Android Studio ni una firma personal. El APK es la misma aplicación pública, con firma estable, para todos los jugadores. El PCK privado contiene los recursos de tus juegos y no se sube a ningún servicio. La descarga pública no contiene recursos originales ni la clave privada del autor. La primera preparación necesita conexión y espacio libre; las herramientas descargadas se reutilizan.
@@ -250,8 +251,7 @@ Todo se guarda dentro de la carpeta de datos:
 | Contenido Android | Ruta |
 | --- | --- |
 | Herramientas reutilizables y fuentes incluidas | `PoC Data/android/tools/` |
-| Caché del APK público verificado | `PoC Data/android/official/` |
-| APK público, PCK privado e informe JSON | `PoC Data/android/apks/` |
+| PCK privado e informe JSON | `PoC Data/android/pck/` |
 | Registros e informes de cada intento | `PoC Data/android/builds/` |
 | Firma de compilaciones personalizadas anteriores, si se usa | `PoC Data/android/signing/debug.keystore` |
 

@@ -13,7 +13,6 @@ import zipfile
 
 VERSION = "4.7.2"
 SDK_LICENSE_URL = "https://developer.android.com/studio/terms"
-RELEASES = "https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/"
 # CI builds the public APK and its source snapshot in the same run and embeds both, with
 # this description, next to this module: version, APK SHA-256 and source manifest SHA-256.
 RELEASE_INFO = Path(__file__).with_name("android-release.json")
@@ -112,7 +111,7 @@ def _source_dir(root: Path, info: dict) -> Path:
 
 
 def prepare(launcher: Path, *, private_build: bool = False) -> dict:
-    """Default: unchanged public APK plus a private, user-created resource pack.
+    """Default: Godot and the embedded source to pack the private resource PCK.
 
     Explicit private builds retain the older full Android SDK/signing workflow.
     """
@@ -131,7 +130,6 @@ def _verify_source(source: Path, expected: str) -> None:
 
 def _prepare_public(launcher: Path) -> dict:
     info = release_info()
-    expected_apk = info["sha256"]
     storage = launcher / "PoC Data/android"
     root = storage / "tools/kit-1"
     root.mkdir(parents=True, exist_ok=True)
@@ -179,19 +177,9 @@ def _prepare_public(launcher: Path) -> dict:
                 _verify_source(stage, info["source_manifest_sha256"])
                 stage.rename(source)
         _verify_source(source, info["source_manifest_sha256"])
-        public_apk = storage / "official" / f"PowerOfChaos-Android-{info['version']}.apk"
-        public_apk.parent.mkdir(parents=True, exist_ok=True)
-        if not public_apk.is_file() or digest(public_apk) != expected_apk:
-            status("Android: descargando el APK público verificado…")
-            embedded = Path(__file__).with_name("public-android.apk")
-            if embedded.is_file() and digest(embedded) == expected_apk:
-                shutil.copyfile(embedded, public_apk)
-            else:
-                fetch(RELEASES + info["version"] + "/PowerOfChaos-Android.apk", public_apk, expected_apk)
-        if digest(public_apk) != expected_apk:
-            raise ValueError("El APK público Android no supera SHA-256")
-        status("Android: APK público listo; preparando tus recursos privados…")
-        return dict(root=source, godot=godot, public_apk=public_apk, public_apk_sha256=expected_apk)
+        status("Android: preparando tus recursos privados…")
+        # The PCK matches the public APK built from this same source (info["version"]).
+        return dict(root=source, godot=godot, version=info["version"])
     finally:
         try:
             progress_file.unlink(missing_ok=True)

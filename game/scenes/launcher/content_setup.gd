@@ -9,7 +9,8 @@ var _dialog := FileDialog.new()
 var _status := Label.new()
 var _python := LineEdit.new()
 var _convert := Button.new()
-var _apk := Button.new()
+var _apk := Button.new() # Crea el paquete privado de recursos (.pck) para Android.
+var _download_apk := Button.new() # El APK público lo compila GitHub Actions.
 var _building_apk := false
 var _apk_directory := ""
 var _back := Button.new()
@@ -111,9 +112,13 @@ func _ready() -> void:
 	_convert.pressed.connect(_start)
 	add_child(_convert)
 	_style_control(_apk)
-	_apk.tooltip_text = "Prepara la APK oficial y tus recursos privados para importarlos una vez en Android." if Assets.lang == "s" else "Prepares the official APK and your private content for one-time Android import."
+	_apk.tooltip_text = "Crea tus recursos privados (.pck) para importarlos una vez en el APK público." if Assets.lang == "s" else "Creates your private content (.pck) to import once into the public APK."
 	_apk.pressed.connect(_start.bind(false, true))
 	add_child(_apk)
+	_style_control(_download_apk)
+	_download_apk.tooltip_text = "Descarga el APK público de esta versión desde GitHub." if Assets.lang == "s" else "Downloads this version's public APK from GitHub."
+	_download_apk.pressed.connect(_open_apk_download)
+	add_child(_download_apk)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.add_theme_color_override("font_color", GOLD_LIGHT.darkened(0.2))
@@ -159,7 +164,9 @@ func _language_updated() -> void:
 	_subtitle.text = str(LIBRARY_HINT[Assets.lang]) if Paths.has_data() else _copy(1)
 	_convert.text = _copy(4)
 	_convert.visible = true
-	_apk.text = {"s": "Crear APK", "e": "Create APK", "g": "APK erstellen", "f": "Créer un APK", "i": "Crea APK", "j": "APKを作成"}.get(Assets.lang, "Create APK")
+	_apk.text = {"s": "Crear recursos .pck", "e": "Create .pck resources", "g": ".pck-Ressourcen erstellen", "f": "Créer les ressources .pck", "i": "Crea risorse .pck", "j": ".pckリソースを作成"}.get(Assets.lang, "Create .pck resources")
+	_download_apk.text = {"s": "Descargar APK", "e": "Download APK", "g": "APK herunterladen", "f": "Télécharger l'APK", "i": "Scarica APK", "j": "APKをダウンロード"}.get(Assets.lang, "Download APK")
+	_download_apk.disabled = _busy
 	_apk.disabled = _busy or _tools_failed or Paths.storage_error or (not _has_pending() and not Paths.has_data())
 	if not _busy:
 		_status.text = _copy(5)
@@ -198,10 +205,12 @@ func _layout() -> void:
 	var actions_y := 446.0 if _python.visible else 414.0
 	_python.position = _origin + Vector2(250, 404)
 	_python.size = Vector2(300, 32)
-	_convert.position = _origin + Vector2(110, actions_y)
-	_convert.size = Vector2(280, 42)
-	_apk.position = _origin + Vector2(410, actions_y)
-	_apk.size = Vector2(280, 42)
+	_convert.position = _origin + Vector2(20, actions_y)
+	_convert.size = Vector2(240, 42)
+	_apk.position = _origin + Vector2(280, actions_y)
+	_apk.size = Vector2(240, 42)
+	_download_apk.position = _origin + Vector2(540, actions_y)
+	_download_apk.size = Vector2(240, 42)
 	_status.position = _origin + Vector2(90, actions_y + 52)
 	_status.size = Vector2(620, 24)
 	if _error_link.visible:
@@ -319,9 +328,10 @@ func _start(migrate := false, build_apk := false) -> void:
 		button.disabled = true
 	_convert.disabled = true
 	_apk.disabled = true
+	_download_apk.disabled = true
 	_back.disabled = true
 	_python.editable = false
-	_status.text = ("Preparando APK Android y paquete de recursos… Puede tardar varios minutos." if Assets.lang == "s" else "Preparing Android APK and content pack… This may take several minutes.") if build_apk else _copy(8)
+	_status.text = ("Preparando tus recursos Android (.pck)… Puede tardar varios minutos." if Assets.lang == "s" else "Preparing your Android content (.pck)… This may take several minutes.") if build_apk else _copy(8)
 	_language.disabled = true
 	var output_log := Paths.storage_dir.path_join("converter-output.log")
 	args.append_array(PackedStringArray(["--output-log", output_log]))
@@ -382,16 +392,17 @@ func _finish(result: Dictionary) -> void:
 		button.disabled = false
 	_convert.disabled = not _has_pending() or _tools_failed
 	_apk.disabled = _tools_failed or Paths.storage_error or (not _has_pending() and not Paths.has_data())
+	_download_apk.disabled = false
 	_back.disabled = false
 	_python.editable = true
 	if int(result["code"]) != 0:
 		_show_import_error(result)
 		return
 	if _building_apk:
-		_status.text = ("APK y recursos listos en PoC Data/android/apks. Instala la APK e importa el archivo .pck." if Assets.lang == "s" else "APK and content ready in PoC Data/android/apks. Install the APK and import the .pck file.")
+		_status.text = ("Recursos listos en PoC Data/android/pck. Instala el APK público e importa el archivo .pck." if Assets.lang == "s" else "Content ready in PoC Data/android/pck. Install the public APK and import the .pck file.")
 		_status.tooltip_text = str(result["output"])
 		if DisplayServer.get_name() != "headless":
-			OS.shell_open(_apk_directory.path_join("PoC Data/android/apks"))
+			OS.shell_open(_apk_directory.path_join("PoC Data/android/pck"))
 		return
 	var config := ConfigFile.new()
 	config.load(Paths.settings_path())
@@ -421,7 +432,7 @@ func _show_import_error(result: Dictionary) -> void:
 			var parser := JSON.new()
 			if parser.parse(line.substr(marker + 17).strip_edges()) == OK and parser.data is Dictionary:
 				failure = parser.data
-	var title := ("No se pudo crear el APK" if spanish else "APK build failed") if _building_apk else ("No se pudo importar" if spanish else "Import failed")
+	var title := ("No se pudieron crear los recursos Android" if spanish else "Android content build failed") if _building_apk else ("No se pudo importar" if spanish else "Import failed")
 	var game := str(failure.get("game", "")) if failure.get("game") != null else ""
 	var game_label := game.capitalize() if game in Game.GAMES else ""
 	var stages := {
@@ -471,6 +482,11 @@ func _close() -> void:
 	if _busy:
 		if not _building_apk:
 			_status.text = _copy(8)
+
+
+func _open_apk_download() -> void:
+	# Release de esta misma versión: su APK acepta el formato del .pck que crea este launcher.
+	OS.shell_open(Updates.REPOSITORY + "/releases/download/%s/PowerOfChaos-Android.apk" % Updates.current)
 
 
 func _open_licenses() -> void:

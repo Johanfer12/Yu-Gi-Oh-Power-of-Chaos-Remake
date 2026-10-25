@@ -131,55 +131,31 @@ class AndroidToolchainTests(unittest.TestCase):
         source = root / ("source-" + kit.digest(manifest)[:12])
         staged.rename(source)
         manifest = source / "PUBLICATION_MANIFEST.json"
-        apk = storage / "official" / "PowerOfChaos-Android-v0.1.0-alpha.19.apk"
-        apk.parent.mkdir()
-        apk.write_bytes(b"public APK from stable maintainer signing key")
+        apk = None
         key = storage / "signing/debug.keystore"
         key.parent.mkdir()
         key.write_bytes(b"personal key must remain untouched")
-        info = release_info(launcher, kit.digest(manifest), kit.digest(apk))
+        info = release_info(launcher, kit.digest(manifest), "c" * 64)
         return storage, source, apk, key, info
 
-    def test_public_default_reuses_verified_sources_and_apk_without_sdk_or_signing(self):
+    def test_public_default_reuses_verified_sources_without_apk_sdk_or_signing(self):
         with tempfile.TemporaryDirectory() as temporary:
             launcher = Path(temporary)
-            storage, source, apk, key, info = self._public_fixture(launcher)
-            apk_hash = kit.digest(apk)
+            storage, source, _, key, info = self._public_fixture(launcher)
             with patch.object(kit, "RELEASE_INFO", info), \
                  patch.object(kit, "fetch") as fetch, patch.object(kit.subprocess, "run") as execute:
                 config = kit.prepare(launcher)
             fetch.assert_not_called()
             execute.assert_not_called()
             self.assertEqual(config["root"], source)
-            self.assertEqual(config["public_apk"], apk)
-            self.assertEqual(config["public_apk_sha256"], apk_hash)
-            self.assertNotIn("keystore", config)
+            self.assertEqual(config["version"], "v0.1.0-alpha.19")
+            self.assertEqual(set(config), {"root", "godot", "version"})
             self.assertFalse((storage / "sdk-license.accepted").exists())
             self.assertFalse((storage / "tools/kit-1/sdk").exists())
             self.assertFalse((storage / "progress.json").exists())
             self.assertEqual(key.read_bytes(), b"personal key must remain untouched")
 
-    def test_public_missing_apk_downloads_only_pinned_public_file(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            launcher = Path(temporary)
-            storage, _, apk, key, info = self._public_fixture(launcher)
-            apk_hash = kit.digest(apk)
-            payload = apk.read_bytes()
-            apk.unlink()
-            def fetched(url, target, expected, progress=None):
-                self.assertEqual(url, kit.RELEASES + "v0.1.0-alpha.19/PowerOfChaos-Android.apk")
-                self.assertEqual(expected, apk_hash)
-                target.write_bytes(payload)
-            with patch.object(kit, "RELEASE_INFO", info), \
-                 patch.object(kit, "fetch", side_effect=fetched) as fetch, \
-                 patch.object(kit.subprocess, "run") as execute:
-                config = kit.prepare(launcher)
-            self.assertEqual(fetch.call_count, 1)
-            execute.assert_not_called()
-            self.assertEqual(kit.digest(config["public_apk"]), apk_hash)
-            self.assertEqual(key.read_bytes(), b"personal key must remain untouched")
-
-    def test_public_source_tampering_is_rejected_before_apk_fetch(self):
+    def test_public_source_tampering_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             launcher = Path(temporary)
             _, source, _, _, info = self._public_fixture(launcher)

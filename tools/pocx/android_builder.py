@@ -1,4 +1,9 @@
-"""Puente del launcher al compilador de la copia Android, sin modificar datos PC."""
+"""Puente del launcher al empaquetador Android, sin modificar datos PC.
+
+Por defecto solo crea el paquete privado de recursos (.pck): el APK público lo compila
+GitHub Actions y se descarga aparte. Una configuración con clave propia
+(android-builder.json con keystore) sigue compilando un APK personal completo.
+"""
 from __future__ import annotations
 
 import json
@@ -15,34 +20,30 @@ def configuration(launcher: Path) -> dict:
     config = launcher / "android-builder.json"
     if config.is_file():
         values = json.loads(config.read_text(encoding="utf8"))
-        return {key: str(value) if key in ("mode", "public_apk_sha256") else (launcher / value).resolve()
+        return {key: str(value) if key in ("mode", "version") else (launcher / value).resolve()
                 for key, value in values.items()}
     if getattr(sys, "frozen", False):
         from .android_toolchain import prepare
         return prepare(launcher)
-    # Desarrollo: PC y Android comparten main; el compilador está en este repositorio. La
-    # clave de FirmaAndroid es la publicada: --release la coteja con su certificado fijado.
+    # Desarrollo: el empaquetador está en este repositorio y Godot en Herramientas.
     repo = Path(__file__).resolve().parents[2]
     for parent in (launcher, *launcher.parents):
-        root = repo if (repo / "tools/android/build_apk.py").is_file() else parent / "PortTesting-Android"
-        if (root / "tools/android/build_apk.py").is_file() and (parent / "Herramientas").is_dir():
-            return dict(root=root, godot=parent / "Herramientas/Godot/godot_console.exe",
-                        sdk=parent / "Herramientas/AndroidSdk", java=parent / "Herramientas/JDK21",
-                        keystore=parent / "FirmaAndroid/debug.keystore", release=True)
+        if (repo / "tools/android/build_apk.py").is_file() and (parent / "Herramientas").is_dir():
+            return dict(root=repo, godot=parent / "Herramientas/Godot/godot_console.exe")
     from .android_toolchain import prepare
     return prepare(launcher)
 
 
+def content_only(config: dict) -> bool:
+    return "keystore" not in config
+
+
 def preflight(config: dict) -> None:
-    if "public_apk" in config:
-        from .android_toolchain import digest
+    if content_only(config):
         for path in (config["root"] / "tools/android/build_apk.py", config["root"] / "game/project.godot",
-                     config["godot"], config["public_apk"]):
+                     config["godot"]):
             if not path.is_file():
-                raise ValueError(f"Falta una herramienta o APK público Android: {path}")
-        expected = config.get("public_apk_sha256", "")
-        if not isinstance(expected, str) or len(expected) != 64 or digest(config["public_apk"]) != expected:
-            raise ValueError("El APK público Android no supera la verificación SHA-256")
+                raise ValueError(f"Falta una herramienta Android: {path}")
         return
     for key, relative in (("root", "tools/android/build_apk.py"), ("root", "game/project.godot"),
                           ("java", "bin/keytool.exe"), ("sdk", "build-tools")):
@@ -62,16 +63,17 @@ def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | No
     launcher = launcher.resolve()
     config = configuration(launcher)
     preflight(config)  # Fallar antes de extraer ISO grandes.
-    public_mode = "public_apk" in config
+    public_mode = content_only(config)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     evidence = launcher / "PoC Data/android/builds" / stamp
     evidence.mkdir(parents=True, exist_ok=False)
-    target = launcher / "PoC Data/android/apks" / f"PowerOfChaos-Android-{stamp}.apk"
+    if public_mode:
+        target = launcher / "PoC Data/android/pck" / f"PowerOfChaos-resources-{stamp}.pck"
+    else:
+        target = launcher / "PoC Data/android/apks" / f"PowerOfChaos-Android-{stamp}.apk"
     target.parent.mkdir(parents=True, exist_ok=True)
-    # Publicar solo el APK completamente verificado. Un fallo no deja un APK instalable.
-    staged_apk = evidence / target.name
-    content_target = target.with_name(target.stem + "-resources.pck")
-    staged_content = evidence / content_target.name
+    # Publicar solo el archivo completamente verificado. Un fallo no deja nada a medias.
+    staged = evidence / target.name
     published: list[Path] = []
     old_env = {key: os.environ.get(key) for key in ("JAVA_HOME", "ANDROID_HOME", "ANDROID_SDK_ROOT", "PATH")}
     old_argv = sys.argv[:]
@@ -88,22 +90,20 @@ def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | No
                 shutil.copytree(base, data)
                 optimize_tree(data)
             else:
-                raise ValueError("Selecciona un ISO o prepara un juego antes de crear el APK")
+                raise ValueError("Selecciona un ISO o prepara un juego antes de crear los recursos")
             sys.argv = [str(config["root"] / "tools/android/build_apk.py"),
                         "--data", str(data), "--work", str(evidence / "build"),
                         "--godot", str(config["godot"])]
             if public_mode:
-                sys.argv += ["--content-only", "--content-output", str(staged_content)]
+                sys.argv += ["--content-only", "--content-output", str(staged)]
             else:
-                sys.argv += ["--output", str(staged_apk), "--sdk", str(config["sdk"]),
+                sys.argv += ["--output", str(staged), "--sdk", str(config["sdk"]),
                              "--debug-keystore", str(config["keystore"])]
-                if config.get("release"):
-                    sys.argv += ["--release"]
-                elif "previous" in config:
+                if "previous" in config:
                     sys.argv += ["--previous-apk", str(config["previous"])]
                 else:
                     sys.argv += ["--first-build"]
-            print("Preparando tus recursos para el APK público Android…" if public_mode else
+            print("Preparando tus recursos privados para Android…" if public_mode else
                   "Compilando con los controles de la copia Android…", flush=True)
             runpy.run_path(sys.argv[0], run_name="__main__")
         manifests = list((evidence / "build").glob("*-build-manifest.json"))
@@ -113,22 +113,19 @@ def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | No
         report = json.loads(manifest.read_text(encoding="utf8"))
         if public_mode:
             from .android_toolchain import digest
-            if (not staged_content.is_file() or Path(report.get("content_pack", "")).resolve() != staged_content.resolve()
-                    or digest(staged_content) != report.get("sha256")):
+            if (not staged.is_file() or Path(report.get("content_pack", "")).resolve() != staged.resolve()
+                    or digest(staged) != report.get("sha256")):
                 raise ValueError("El paquete privado de recursos no supera la validación SHA-256")
-            shutil.copyfile(config["public_apk"], staged_apk)
-            if digest(staged_apk) != config["public_apk_sha256"]:
-                raise ValueError("El APK público cambió durante la preparación")
-            report.update(content_pack=str(content_target), content_pack_sha256=digest(staged_content),
-                          apk_sha256=config["public_apk_sha256"], apk_original_game_data_included=False,
-                          public_apk_unchanged=True)
-        report["apk"] = str(target)
+            report.update(content_pack=str(target), content_pack_sha256=digest(staged))
+            if config.get("version"):
+                report["public_apk_version"] = config["version"]
+        else:
+            report["apk"] = str(target)
         report["android_source"] = str(config["root"])
         manifest.write_text(json.dumps(report, indent=2), encoding="utf8")
         staged_manifest = evidence / target.with_suffix(".json").name
         shutil.copyfile(manifest, staged_manifest)
-        outputs = [(staged_content, content_target)] if public_mode else []
-        outputs += [(staged_manifest, target.with_suffix(".json")), (staged_apk, target)]
+        outputs = [(staged_manifest, target.with_suffix(".json")), (staged, target)]
         try:
             for source, destination in outputs:
                 if destination.exists():
@@ -139,10 +136,11 @@ def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | No
             for destination in reversed(published):
                 destination.unlink(missing_ok=True)
             raise
-        print(f"APK creado: {target}", flush=True)
         if public_mode:
-            print(f"Recursos privados: {content_target}\nInstala el APK y selecciona ese archivo .pck una sola vez al abrirlo. "
-                  "Las actualizaciones públicas conservarán tus recursos y partidas.", flush=True)
+            print(f"Recursos privados: {target}\nInstala el APK público y selecciona este archivo .pck una sola vez al abrirlo. "
+                  "Las actualizaciones conservarán tus recursos y partidas.", flush=True)
+        else:
+            print(f"APK creado: {target}", flush=True)
         return target
     finally:
         sys.argv = old_argv
@@ -151,9 +149,7 @@ def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | No
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
-        if staged_apk.exists():
-            staged_apk.unlink()
-        staged_content.unlink(missing_ok=True)
+        staged.unlink(missing_ok=True)
         # Solo la copia generada por esta llamada. Los registros y manifiestos quedan.
         project = evidence / "build/project"
         if project.is_dir() and project.resolve().parent == (evidence / "build").resolve():

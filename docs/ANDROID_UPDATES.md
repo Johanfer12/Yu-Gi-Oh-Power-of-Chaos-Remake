@@ -3,8 +3,8 @@
 The public APK is identical for every user. Its package is
 `org.porttesting.powerofchaos`; updates retain the established signing certificate.
 Original game resources are never uploaded. GitHub Actions builds and signs the APK;
-the Windows launcher built in the same run embeds it and prepares a separate private
-PCK locally. Android imports
+the Windows launcher downloads it from the release (**Download APK**) and prepares the
+separate private PCK locally (**Create .pck resources**). Android imports
 the PCK once into app storage and retains it, saves and preferences across APK updates.
 Repacking an APK would invalidate its signature.
 
@@ -38,8 +38,9 @@ installer launch falls back to the browser download. Old downloads are removed a
      certificate differs from `PUBLIC_SIGNING_CERTIFICATE` (`3ecec96a…`), so installed
      apps can always update. It also verifies 16 KB alignment, ZIP integrity, absence of
      original resources and that a fresh profile boots to the importer.
-   - `tools/build_windows.py --android` embeds that APK and the exact source snapshot it
-     came from in the EXE; end users neither modify nor sign it.
+   - `tools/build_windows.py --android` checks that APK and embeds in the EXE the exact
+     source snapshot it came from, so the launcher packs PCKs in the format that APK
+     reads; end users neither modify nor sign the APK.
    - A tag publishes the EXE, the APK and `ANDROID_RELEASE.json` together. A tag build
      without the signing secret fails; other builds without it (forks) use a throwaway
      key as a build check only.

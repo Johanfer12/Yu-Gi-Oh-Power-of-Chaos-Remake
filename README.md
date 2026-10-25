@@ -70,9 +70,10 @@ Enable it with an internet connection to prepare the local pack. The first downl
 Select your ISO images or installed game folders, then choose:
 
 - **Extract for PC** to prepare the games for Windows.
-- **Create APK** to prepare two files: the unchanged public Android APK and a private **`.pck` resource pack** made from your games. Both files and their validation receipt are saved in **`PoC Data/android/apks/`**. Already prepared games can also be reused.
+- **Create .pck resources** to prepare a private **`.pck` resource pack** made from your games, saved with its validation receipt in **`PoC Data/android/pck/`**. Already prepared games can also be reused.
+- **Download APK** to download this version's public Android APK from GitHub.
 
-**Android setup is handled by the launcher.** It verifies the public APK and prepares the resource pack locally. No account, Android SDK, JDK, signing-key setup or author signing key is needed for this normal workflow. Install the APK, open it and select your `.pck` once. Later compatible updates keep those resources and your saves. [Prepare your Android files](#build-your-android-apk).
+**Android setup is handled by the launcher.** The public APK is built and signed by GitHub Actions; the launcher prepares the resource pack locally. No account, Android SDK, JDK, signing-key setup or author signing key is needed for this normal workflow. Install the APK, open it and select your `.pck` once. Later compatible updates keep those resources and your saves. [Prepare your Android files](#build-your-android-apk).
 
 Your ISO images and converted resources stay on your computer; no original game data is included in the download. Joey's networking has been tested between **PC and PC**, and between **PC and Android**. This is still an alpha: feedback, bug reports and testing on other editions and devices are welcome.
 
@@ -84,7 +85,7 @@ Your ISO images and converted resources stay on your computer; no original game 
 
 **Import your resources and choose PC extraction or Android APK creation**
 
-![English import screen showing ISO and folder selection, Extract for PC and Create APK](docs/images/launcher-import-en.png)
+![English import screen showing ISO and folder selection, Extract for PC, Create .pck resources and Download APK](docs/images/launcher-import-en.png)
 
 The screenshots show the Windows launcher. Game logos appear after importing your own compatible copies.
 
@@ -252,8 +253,8 @@ Third-party components retain their own licenses. See [THIRD_PARTY_NOTICES.md](T
 ## Build your Android APK
 
 1. Select your ISO images/folders or reuse the library already prepared for PC.
-2. Click **Create APK**. The launcher downloads a pinned public APK and Godot's resource packer when needed, verifies their SHA-256 checksums and prepares your private resources locally.
-3. The launcher opens **`PoC Data/android/apks/`**, containing the **APK**, its matching **`-resources.pck`** and a JSON validation receipt. Copy both the APK and PCK to your Android device.
+2. Click **Create .pck resources**. The launcher downloads Godot's resource packer when needed, verifies its SHA-256 checksum and prepares your private resources locally. It opens **`PoC Data/android/pck/`**, containing the **`.pck`** and a JSON validation receipt.
+3. Click **Download APK** to get this version's public APK from GitHub. Copy both the APK and PCK to your Android device.
 4. Install the APK. At first launch, choose **Select .pck resource pack** and select that PCK. Import it once; the app keeps its own copy alongside your saves.
 
 The normal workflow needs no account, SDK, JDK, Android Studio or personal signing key. The APK is the same public, consistently signed application for every player; the private PCK contains the resources from your games and is never uploaded. Original game resources and the author's signing key are not included in the public download. Initial preparation requires internet and free space; downloaded tools are reused.
@@ -273,8 +274,7 @@ Everything stays inside the data folder:
 | Android content | Location |
 | --- | --- |
 | Reusable tools and bundled sources | `PoC Data/android/tools/` |
-| Verified public APK cache | `PoC Data/android/official/` |
-| Public APK, private PCK and JSON validation receipt | `PoC Data/android/apks/` |
+| Private PCK and JSON validation receipt | `PoC Data/android/pck/` |
 | Build logs and validation reports | `PoC Data/android/builds/` |
 | Existing custom-build signing key, when used | `PoC Data/android/signing/debug.keystore` |
 

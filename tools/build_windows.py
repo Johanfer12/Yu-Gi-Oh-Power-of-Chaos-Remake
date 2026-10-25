@@ -141,15 +141,14 @@ def build(godot: Path, output: Path, with_android: bool = False, android: Path |
             android_release["source_manifest_sha256"] = bundle_source(android/"source", android_source)
             android_info = work/"android-release.json"
             android_info.write_text(json.dumps(android_release, indent=2), encoding="utf-8")
-            embedded_apk = work/"public-android.apk"
-            shutil.copyfile(android_apk, embedded_apk)
+            # The APK is published beside the EXE; the launcher only needs its source to pack PCKs.
             for name in ("PowerOfChaos-Android.apk", "PowerOfChaos-Android.apk.sha256", "ANDROID_RELEASE.json"):
                 shutil.copyfile(android/name, output/name)
-            for path in (android_source, android_info, embedded_apk):
+            for path in (android_source, android_info):
                 android_data += ["--add-data", str(path) + os.pathsep + "pocx"]
             receipt["android_source_manifest_sha256"] = android_release["source_manifest_sha256"]
             receipt["android_apk_sha256"] = android_release["sha256"]
-        # Bundle source, the verified public APK and the small color-key configuration.
+        # Bundle the Android source snapshot and the small color-key configuration.
         command([sys.executable, "-m", "PyInstaller", "--onefile", "--noupx", "--name", "pocx-import",
                  "--distpath", str(bundled), "--workpath", str(work/"pyinstaller"), "--specpath", str(work),
                  "--paths", str(source/"tools"), "--add-data",
