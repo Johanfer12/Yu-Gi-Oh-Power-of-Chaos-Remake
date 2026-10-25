@@ -76,11 +76,23 @@ def digest(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def signer_certificate(text):
+    """Certificate SHA-256 of the only signer in `apksigner verify --print-certs` output.
+
+    build-tools 35 prints "Signer #1 certificate ...", 36 prints "V3.0 Signer: certificate ...".
+    """
+    if re.search(r"^Number of signers: (?!1$)", text, re.M):
+        raise RuntimeError("The APK must have exactly one signer")
+    digests = set(re.findall(r"^(?:Signer #1|V[\d.]+ Signer:) certificate SHA-256 digest: ([0-9a-f]{64})$", text, re.M))
+    if len(digests) != 1:
+        raise RuntimeError("Could not read a single signing certificate from apksigner")
+    return digests.pop()
+
+
 def verify_signing_key(tools, previous_apk, keystore):
     previous = run([str(tools / "apksigner.bat"), "verify", "--print-certs",
                     str(previous_apk.resolve())], f"v{CODE}-previous-signature.log", cwd=OUT)
-    expected = next(line.split(": ", 1)[1] for line in previous.splitlines()
-                    if line.startswith("Signer #1 certificate SHA-256 digest:"))
+    expected = signer_certificate(previous)
     if signing_key_digest(keystore) != expected:
         raise RuntimeError("Keystore differs from the installed APK certificate; use --debug-keystore")
     return expected
@@ -196,11 +208,9 @@ def main():
          "--key-pass", "pass:android", str(apk)], f"v{CODE}-sign.log", cwd=OUT)
     signed = run([str(tools / "apksigner.bat"), "verify", "--verbose", "--print-certs", str(apk)], f"v{CODE}-signature.log", cwd=OUT)
     previous = "" if args.first_build or args.release else run([str(tools / "apksigner.bat"), "verify", "--print-certs", str(args.previous_apk.resolve())], f"v{CODE}-previous-signature.log", cwd=OUT)
-    def certificate(text):
-        return next(line for line in text.splitlines() if line.startswith("Signer #1 certificate SHA-256 digest:"))
-    assert certificate(signed).split(": ", 1)[1] == signing_certificate, "Unexpected signing certificate"
+    assert signer_certificate(signed) == signing_certificate, "Unexpected signing certificate"
     if previous:
-        assert certificate(signed) == certificate(previous), "Certificate changed; update would require uninstalling"
+        assert signer_certificate(signed) == signer_certificate(previous), "Certificate changed; update would require uninstalling"
     run([str(tools / "zipalign.exe"), "-c", "-P", "16", "-v", "4", str(apk)], f"v{CODE}-alignment.log")
     run([str(tools / "aapt.exe"), "dump", "badging", str(apk)], f"v{CODE}-package.log", cwd=OUT)
     with zipfile.ZipFile(apk) as archive:
