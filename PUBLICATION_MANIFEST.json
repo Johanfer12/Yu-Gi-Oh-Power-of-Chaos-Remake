@@ -226,7 +226,7 @@
     "README.md": "1a859b94f4dc699bd5d30b79623bbfe67a49860c39323db877eeabea03b0f927",
     "RELEASE_NOTES.md": "193ba57d5d1814fff7bbf7acbe731ffa0bde3fdf9e1bb476c26981170e52470d",
     "THIRD_PARTY_NOTICES.md": "fb85351d3f3c16e5eb72e84ca94f242183839a39a4d95cc65059cb8312b3f8bf",
-    "tools/android/build_apk.py": "2fa27f049980e1d2ecbc4d63d8d70fd2a1be3fb9a9ef0ecc727e4bfe4ad3d2f3",
+    "tools/android/build_apk.py": "b457ef6932306c3a94d437d3a0bfa4f16a57a5d706f745a1eb9e1610ef1ac1f4",
     "tools/android/pack_data.gd": "c4a314755679e4834a6b480104498c87f38e4e690f59db5d44146f5c377093e1",
     "tools/build_android.py": "3bbd301a41700b2dccee27c478a3a7860e7df83fd8df579201ab7faecc29cec7",
     "tools/build_windows.py": "6df4dffcd7b822480544b21acf7864217f6285c1c6f5620e897b28bd8c2660f4",

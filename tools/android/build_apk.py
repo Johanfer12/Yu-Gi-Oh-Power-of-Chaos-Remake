@@ -81,6 +81,7 @@ def signer_certificate(text):
 
     build-tools 35 prints "Signer #1 certificate ...", 36 prints "V3.0 Signer: certificate ...".
     """
+    text = "\n".join(text.splitlines())  # apksigner.bat output on Windows ends lines with CRLF.
     if re.search(r"^Number of signers: (?!1$)", text, re.M):
         raise RuntimeError("The APK must have exactly one signer")
     digests = set(re.findall(r"^(?:Signer #1|V[\d.]+ Signer:) certificate SHA-256 digest: ([0-9a-f]{64})$", text, re.M))
