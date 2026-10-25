@@ -1,8 +1,7 @@
-## v0.1.0-alpha.20
+## v0.1.0-alpha.21
 
-- PC launcher: **Download APK** gets this version's public Android APK from GitHub and **Create .pck resources** only prepares your private resource pack in `PoC Data/android/pck/`. The launcher no longer packages an APK.
-- The public APK is now built and signed by GitHub Actions with the same certificate as every previous public APK.
+- Joey: field spells now change the duel background, show the field flash and play the scene-change sound, and the duel waits for that effect as in the original. Playing the same field again does nothing, as in the original.
 
-Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android24 uses the same package and signing certificate as Android23. No new physical-device validation is claimed.
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android25 uses the same package and signing certificate as Android24. No new physical-device validation is claimed.
 
-Launcher PC: **Descargar APK** baja de GitHub el APK público de esta versión y **Crear recursos .pck** prepara solo tu paquete privado en `PoC Data/android/pck/`. En Android, actualiza desde el launcher; no desinstales la app ni borres sus datos.
+Joey: las cartas de campo ya cambian el fondo del duelo, muestran el destello del campo y suenan, y el duelo espera ese efecto como el original. En Android, actualiza desde el launcher; no desinstales la app ni borres sus datos.

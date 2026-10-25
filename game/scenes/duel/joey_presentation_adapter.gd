@@ -82,6 +82,8 @@ var _lp_started := {}
 var presentation_visual: Node2D
 var quick_messages: Node2D
 var _lp_targets := [8000, 8000]
+## Terreno destino del objeto de campo 5f3244 (+0x1c); 449330 lo crea en 0 con cada duelo.
+var _field_target := 0
 
 
 static func create_native(data_dir: String) -> JoeyPresentationAdapter:
@@ -360,8 +362,12 @@ func query_visual_busy(kind: String, p: int = 0, _zone: int = 0) -> bool:
 		return presentation_visual.joey_objects_busy()
 	if kind == "markers":
 		return presentation_visual._markers_busy() or presentation_visual.active.get("mode", "") == "sacrifice_release"
-	if kind == "phase_banner":
-		return presentation_visual.active.get("mode", "") == "phase_native"
+	if kind == "field_effect":
+		# 403080: byte +0x144 del efecto de campo, activo hasta que 4490c0 supera 0x27f.
+		if presentation_visual.active.get("mode", "") == "field_change": return true
+		for pending: Dictionary in presentation_visual.pending:
+			if pending.get("mode", "") == "field_change": return true
+		return false
 	if kind != "lp": return false
 	if _lp_started.has(p) and _presentation_tick() - int(_lp_started[p]) < 32: return true
 	var active: Dictionary = presentation_visual.active
@@ -540,6 +546,15 @@ func _collect_native_events() -> void:
 				for i in event.before:
 					before[i] = engine.f4022e0(int(event.before[i])) & 0xffff
 				_emit("joey_hand_shuffle", {"p": int(event.p), "objects": before.keys(), "before": before})
+			"449740":
+				# 449740: solo un terreno distinto reinicia el fondo (+0x18 -> +0x1c, 449850) y
+				# activa el efecto +0x140 (4490c0/449120) con scene_change (0x10000012).
+				var terrain := int(args[1])
+				if terrain != _field_target:
+					_field_target = terrain
+					# duel_field_visual lee el terreno de la vista, como en Yugi (0xa133ec).
+					m.set_u16(0xa133ec, (m.u16(0xa133ec) & 0xfff0) | (terrain & 15))
+					_emit("cmd11", {"p": 0, "a": terrain})
 			"native_field_shuffle":
 				_emit("joey_field_shuffle", {"p": int(event.p), "objects": event.objects.duplicate(),
 					"visual_flags": event.visual_flags.duplicate()})

@@ -620,8 +620,8 @@ func f408670() -> int:
 	return 0
 
 
-## Joey FUN_004086c0: comando 11, fija el nibble bajo de a577f4 con a y muestra el indicador
-## (449740); despues espera al objeto +0x310 (omitido).
+## Joey FUN_004086c0: comando 11, fija el terreno (nibble bajo de a577f4) con a, lo pasa al
+## objeto de campo (449740) y espera su efecto (+0x140, vtable+4 = 403080).
 func f4086c0() -> int:
 	var a := cmd_a()
 	var w := m.u16(0xa577f4)
@@ -630,7 +630,7 @@ func f4086c0() -> int:
 		cmd_advance()
 		f449740(m.u32(_JH_GRAPHICS) + 0x310, a)
 		return 0
-	if visual_busy("phase_banner", 0, 0, 0x40871d): return 0
+	if visual_busy("field_effect", 0, 0, 0x40871d): return 0
 	cmd_finish()
 	return 0
 
