@@ -14,7 +14,12 @@ TOOL_TOP = {"tools/pyproject.toml", "tools/prepare_public.py", "tools/build_wind
             "tools/tests/test_public_import.py", "tools/tests/test_media_import.py",
             "tools/tests/test_compact_import.py", "tools/configure_android_builder.py", "tools/tests/test_android_builder.py", "tools/tests/test_android_toolchain.py", "tools/tests/test_updater.py", "tools/tests/test_card_translations.py", "tools/tests/test_reviewed_card_pack.py",
             "tools/prepare_android_public.py", "tools/public_android/README.md", "tools/public_android/README.es.md",
-            ".github/workflows/build-windows.yml", "game/export_presets.cfg"}
+            ".github/workflows/build-windows.yml", "game/export_presets.cfg",
+            # CI builds the APK from the Android snapshot of this same tree (build_android.py).
+            "tools/build_android.py", "tools/android/build_apk.py", "tools/android/pack_data.gd",
+            "game/tests/android_bundle_test.gd", "game/tests/android_engine_bundle_test.gd",
+            "game/assets/icons/launcher-adaptive-foreground.svg", "game/assets/icons/launcher-adaptive-background.svg",
+            "game/assets/icons/launcher-adaptive-monochrome.svg"}
 OWN_ASSETS = {"game/assets/music/launcher_theme.mp3",
               "game/assets/backgrounds/yugi_duel.jpg",
               "game/assets/backgrounds/joey_duel.png",

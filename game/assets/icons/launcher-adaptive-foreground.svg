@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="432" viewBox="0 0 432 432">
+  <g transform="translate(80 80) scale(0.53125)">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0.8" y2="1">
+      <stop stop-color="#fff3b5"/><stop offset=".27" stop-color="#ffd45f"/>
+      <stop offset=".57" stop-color="#ac651d"/><stop offset=".78" stop-color="#ffe095"/>
+      <stop offset="1" stop-color="#ba7428"/>
+    </linearGradient>
+    <radialGradient id="night" cx=".4" cy=".28" r=".85">
+      <stop stop-color="#49315f"/><stop offset=".6" stop-color="#1e142d"/>
+      <stop offset="1" stop-color="#080911"/>
+    </radialGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#5e387b"/><stop offset="1" stop-color="#171022"/>
+    </linearGradient>
+    <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fff8cd"/><stop offset=".45" stop-color="#ffdb72"/>
+      <stop offset="1" stop-color="#c27926"/>
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="260" r="244" fill="#08070e"/>
+  <circle cx="256" cy="252" r="238" fill="url(#gold)"/>
+  <circle cx="256" cy="252" r="224" fill="url(#night)" stroke="#734722" stroke-width="4"/>
+  <circle cx="256" cy="252" r="208" fill="none" stroke="#e3b75e" stroke-width="2" opacity=".4"/>
+  <path d="M80 207A184 184 0 0 1 207 76M305 428A184 184 0 0 0 432 301" fill="none" stroke="#fff0b0" stroke-width="5" stroke-linecap="round" opacity=".65"/>
+  <g transform="rotate(-23 256 266)">
+    <rect x="125" y="132" width="166" height="254" rx="19" fill="#0d1724" stroke="url(#gold)" stroke-width="10"/>
+    <rect x="141" y="148" width="134" height="222" rx="8" fill="#26526c"/>
+    <path d="M153 170H263M153 346H263" stroke="#69acc4" stroke-width="4" opacity=".5"/>
+  </g>
+  <g transform="rotate(23 256 266)">
+    <rect x="221" y="132" width="166" height="254" rx="19" fill="#281318" stroke="url(#gold)" stroke-width="10"/>
+    <rect x="237" y="148" width="134" height="222" rx="8" fill="#754431"/>
+    <path d="M249 170H359M249 346H359" stroke="#e29b62" stroke-width="4" opacity=".5"/>
+  </g>
+  <rect x="165" y="99" width="182" height="304" rx="20" fill="#0a0810" opacity=".6"/>
+  <rect x="172" y="91" width="168" height="304" rx="19" fill="url(#gold)"/>
+  <rect x="183" y="102" width="146" height="282" rx="11" fill="url(#card)" stroke="#54372c" stroke-width="3"/>
+  <path d="M197 143V119H221M291 119H315V143M197 343V367H221M291 367H315V343" fill="none" stroke="#f1c76c" stroke-width="5" stroke-linecap="round"/>
+  <path d="M256 155L283 215L309 243L283 271L256 331L229 271L203 243L229 215Z" fill="url(#gem)" stroke="#ffe6a0" stroke-width="3"/>
+  <path d="M256 184V302L229 243Z" fill="#fff4bc"/>
+  <path d="M256 184L283 243L256 302Z" fill="#c18234"/>
+  <path d="M256 210L271 243L256 276L241 243Z" fill="#20142f"/>
+  <path d="M256 224L265 243L256 262L247 243Z" fill="#ffeaa2"/>
+  <path d="M256 421L265 434L256 447L247 434Z" fill="url(#gold)"/>
+  </g>
+</svg>

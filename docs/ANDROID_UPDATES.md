@@ -2,8 +2,9 @@
 
 The public APK is identical for every user. Its package is
 `org.porttesting.powerofchaos`; updates retain the established signing certificate.
-Original game resources are never uploaded. The Windows launcher embeds a verified
-copy of the public APK and prepares a separate private PCK locally. Android imports
+Original game resources are never uploaded. GitHub Actions builds and signs the APK;
+the Windows launcher built in the same run embeds it and prepares a separate private
+PCK locally. Android imports
 the PCK once into app storage and retains it, saves and preferences across APK updates.
 Repacking an APK would invalidate its signature.
 
@@ -24,32 +25,33 @@ installer launch falls back to the browser download. Old downloads are removed a
 1. PC and Android share `main`: game fixes need no port. Check that Android-only
    behaviour stays behind its platform checks or files (`docs/ANDROID.md`) and run the
    Android desktop tests with `--platform=android --mobile-controls=true`, plus
-   `desktop_pointer_test` for PC.
-2. Increment Android versionCode and set its build version to the intended PC release.
-   Export a fresh allowlisted Android source snapshot (`tools/prepare_android_public.py`,
-   source `main` by default). Build its engine-only APK using
-   `tools/android/build_apk.py --engine-only`, the established local signing key and
-   the previous APK for certificate comparison. Keep signing keys outside Git/GitHub.
-3. Verify signature, certificate continuity, 16 KB alignment, ZIP integrity and absence
-   of original resources. Run touch, content import/persistence and native regressions.
-   On an empty profile, launch the configured main scene and verify it reaches the
-   import button. Instantiating the importer directly does not test the boot route.
-   Publish the signed APK, checksum and ANDROID_RELEASE.json under its Android tag.
-4. Update the Windows builder's source commit/manifest hash and public APK URL/hash.
-   The EXE embeds that exact APK; end users neither modify nor sign it. No SDK/JDK or
-   account is needed for the normal APK + PCK workflow. Explicit custom-key builds
-   retain their separate advanced configuration.
-5. Windows CI downloads the pinned signed public APK without receiving any private
-   signing material. When Android metadata names this PC release version, CI also
-   publishes the APK and its metadata with the EXE, making them visible to the Android
-   updater. A PC-only release does not masquerade as a newer Android build.
+   `desktop_pointer_test` for PC. Local work is code and tests only.
+2. Set `config/version` in `game/project.godot` to the release and increment the
+   Android Tablet preset's `version/code`; an unchanged versionCode is not offered to
+   installed apps.
+3. Push to `main` and tag `vX.Y.Z[-alpha.N]`. GitHub Actions builds everything from that
+   commit; nothing is built or uploaded by hand:
+   - `tools/build_android.py` exports the allowlisted Android source snapshot
+     (`tools/prepare_android_public.py`) and builds its engine-only APK with
+     `tools/android/build_apk.py --engine-only --release`. The APK is signed with the
+     repository secret `ANDROID_SIGNING_KEYSTORE` and `--release` refuses any key whose
+     certificate differs from `PUBLIC_SIGNING_CERTIFICATE` (`3ecec96a…`), so installed
+     apps can always update. It also verifies 16 KB alignment, ZIP integrity, absence of
+     original resources and that a fresh profile boots to the importer.
+   - `tools/build_windows.py --android` embeds that APK and the exact source snapshot it
+     came from in the EXE; end users neither modify nor sign it.
+   - A tag publishes the EXE, the APK and `ANDROID_RELEASE.json` together. A tag build
+     without the signing secret fails; other builds without it (forks) use a throwaway
+     key as a build check only.
 
-The installed updater only recognizes semantic tags such as
-`v0.1.0-alpha.18`. Publishing solely under `android-v22` does not expose an
-update to an installed app. Before declaring an update available, publish the
-APK and `ANDROID_RELEASE.json` together under the semantic release tag; its
-metadata `version` must equal that tag. The Android-specific tag may remain as
-the immutable download pinned by the Windows builder.
+The installed updater only recognizes semantic tags such as `v0.1.0-alpha.19`, and the
+metadata `version` must equal that tag. Older `android-vNN` releases were immutable
+downloads for the former pinned builder and are no longer created.
+
+The signing key is a single file with Godot's debug-keystore password. Keep the
+original outside Git as the backup; losing it means installed apps can only move to a
+new key by uninstalling. To (re)install it as the repository secret:
+`base64 -w0 debug.keystore | gh secret set ANDROID_SIGNING_KEYSTORE`.
 
 For alpha.18, the compiled updater extracted from the actual alpha.17 APK
 (versionCode21) first reproduced the missing notice with only `android-v22`,
@@ -64,9 +66,10 @@ a release is published. This check does not claim physical-device testing.
 
 Android checks trusted repository release assets, metadata, package, increasing
 versionCode and the installed build's signing certificate before offering an update.
-The update button opens the APK download in a browser. Android asks the user to
-confirm installation and enforces the APK signature. The app does not claim to
-verify browser downloads itself or perform silent installation. Do not uninstall
+The update button downloads the APK inside the app and verifies its SHA-256 before
+opening the system installer (see In-app update); the browser download is only the
+fallback. Android asks the user to confirm installation and enforces the APK
+signature. The app does not perform silent installation. Do not uninstall
 or clear app storage to update. A new device or removed app needs its resource
 PCK again. Legacy APKs using another key require that original build process, or
 an explicitly chosen fresh installation of the public APK.

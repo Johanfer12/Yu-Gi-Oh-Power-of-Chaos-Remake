@@ -12,14 +12,11 @@ import urllib.request
 import zipfile
 
 VERSION = "4.7.2"
-SOURCE_COMMIT = "b30e6c23e13b7f3593359a2459411c50251277b2"
-SOURCE_MANIFEST_SHA256 = "e23c088b8c1cdbf824f76a0b88158e15f7b02c3736ff2438b7295896916ea3dc"
 SDK_LICENSE_URL = "https://developer.android.com/studio/terms"
-PUBLIC_APK_VERSION = "v0.1.0-alpha.18"
-PUBLIC_APK_URL = ("https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/"
-                  + "android-v22/PowerOfChaos-Android.apk")
-# Filled from the independently verified engine-only APK before releasing the launcher.
-PUBLIC_APK_SHA256 = "9c06bb78941084d55d7f91cb4307359f78abc2d1d9a5dc67525e4288eb3df09d"
+RELEASES = "https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/"
+# CI builds the public APK and its source snapshot in the same run and embeds both, with
+# this description, next to this module: version, APK SHA-256 and source manifest SHA-256.
+RELEASE_INFO = Path(__file__).with_name("android-release.json")
 GODOT_BASE = f"https://github.com/godotengine/godot-builds/releases/download/{VERSION}-stable/"
 PACKAGES = {
     "godot": (GODOT_BASE + f"Godot_v{VERSION}-stable_win64.exe.zip",
@@ -81,38 +78,37 @@ def extract(archive: Path, target: Path, select=None, strip=0) -> None:
                 shutil.copyfileobj(source, output)
 
 
-def bundle_source(target: Path) -> None:
-    """Build-time: pin and verify the public, source-only Android snapshot."""
-    with tempfile.TemporaryDirectory(prefix="android-source-") as temporary:
-        work = Path(temporary)
-        archive = work / "source.zip"
-        url = f"https://codeload.github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/zip/{SOURCE_COMMIT}"
-        with urllib.request.urlopen(url, timeout=120) as source, archive.open("wb") as output:
-            shutil.copyfileobj(source, output)
-        extract(archive, work / "source", strip=1)
-        root = work / "source"
-        manifest = root / "PUBLICATION_MANIFEST.json"
-        if digest(manifest) != SOURCE_MANIFEST_SHA256:
-            raise ValueError("El manifiesto Android no coincide con la revisión auditada")
-        files = json.loads(manifest.read_text(encoding="utf8"))["files"]
-        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as output:
-            for name, expected in files.items():
-                path = root / name
-                if not path.resolve().is_relative_to(root.resolve()) or digest(path) != expected:
-                    raise ValueError("Fuente Android no válida: " + name)
-                output.write(path, name)
-            # The launcher revalidates extracted sources before packing private data.
-            output.write(manifest, "PUBLICATION_MANIFEST.json")
+def bundle_source(root: Path, target: Path) -> str:
+    """Build-time: zip the source snapshot the APK was built from; returns its manifest SHA-256."""
+    manifest = root / "PUBLICATION_MANIFEST.json"
+    files = json.loads(manifest.read_text(encoding="utf8"))["files"]
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as output:
+        for name, expected in files.items():
+            path = root / name
+            if not path.resolve().is_relative_to(root.resolve()) or digest(path) != expected:
+                raise ValueError("Fuente Android no válida: " + name)
+            output.write(path, name)
+        # The launcher revalidates extracted sources before packing private data.
+        output.write(manifest, "PUBLICATION_MANIFEST.json")
+    return digest(manifest)
 
 
-def bundle_public_apk(target: Path) -> dict:
-    """Embed the unchanged signed APK; original game data is never bundled."""
-    fetch(PUBLIC_APK_URL, target, PUBLIC_APK_SHA256)
-    with urllib.request.urlopen(PUBLIC_APK_URL.rsplit('/', 1)[0] + '/ANDROID_RELEASE.json', timeout=60) as response:
-        info = json.load(response)
-    if info.get('sha256') != PUBLIC_APK_SHA256 or info.get('original_game_data_included', True):
-        raise ValueError('Invalid public Android release metadata')
+def release_info() -> dict:
+    """APK and source identity embedded by the CI build of this launcher."""
+    if not RELEASE_INFO.is_file():
+        raise ValueError("Esta compilación del launcher no incluye el APK público Android")
+    info = json.loads(RELEASE_INFO.read_text(encoding="utf8"))
+    for key in ("sha256", "source_manifest_sha256"):
+        value = info.get(key, "")
+        if not isinstance(value, str) or len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+            raise ValueError("Esta compilación aún no incluye el SHA-256 auditado del APK público Android")
+    if info.get("original_game_data_included", True):
+        raise ValueError("El APK público Android no debe incluir datos originales")
     return info
+
+
+def _source_dir(root: Path, info: dict) -> Path:
+    return root / ("source-" + info["source_manifest_sha256"][:12])
 
 
 def prepare(launcher: Path, *, private_build: bool = False) -> dict:
@@ -123,9 +119,9 @@ def prepare(launcher: Path, *, private_build: bool = False) -> dict:
     return _prepare_private(launcher) if private_build else _prepare_public(launcher)
 
 
-def _verify_source(source: Path) -> None:
+def _verify_source(source: Path, expected: str) -> None:
     manifest = source / "PUBLICATION_MANIFEST.json"
-    if not manifest.is_file() or digest(manifest) != SOURCE_MANIFEST_SHA256:
+    if not manifest.is_file() or digest(manifest) != expected:
         raise ValueError("Las fuentes Android no coinciden con la revisión auditada")
     for name, expected in json.loads(manifest.read_text(encoding="utf8"))["files"].items():
         path = source / name
@@ -134,8 +130,8 @@ def _verify_source(source: Path) -> None:
 
 
 def _prepare_public(launcher: Path) -> dict:
-    if len(PUBLIC_APK_SHA256) != 64 or any(c not in "0123456789abcdef" for c in PUBLIC_APK_SHA256):
-        raise ValueError("Esta compilación aún no incluye el SHA-256 auditado del APK público Android")
+    info = release_info()
+    expected_apk = info["sha256"]
     storage = launcher / "PoC Data/android"
     root = storage / "tools/kit-1"
     root.mkdir(parents=True, exist_ok=True)
@@ -171,7 +167,7 @@ def _prepare_public(launcher: Path) -> dict:
                     shutil.rmtree(godot.parent)
                 installed.rename(godot.parent)
         (godot.parent / "_sc_").touch()
-        source = root / ("source-" + SOURCE_COMMIT[:12])
+        source = _source_dir(root, info)
         if not source.is_dir():
             source_zip = Path(__file__).with_name("android-source.zip")
             if not source_zip.is_file():
@@ -180,22 +176,22 @@ def _prepare_public(launcher: Path) -> dict:
             with tempfile.TemporaryDirectory(prefix="source-", dir=root) as temporary:
                 stage = Path(temporary) / "source"
                 extract(source_zip, stage)
-                _verify_source(stage)
+                _verify_source(stage, info["source_manifest_sha256"])
                 stage.rename(source)
-        _verify_source(source)
-        public_apk = storage / "official" / f"PowerOfChaos-Android-{PUBLIC_APK_VERSION}.apk"
+        _verify_source(source, info["source_manifest_sha256"])
+        public_apk = storage / "official" / f"PowerOfChaos-Android-{info['version']}.apk"
         public_apk.parent.mkdir(parents=True, exist_ok=True)
-        if not public_apk.is_file() or digest(public_apk) != PUBLIC_APK_SHA256:
+        if not public_apk.is_file() or digest(public_apk) != expected_apk:
             status("Android: descargando el APK público verificado…")
             embedded = Path(__file__).with_name("public-android.apk")
-            if embedded.is_file() and digest(embedded) == PUBLIC_APK_SHA256:
+            if embedded.is_file() and digest(embedded) == expected_apk:
                 shutil.copyfile(embedded, public_apk)
             else:
-                fetch(PUBLIC_APK_URL, public_apk, PUBLIC_APK_SHA256)
-        if digest(public_apk) != PUBLIC_APK_SHA256:
+                fetch(RELEASES + info["version"] + "/PowerOfChaos-Android.apk", public_apk, expected_apk)
+        if digest(public_apk) != expected_apk:
             raise ValueError("El APK público Android no supera SHA-256")
         status("Android: APK público listo; preparando tus recursos privados…")
-        return dict(root=source, godot=godot, public_apk=public_apk, public_apk_sha256=PUBLIC_APK_SHA256)
+        return dict(root=source, godot=godot, public_apk=public_apk, public_apk_sha256=expected_apk)
     finally:
         try:
             progress_file.unlink(missing_ok=True)
@@ -261,7 +257,7 @@ def _prepare_private(launcher: Path) -> dict:
                 component.parent.mkdir(parents=True, exist_ok=True)
                 installed.rename(component)
         source_zip = Path(__file__).with_name("android-source.zip")
-        source = root / ("source-" + SOURCE_COMMIT[:12])
+        source = _source_dir(root, release_info())
         if not source.is_dir():
             status("Android: preparando el motor táctil incluido…")
             if not source_zip.is_file():

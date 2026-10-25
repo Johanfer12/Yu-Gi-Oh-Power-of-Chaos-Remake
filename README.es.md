@@ -6,11 +6,11 @@
 
 [English](README.md) | **Español**
 
-[![Descargar EXE para Windows](https://img.shields.io/badge/Descargar_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.18/PowerOfChaos.exe)
+[![Descargar EXE para Windows](https://img.shields.io/badge/Descargar_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.19/PowerOfChaos.exe)
 
-[![Descargar APK Android](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.18/PowerOfChaos-Android.apk)
+[![Descargar APK Android](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.19/PowerOfChaos-Android.apk)
 
-**Descarga directa · Windows · Preliminar v0.1.0-alpha.18 · Sin ZIP**
+**Descarga directa · Windows · Preliminar v0.1.0-alpha.19 · Sin ZIP**
 
 **Tus juegos de Power of Chaos reunidos en un launcher moderno para Windows.**
 
@@ -111,7 +111,7 @@ Tú aportas una copia compatible del juego que quieras usar. El launcher lee sus
 
 ## Empezar en Windows
 
-1. [Descarga **`PowerOfChaos.exe`** directamente](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.18/PowerOfChaos.exe). También hay compilaciones de desarrollo en [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
+1. [Descarga **`PowerOfChaos.exe`** directamente](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.19/PowerOfChaos.exe). También hay compilaciones de desarrollo en [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
 2. Pon el EXE en una carpeta donde quieras guardar el launcher y tus partidas, y ábrelo.
 3. En **SUBE TUS RECURSOS**, pasa el cursor por el juego que quieras añadir y elige **ISO** o **Carpeta**.
 4. Selecciona una imagen de disco o carpeta instalada compatible, pulsa **Extraer para PC** y espera a que termine.
@@ -239,7 +239,7 @@ Android conserva las mismas opciones de imagen y juego que PC, incluidas las tra
 
 ### Actualizaciones Android e instalaciones anteriores
 
-Usa el botón de actualizar del launcher Android para consultar GitHub y abrir la descarga del APK. Descárgalo y confirma la actualización en el instalador de Android. **Actualiza la aplicación instalada sin desinstalarla** para conservar su paquete privado, ajustes y partidas. Android puede pedirte permiso para instalar desde el navegador o gestor de archivos que utilices.
+Usa el botón de actualizar del launcher Android: desde alpha.19 descarga y verifica el APK dentro de la app y abre el instalador de Android, donde confirmas la actualización. La primera vez, Android pide permitir instalar desde Power of Chaos. **Actualiza la aplicación instalada sin desinstalarla** para conservar su paquete privado, ajustes y partidas. Si la descarga integrada falla, se abre la descarga del APK en el navegador.
 
 Si tienes una instalación antigua, prepara tu PCK desde PC antes de pasar al APK público. Si la firma es distinta, Android no puede instalarlo como actualización. Puedes desinstalar la aplicación antigua si aceptas perder sus datos, instalar el APK público e importar tu PCK una vez. Las actualizaciones públicas compatibles posteriores conservan recursos y partidas sin repetir la importación.
 

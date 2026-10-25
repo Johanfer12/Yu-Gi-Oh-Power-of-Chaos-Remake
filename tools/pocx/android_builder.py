@@ -20,16 +20,15 @@ def configuration(launcher: Path) -> dict:
     if getattr(sys, "frozen", False):
         from .android_toolchain import prepare
         return prepare(launcher)
-    # Desarrollo: PC y Android comparten main; el compilador está en este repositorio. Los APK
-    # anteriores siguen en el almacén artifacts/android de la copia Android (no versionado).
+    # Desarrollo: PC y Android comparten main; el compilador está en este repositorio. La
+    # clave de FirmaAndroid es la publicada: --release la coteja con su certificado fijado.
     repo = Path(__file__).resolve().parents[2]
     for parent in (launcher, *launcher.parents):
         root = repo if (repo / "tools/android/build_apk.py").is_file() else parent / "PortTesting-Android"
         if (root / "tools/android/build_apk.py").is_file() and (parent / "Herramientas").is_dir():
             return dict(root=root, godot=parent / "Herramientas/Godot/godot_console.exe",
                         sdk=parent / "Herramientas/AndroidSdk", java=parent / "Herramientas/JDK21",
-                        keystore=parent / "FirmaAndroid/debug.keystore",
-                        previous=parent / "PortTesting-Android/artifacts/android/PowerOfChaos-tablet-v17.apk")
+                        keystore=parent / "FirmaAndroid/debug.keystore", release=True)
     from .android_toolchain import prepare
     return prepare(launcher)
 
@@ -98,7 +97,9 @@ def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | No
             else:
                 sys.argv += ["--output", str(staged_apk), "--sdk", str(config["sdk"]),
                              "--debug-keystore", str(config["keystore"])]
-                if "previous" in config:
+                if config.get("release"):
+                    sys.argv += ["--release"]
+                elif "previous" in config:
                     sys.argv += ["--previous-apk", str(config["previous"])]
                 else:
                     sys.argv += ["--first-build"]

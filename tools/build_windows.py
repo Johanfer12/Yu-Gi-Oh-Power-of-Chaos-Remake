@@ -31,12 +31,14 @@ def fetch(url: str, destination: Path) -> None:
         shutil.copyfileobj(response, output)
 
 
-def install_engine(cache: Path) -> Path:
+def install_engine(cache: Path, android: bool = False) -> Path:
     cache.mkdir(parents=True, exist_ok=True)
     editor = cache / f"Godot_v{GODOT_VERSION}-stable_win64_console.exe"
     editor_binary = cache / f"Godot_v{GODOT_VERSION}-stable_win64.exe"
     template = cache / "windows_release_x86_64.exe"
-    if not editor.is_file() or not editor_binary.is_file() or not template.is_file():
+    # Android templates come from the same verified archive (build_android.py).
+    templates = [template.name, "android_debug.apk", "android_release.apk"]
+    if not editor.is_file() or not editor_binary.is_file() or not all((cache/name).is_file() for name in templates):
         base = f"https://github.com/godotengine/godot-builds/releases/download/{GODOT_VERSION}-stable/"
         with tempfile.TemporaryDirectory(prefix="godot-download-") as directory:
             work = Path(directory)
@@ -49,7 +51,7 @@ def install_engine(cache: Path) -> Path:
                     hashes[parts[1].lstrip("*")] = parts[0]
             for name, members in (
                 (f"Godot_v{GODOT_VERSION}-stable_win64.exe.zip", [editor.name, editor_binary.name]),
-                (f"Godot_v{GODOT_VERSION}-stable_export_templates.tpz", [template.name]),
+                (f"Godot_v{GODOT_VERSION}-stable_export_templates.tpz", templates),
             ):
                 archive = work / name
                 print("Descargando y verificando " + name, flush=True)
@@ -102,7 +104,7 @@ def bundle_archiver(work: Path, bundled: Path, logs: Path) -> None:
         "Matching source is included as 7ZIP_SOURCE_26.04.7z.\n", encoding="utf-8")
 
 
-def build(godot: Path, output: Path, with_android: bool = False) -> Path:
+def build(godot: Path, output: Path, with_android: bool = False, android: Path | None = None) -> Path:
     output = output.resolve()
     if output.exists():
         raise ValueError("El destino debe ser nuevo")
@@ -127,22 +129,32 @@ def build(godot: Path, output: Path, with_android: bool = False) -> Path:
         receipt["version"] = release_version
         bundled = project/"bundled"
         bundled.mkdir()
-        from pocx.android_toolchain import bundle_source, bundle_public_apk
-        android_source = work / "android-source.zip"
-        bundle_source(android_source)
-        android_apk = work / "public-android.apk"
-        android_release = bundle_public_apk(android_apk)
-        if android_release.get("version") == release_version:
-            shutil.copyfile(android_apk, output / "PowerOfChaos-Android.apk")
-            (output / "PowerOfChaos-Android.apk.sha256").write_text(hashlib.sha256(android_apk.read_bytes()).hexdigest() + "  PowerOfChaos-Android.apk\n", encoding="ascii")
-            (output / "ANDROID_RELEASE.json").write_text(json.dumps(android_release, indent=2), encoding="utf-8")
+        android_data = []
+        if android:
+            # APK and source snapshot built from this same commit by build_android.py.
+            from pocx.android_toolchain import bundle_source, digest
+            android_release = json.loads((android/"ANDROID_RELEASE.json").read_text(encoding="utf-8"))
+            android_apk = android/"PowerOfChaos-Android.apk"
+            if android_release.get("version") != release_version or digest(android_apk) != android_release.get("sha256"):
+                raise ValueError("El APK Android no corresponde a esta versión: " + str(android_release.get("version")))
+            android_source = work/"android-source.zip"
+            android_release["source_manifest_sha256"] = bundle_source(android/"source", android_source)
+            android_info = work/"android-release.json"
+            android_info.write_text(json.dumps(android_release, indent=2), encoding="utf-8")
+            embedded_apk = work/"public-android.apk"
+            shutil.copyfile(android_apk, embedded_apk)
+            for name in ("PowerOfChaos-Android.apk", "PowerOfChaos-Android.apk.sha256", "ANDROID_RELEASE.json"):
+                shutil.copyfile(android/name, output/name)
+            for path in (android_source, android_info, embedded_apk):
+                android_data += ["--add-data", str(path) + os.pathsep + "pocx"]
+            receipt["android_source_manifest_sha256"] = android_release["source_manifest_sha256"]
+            receipt["android_apk_sha256"] = android_release["sha256"]
         # Bundle source, the verified public APK and the small color-key configuration.
         command([sys.executable, "-m", "PyInstaller", "--onefile", "--noupx", "--name", "pocx-import",
                  "--distpath", str(bundled), "--workpath", str(work/"pyinstaller"), "--specpath", str(work),
                  "--paths", str(source/"tools"), "--add-data",
                  str(source/"tools/pocx/color_key_overrides.json") + os.pathsep + "pocx",
-                 "--add-data", str(android_source) + os.pathsep + "pocx",
-                 "--add-data", str(android_apk) + os.pathsep + "pocx",
+                 *android_data,
                  str(source/"tools/importer_entry.py")], logs/"converter.log", cwd=work)
         command([str(bundled/"pocx-import.exe"), "--help"], logs/"converter-help.log")
         licenses = bundled / "licenses"
@@ -214,7 +226,6 @@ def build(godot: Path, output: Path, with_android: bool = False) -> Path:
                         "single_executable": True, "embedded_tools_verified": True, "bundled_7zip": "26.04"})
         receipt["menu_boot_without_tool_extraction"] = True
         receipt["android_tools_prepared_by_launcher"] = True
-        receipt["android_source_commit"] = __import__("pocx.android_toolchain", fromlist=["SOURCE_COMMIT"]).SOURCE_COMMIT
         if not receipt["godot"].startswith(GODOT_VERSION + ".stable"):
             raise ValueError("El manifiesto no identifica correctamente la versión del motor")
         (output/"BUILD_MANIFEST.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
@@ -236,6 +247,7 @@ if __name__ == "__main__":
     parser.add_argument("--engine-cache", type=Path)
     parser.add_argument("--godot", type=Path)
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--android", type=Path, help="salida de build_android.py de este mismo commit")
     args = parser.parse_args()
     if args.audit:
         audit()
@@ -243,4 +255,4 @@ if __name__ == "__main__":
         engine = install_engine(args.engine_cache) if args.engine_cache else args.godot
         if not engine:
             parser.error("Usa --godot o --engine-cache")
-        build(engine.resolve(), args.out, args.with_android)
+        build(engine.resolve(), args.out, args.with_android, args.android.resolve() if args.android else None)

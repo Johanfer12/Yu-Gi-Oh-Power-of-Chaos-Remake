@@ -42,9 +42,28 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/poc-godot-4.7.2
-          key: godot-windows-4.7.2-verified-v1
+          key: godot-windows-4.7.2-verified-v2
+      # La clave de firma solo existe como secreto del repositorio. Sin ella (forks) se compila
+      # con una clave desechable para comprobar el APK, pero una etiqueta exige la publicada.
+      - name: Compilar y firmar APK Android
+        env:
+          ANDROID_SIGNING_KEYSTORE: ${{ secrets.ANDROID_SIGNING_KEYSTORE }}
+        run: |
+          $signing = @()
+          if ($env:ANDROID_SIGNING_KEYSTORE) {
+            $key = Join-Path $env:RUNNER_TEMP "signing.keystore"
+            [IO.File]::WriteAllBytes($key, [Convert]::FromBase64String($env:ANDROID_SIGNING_KEYSTORE))
+            $signing = @("--keystore", $key)
+          } elseif ($env:GITHUB_REF -like "refs/tags/*") {
+            throw "Falta el secreto ANDROID_SIGNING_KEYSTORE: una versión debe firmarse con la clave publicada"
+          }
+          python tools/build_android.py --engine-cache "${{ runner.tool_cache }}/poc-godot-4.7.2" --out "$env:RUNNER_TEMP/android" @signing
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Borrar la clave de firma del runner
+        if: always()
+        run: Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:RUNNER_TEMP "signing.keystore")
       - name: Compilar launcher y conversor local
-        run: python tools/build_windows.py --engine-cache "${{ runner.tool_cache }}/poc-godot-4.7.2" --out dist/windows
+        run: python tools/build_windows.py --engine-cache "${{ runner.tool_cache }}/poc-godot-4.7.2" --out dist/windows --android "$env:RUNNER_TEMP/android"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: PowerOfChaos-Windows
@@ -62,7 +81,10 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-build-logs
-          path: dist/windows/logs/
+          path: |
+            dist/windows/logs/
+            ${{ runner.temp }}/android/work/build/*.log
+            ${{ runner.temp }}/android/work/build/*.json
           if-no-files-found: ignore
           retention-days: 14
 
