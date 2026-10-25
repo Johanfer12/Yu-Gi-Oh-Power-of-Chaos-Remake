@@ -145,7 +145,7 @@ func busy() -> bool:
 	return not active.is_empty() or not pending.is_empty() or (_start_banner_shade and _shade_moving())
 
 func zone(p: int, z: int) -> Vector2:
-	return DuelGeometry.zone(p, z)
+	return DuelGeometry.zone(p, z, game)
 
 func hand(p: int, i: int, count: int) -> Vector2:
 	return hand_positions.get(p * 256 + i, DuelGeometry.hand(p, i, count))
@@ -713,6 +713,7 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			if d.has("to_angle"): d["from_angle"] = d["to_angle"]
 			d["frames"] = 1
 	if d["mode"] == "field_change": d = FieldEffects.normalize(d, duel)
+	d["game"] = game # Las geometrías propias de cada juego se resuelven al normalizar.
 	d = BasicEffects.normalize(d, duel)
 	# Joey44f630 agrega su efecto sin ocultar el objeto418ef0 ya colocado.
 	if d.get("native_base_visible", false): d["hide"] = []

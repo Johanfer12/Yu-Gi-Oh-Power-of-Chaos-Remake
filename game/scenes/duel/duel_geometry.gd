@@ -13,8 +13,13 @@ const GRAVE := [Vector2(760, 360), Vector2(290, 240)]
 static func hand_cursor_offset(p: int) -> Vector2:
 	return Vector2(-50, -72) if p == 0 else Vector2(49, 71)
 
-static func zone(p: int, z: int) -> Vector2:
-	if z == 10: return Vector2(290, 360) if p == 0 else Vector2(760, 240)
+## Joey 45c280 (tabla 5db5e0) coloca la zona de campo aparte; Yugi y Kaiba comparten la suya.
+const JOEY_FIELD := [Vector2(286, 353), Vector2(766, 236)]
+
+static func zone(p: int, z: int, game := "") -> Vector2:
+	if z == 10:
+		if game == "joey": return JOEY_FIELD[p]
+		return Vector2(290, 360) if p == 0 else Vector2(760, 240)
 	var column := z if z < 5 else z - 5
 	if p == 1: column = 4 - column
 	return Vector2(COLUMNS[column], [352, 248][p] if z < 5 else [460, 140][p])

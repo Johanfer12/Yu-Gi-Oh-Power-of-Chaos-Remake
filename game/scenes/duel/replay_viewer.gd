@@ -374,7 +374,7 @@ func _hit_zone(point: Vector2) -> Dictionary:
 	# Selección sobre zonas vacías: mismos centros que el dibujo y el motor.
 	for p in 2:
 		for z in 11:
-			if Rect2(DuelGeometry.zone(p, z) - Vector2(39, 48), Vector2(78, 96)).has_point(point):
+			if Rect2(DuelGeometry.zone(p, z, game) - Vector2(39, 48), Vector2(78, 96)).has_point(point):
 				return {"p": p, "loc": 0 if z < 5 else 5 if z < 10 else 10, "i": z if z < 5 else z - 5 if z < 10 else 0, "id": 0, "known": false}
 	return {}
 
@@ -662,7 +662,7 @@ func _redraw() -> void:
 			var obj: Dictionary = table.field[p][z]
 			if obj.is_empty() or obj.has("moving") or int(obj["card"]) < 0:
 				continue
-			var pos := DuelGeometry.zone(p, z)
+			var pos := DuelGeometry.zone(p, z, game)
 			var face_up := bool(obj["face"])
 			# bit 14 de la palabra: posicion de defensa (va tumbada)
 			var defense := z < 5 and bool(obj["defense"])

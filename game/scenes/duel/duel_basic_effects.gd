@@ -24,7 +24,7 @@ static func normalize(event: Dictionary, duel: Duel) -> Dictionary:
 		var flags: int = int(d["flags"]) if d.has("flags") else duel.m.u8(DuelMem.zone(p, z) + 6)
 		d["flags"] = flags
 		d["angle"] = ((flags & 1) + p * 2) * 128
-		d["center"] = Geometry.zone(p, z)
+		d["center"] = Geometry.zone(p, z, str(d.get("game", "")))
 		d["hide"] = [d["center"]]
 		if mode == "set":
 			var points: Array[Vector2] = []
@@ -36,14 +36,16 @@ static func normalize(event: Dictionary, duel: Duel) -> Dictionary:
 			d["face"] = bool(flags & 2)
 			d["hide"] = [d["center"]]
 	elif mode == "special":
-		var z: int = clampi(int(d.get("zone", 0)), 0, 10 if d.get("kind", "") == "joey_relocate_appear" else 4)
+		# 44fcc0 (Joey) sitúa su efecto en cualquier zona del campo con 45c140; los efectos de
+		# Yugi/Kaiba que comparten este modo solo invocan en zonas de monstruo.
+		var z: int = clampi(int(d.get("zone", 0)), 0, 10 if d.get("game", "") == "joey" or d.get("kind", "") == "joey_relocate_appear" else 4)
 		d["zone"] = z
 		# 44fcc0 carries the destination orientation before the rules place the card.
 		var flags := int(d.get("flags", duel.m.u8(DuelMem.zone(p, z) + 6)))
 		if d.get("kind", "") in ["special_summon", "joey_relocate_appear"]:
 			flags = ((int(d.get("a", 0)) >> 9) & 1) | (((int(d.get("a", 0)) >> 8) & 1) << 1)
 		d["flags"] = flags
-		d["center"] = Geometry.zone(p, z)
+		d["center"] = Geometry.zone(p, z, str(d.get("game", "")))
 		d["hide"] = [d["center"]]
 		var texture: Texture2D = CardDB.card_texture(d.get("card", 0), true) if flags & 2 else Assets.texture("common/mini/card_ura.png")
 		if texture:
@@ -124,7 +126,7 @@ static func normalize(event: Dictionary, duel: Duel) -> Dictionary:
 				exists = (duel.m.u16(DuelMem.zone(p, z)) & 0xfff) == index
 				if exists:
 					d["flags"] = duel.m.u8(DuelMem.zone(p, z) + 6)
-					d["center"] = Geometry.zone(p, z)
+					d["center"] = Geometry.zone(p, z, str(d.get("game", "")))
 		elif loc == 14:
 			exists = duel.f544a00(p, card) != 0
 			if exists: d["center"] = Geometry.GRAVE[p]
