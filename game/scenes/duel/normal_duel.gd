@@ -335,7 +335,8 @@ func _start_result() -> void:
 		_visual.end_banner = ""
 		_visual._render()
 	_result = DuelResult.new()
-	_result.setup(game, winner, _duel.m.u32(0xa114b4))
+	var surrendered: bool = _duel is JoeyPresentationAdapter and (_duel.engine.m.u16(JoeyMem.MODE) & 0x40) != 0
+	_result.setup(game, winner, _duel.m.u32(0xa114b4), surrendered)
 	# Estado 7 de 0x435410: match sin decidir -> escena 10 y siguiente duelo; si no, la salida
 	# de Yugi con el resultado global. La musica la gestiona Game: en Yugi sigue sonando.
 	_result.finished.connect(func() -> void:

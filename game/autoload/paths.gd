@@ -189,11 +189,23 @@ func mount_user_content_pack() -> bool:
 	var source := user_content_pack_path()
 	if not FileAccess.file_exists(source):
 		return false
-	var validator: Script = load("res://core/android_content_pack.gd")
-	if validator == null:
+	# Validar las ~7000 entradas en cada arranque retrasa la primera imagen en Android; el
+	# paquete solo cambia al importarlo de nuevo, así que basta revalidarlo si cambia su
+	# tamaño o su fecha de modificación.
+	var file := FileAccess.open(source, FileAccess.READ)
+	if file == null:
 		return false
-	var result: Dictionary = validator.validate_pack(source)
-	if not result.get("ok", false) or not ProjectSettings.load_resource_pack(source, false):
+	var stamp := "%d:%d" % [file.get_length(), FileAccess.get_modified_time(source)]
+	file.close()
+	var marker := source.get_base_dir().path_join("validated.cfg")
+	var validated := ConfigFile.new()
+	if validated.load(marker) != OK or str(validated.get_value("content", "stamp", "")) != stamp:
+		var validator: Script = load("res://core/android_content_pack.gd")
+		if validator == null or not validator.validate_pack(source).get("ok", false):
+			return false
+		validated.set_value("content", "stamp", stamp)
+		validated.save(marker)
+	if not ProjectSettings.load_resource_pack(source, false):
 		return false
 	data_dir = "res://data"
 	_inventory_root = ""

@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="432" height="432" viewBox="0 0 432 432">
+  <!-- Generado desde launcher.svg: misma escala y posición dentro de la zona segura adaptativa. -->
   <g transform="translate(80 80) scale(0.53125)">
   <defs>
     <linearGradient id="gold" x1="0" y1="0" x2="0.8" y2="1">
@@ -10,19 +11,27 @@
       <stop stop-color="#49315f"/><stop offset=".6" stop-color="#1e142d"/>
       <stop offset="1" stop-color="#080911"/>
     </radialGradient>
-    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#5e387b"/><stop offset="1" stop-color="#171022"/>
+    <!-- Dorso clasico de carta Yu-Gi-Oh!: marron con vortice ovalado -->
+    <linearGradient id="back" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#8a4d22"/><stop offset=".5" stop-color="#5a2c12"/>
+      <stop offset="1" stop-color="#2e140a"/>
     </linearGradient>
-    <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#fff8cd"/><stop offset=".45" stop-color="#ffdb72"/>
-      <stop offset="1" stop-color="#c27926"/>
+    <radialGradient id="vortex" cx=".5" cy=".5" r=".5">
+      <stop stop-color="#120604"/><stop offset=".38" stop-color="#2b0f06"/>
+      <stop offset=".62" stop-color="#6a2c0e"/><stop offset=".82" stop-color="#b8661f"/>
+      <stop offset=".93" stop-color="#e6a556"/><stop offset="1" stop-color="#6b2c0c"/>
+    </radialGradient>
+    <linearGradient id="eye" x1="0" y1="0" x2="1" y2="0">
+      <stop offset=".5" stop-color="#f0bf5c"/><stop offset=".5" stop-color="#c4862f"/>
     </linearGradient>
+    <clipPath id="oval"><ellipse cx="256" cy="243" rx="62" ry="104"/></clipPath>
   </defs>
   <circle cx="256" cy="260" r="244" fill="#08070e"/>
   <circle cx="256" cy="252" r="238" fill="url(#gold)"/>
   <circle cx="256" cy="252" r="224" fill="url(#night)" stroke="#734722" stroke-width="4"/>
   <circle cx="256" cy="252" r="208" fill="none" stroke="#e3b75e" stroke-width="2" opacity=".4"/>
   <path d="M80 207A184 184 0 0 1 207 76M305 428A184 184 0 0 0 432 301" fill="none" stroke="#fff0b0" stroke-width="5" stroke-linecap="round" opacity=".65"/>
+  <!-- Cartas laterales: Kaiba (azul) y Joey (cobre) -->
   <g transform="rotate(-23 256 266)">
     <rect x="125" y="132" width="166" height="254" rx="19" fill="#0d1724" stroke="url(#gold)" stroke-width="10"/>
     <rect x="141" y="148" width="134" height="222" rx="8" fill="#26526c"/>
@@ -33,15 +42,24 @@
     <rect x="237" y="148" width="134" height="222" rx="8" fill="#754431"/>
     <path d="M249 170H359M249 346H359" stroke="#e29b62" stroke-width="4" opacity=".5"/>
   </g>
+  <!-- Carta central: dorso Yu-Gi-Oh! -->
   <rect x="165" y="99" width="182" height="304" rx="20" fill="#0a0810" opacity=".6"/>
   <rect x="172" y="91" width="168" height="304" rx="19" fill="url(#gold)"/>
-  <rect x="183" y="102" width="146" height="282" rx="11" fill="url(#card)" stroke="#54372c" stroke-width="3"/>
-  <path d="M197 143V119H221M291 119H315V143M197 343V367H221M291 367H315V343" fill="none" stroke="#f1c76c" stroke-width="5" stroke-linecap="round"/>
-  <path d="M256 155L283 215L309 243L283 271L256 331L229 271L203 243L229 215Z" fill="url(#gem)" stroke="#ffe6a0" stroke-width="3"/>
-  <path d="M256 184V302L229 243Z" fill="#fff4bc"/>
-  <path d="M256 184L283 243L256 302Z" fill="#c18234"/>
-  <path d="M256 210L271 243L256 276L241 243Z" fill="#20142f"/>
-  <path d="M256 224L265 243L256 262L247 243Z" fill="#ffeaa2"/>
+  <rect x="181" y="100" width="150" height="286" rx="10" fill="#1d0c05"/>
+  <rect x="186" y="105" width="140" height="276" rx="7" fill="url(#back)"/>
+  <ellipse cx="256" cy="243" rx="66" ry="108" fill="#1a0803"/>
+  <ellipse cx="256" cy="243" rx="62" ry="104" fill="url(#vortex)"/>
+  <g clip-path="url(#oval)" fill="none" stroke-linecap="round">
+    <path d="M256 243C300 214 308 160 262 140C216 122 182 172 206 214C228 252 290 244 292 204" stroke="#ffb653" stroke-width="7" opacity=".55"/>
+    <path d="M256 243C212 272 204 326 250 346C296 364 330 314 306 272C284 234 222 242 220 282" stroke="#ffb653" stroke-width="7" opacity=".55"/>
+    <path d="M256 243C284 226 288 192 262 180C236 170 220 198 232 220" stroke="#ffd98c" stroke-width="5" opacity=".6"/>
+    <path d="M256 243C228 260 224 294 250 306C276 316 292 288 280 266" stroke="#ffd98c" stroke-width="5" opacity=".6"/>
+  </g>
+  <!-- Anj (cruz egipcia): lazo en gota, brazos y pie abiertos, sin brillos -->
+  <path d="M256 160C287 160 296 194 281 216C275 225 268 231 265 233L291 225Q298 240 291 255L266 247L273 316Q256 321 239 316L246 247L221 255Q214 240 221 225L247 233C244 231 237 225 231 216C216 194 225 160 256 160ZM256 177C271 177 277 198 268 213C264 220 259 225 256 228C253 225 248 220 244 213C235 198 241 177 256 177Z" fill="#1a0904" fill-rule="evenodd" stroke="#1a0904" stroke-width="9" stroke-linejoin="round"/>
+  <path d="M256 160C287 160 296 194 281 216C275 225 268 231 265 233L291 225Q298 240 291 255L266 247L273 316Q256 321 239 316L246 247L221 255Q214 240 221 225L247 233C244 231 237 225 231 216C216 194 225 160 256 160ZM256 177C271 177 277 198 268 213C264 220 259 225 256 228C253 225 248 220 244 213C235 198 241 177 256 177Z" fill="url(#eye)" fill-rule="evenodd"/>
+  <path d="M256 236V312" stroke="#8c5a1e" stroke-width="2" opacity=".6"/>
+  <path d="M198 120H222M290 120H314M198 366H222M290 366H314" stroke="#e8a24a" stroke-width="4" stroke-linecap="round" opacity=".7"/>
   <path d="M256 421L265 434L256 447L247 434Z" fill="url(#gold)"/>
   </g>
 </svg>

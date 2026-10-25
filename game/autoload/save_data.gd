@@ -161,11 +161,17 @@ func import_system_dat(system_dat: String) -> bool:
 ## instalado no lleva la cabecera del system.dat (la compara 45cd20 con su propio objeto);
 ## f540450 no lo reproduce.
 ## Devuelve {block, decks}: el bloque (actualizado si cambio) y el mazo de cada juego.
+## El motor de Yugi se carga al validar mazos: tiparlo aquí lo compilaba entero (cientos de
+## milisegundos en PC, varios segundos en Android) antes de mostrar el launcher.
+static func _duel_script() -> Script:
+	return load("res://duel/core/duel.gd")
+
+
 func _startup_decks(block: PackedByteArray, head: PackedByteArray, paths: Dictionary) -> Dictionary:
 	var decks := {}
-	var duel: Duel = null
+	var duel: Object = null
 	if paths.has("yugi") or paths.has("kaiba"):
-		duel = Duel.create(Paths.data_dir)
+		duel = _duel_script().create(Paths.data_dir)
 		if duel == null:
 			push_warning("Sin imagen del motor de duelo: Deck.ydc se importa sin validar")
 		else:
@@ -197,7 +203,7 @@ func _startup_decks(block: PackedByteArray, head: PackedByteArray, paths: Dictio
 
 
 ## El mismo arranque de 436e80/437430 para importaciones y partidas del port.
-func _resolve_startup_deck(duel: Duel, game: String, loaded: Dictionary, header_matches := true) -> Dictionary:
+func _resolve_startup_deck(duel: Object, game: String, loaded: Dictionary, header_matches := true) -> Dictionary:
 	var game_index := GAMES.find(game)
 	var ok: bool = header_matches and not loaded.is_empty() and loaded.get("main", []).size() >= 40 \
 		and loaded.get("main", []).size() <= 80 and loaded.get("fusion", []).size() <= 15 \
@@ -265,7 +271,7 @@ func _ensure_startup_deck(game: String) -> bool:
 		data["decks"][game] = result.deck
 		_startup_checked[game] = true
 		return true
-	var duel := Duel.create(Paths.data_dir)
+	var duel: Object = _duel_script().create(Paths.data_dir)
 	if duel == null:
 		push_warning("Sin imagen nativa para validar el mazo de " + game)
 		return false
@@ -295,7 +301,7 @@ func _ensure_startup_deck(game: String) -> bool:
 
 ## 436900: lee las tres listas en 0xa112c0 (principal +0x00, side +0xa0, fusion +0xbe;
 ## contadores +0xdc, +0xde, +0xe0) como indices de carta (401ad0) y rellena con ceros.
-func _write_startup_deck(duel: Duel, deck_data: Dictionary) -> void:
+func _write_startup_deck(duel: Object, deck_data: Dictionary) -> void:
 	for zone in [["main", 0x00, 0xdc, 80], ["side", 0xa0, 0xde, 15], ["fusion", 0xbe, 0xe0, 15]]:
 		var ids: Array = deck_data[zone[0]]
 		duel.m.set_u16(0xa112c0 + int(zone[2]), ids.size())
@@ -303,7 +309,7 @@ func _write_startup_deck(duel: Duel, deck_data: Dictionary) -> void:
 			duel.m.set_u16(0xa112c0 + int(zone[1]) + i * 2, duel.f401ad0(int(ids[i])) if i < ids.size() else 0)
 
 
-func _read_startup_deck(duel: Duel) -> Dictionary:
+func _read_startup_deck(duel: Object) -> Dictionary:
 	var result := {}
 	for zone in [["main", 0x00, 0xdc], ["side", 0xa0, 0xde], ["fusion", 0xbe, 0xe0]]:
 		var ids: Array = []
@@ -315,13 +321,13 @@ func _read_startup_deck(duel: Duel) -> Dictionary:
 
 ## Kaiba 541f80: el mismo bucle que 53f8b0 sobre su tabla 0x5a1030, que no esta en la imagen
 ## modelada (la de Yugi); el mazo inicial del port ocupa su lugar.
-func _kaiba_starter(duel: Duel, starter: Dictionary) -> void:
+func _kaiba_starter(duel: Object, starter: Dictionary) -> void:
 	for count_addr in [0xa1139e, 0xa113a0, 0xa1139c]:
 		duel.m.set_u16(count_addr, 0)
 	for zone in [["main", 0xa112c0, 0xa1139c], ["fusion", 0xa1137e, 0xa113a0]]:
 		for id in starter.get(zone[0], []):
-			var index := duel.f401ad0(int(id))
-			var count := duel.m.u16(int(zone[2]))
+			var index: int = duel.f401ad0(int(id))
+			var count: int = duel.m.u16(int(zone[2]))
 			duel.m.set_u16(int(zone[1]) + count * 2, index)
 			duel.m.set_u16(int(zone[2]), count + 1)
 			duel.f540270(index, duel.f53f860(index))
@@ -425,14 +431,24 @@ func ensure_game(game: String, validate_startup := true) -> void:
 					and (int(card.get("pack", 0)) & 4) == 0:
 				previous = true
 				break
-		# 5bee30 escribe un byte; consumidores 489784/44bc15 extienden sin signo.
-		joey["level"] = (1 - 2 * int(previous)) & 0xff
-		joey["shown_level"] = joey["level"]
-		joey["started"] = true
 		var options: Dictionary = data.get_or_add("options", {})
 		var own: Dictionary = options.get_or_add("joey", {})
+		# 5bee30 calcula db2/db3 con db4 (cartas anteriores) ANTES de recalcularlo con 5bedd0:
+		# en una partida nueva aún vale 0 y el nivel empieza en 1. Escribe un byte; los
+		# consumidores 489784/44bc15 lo extienden sin signo.
+		joey["level"] = (1 - 2 * int(bool(own.get("card_set_full", false)))) & 0xff
+		joey["shown_level"] = joey["level"]
+		joey["started"] = true
 		own["card_set_full"] = previous
 		own["limited"] = false
+		changed = true
+	if game == "joey" and int(joey.get("level", 1)) == 0xff and not joey.get("level_start_checked", false):
+		# Hasta alpha.22 el port calculaba el nivel inicial con db4 ya recalculado: quien tenía
+		# cartas de Yugi/Kaiba empezaba en 0xff, nivel que ni sube ni baja. Se lleva una vez
+		# al nivel 1 con el que empieza el original.
+		joey["level"] = 1
+		joey["shown_level"] = 1
+		joey["level_start_checked"] = true
 		changed = true
 	if validate_startup:
 		changed = _ensure_startup_deck(game) or changed

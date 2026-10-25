@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Power of Chaos Remake"
-config/version="0.1.0-alpha.22"
+config/version="0.1.0-alpha.23"
 config/icon="res://assets/icons/launcher.svg"
 config/windows_native_icon="res://assets/icons/launcher.ico"
 config/description="Reimplementación en Godot de Power of Chaos (Yugi, Kaiba y Joey). Requiere los recursos de las copias del usuario."

@@ -50,12 +50,15 @@ var _joey_released := false
 var _joey_left_down := false
 var _joey_previous_down := false
 var _joey_pointer := Vector2.ZERO
+## Joey a54e5c & 0x40 (comando 0x28, 408410): rendición; 446df0 no cuenta el resultado.
+var _surrendered := false
 
 
 ## `winner`: 1 gana el jugador, 2 la CPU, 3 empate (0x53d650).
-func setup(game_id: String, winner: int, duel_flags: int = 0) -> void:
+func setup(game_id: String, winner: int, duel_flags: int = 0, surrendered := false) -> void:
 	game = game_id
 	result = winner
+	_surrendered = surrendered
 	z_index = 70
 	_lang = Assets.lang if Assets.exists("%s/duel/get/you_get_%s1.png" % [game, Assets.lang]) else "e"
 	_record()
@@ -66,11 +69,20 @@ func setup(game_id: String, winner: int, duel_flags: int = 0) -> void:
 	if _outcome == 1 and game != "joey":
 		_cards = _choose_cards(3 if _match else 1)   # 0x434ba0 en match
 		_save_cards()
-	if (duel_flags & 0x100) != 0: _after_replay() # 435410 estado1, DAT_a114b4 bit8.
+	# 435410 estado1, DAT_a114b4 bit8. Joey 447000 estado1: tras rendirse (a54e5c & 0x40)
+	# tampoco pregunta por la repetición.
+	if (duel_flags & 0x100) != 0 or (_surrendered and game == "joey"): _after_replay()
 
 
 ## 0x433e50: estadisticas comunes y racha (DAT_00a11218, DAT_00a11215/16).
 func _record() -> void:
+	if _surrendered and game == "joey":
+		# 446df0 con a54e5c & 0x40: sin victorias/derrotas, racha ni nivel; una victoria previa
+		# deja la racha a 0.
+		SaveData.ensure_game(game)
+		var surrendered_stats: Dictionary = SaveData.data["stats"][game]
+		if int(surrendered_stats.get("streak_last", 0)) == 1: surrendered_stats["streak"] = 0
+		return
 	var stats: Dictionary = SaveData.record_result(game, result)
 	var last_win := int(stats.get("streak_last", 0)) == 1
 	if last_win == (result == 1):
@@ -261,11 +273,13 @@ func _after_replay() -> void:
 		_board.setup(game, Game.match_results, Game.match_duel, _outcome)
 		add_child(_board)
 		return
-	# Joey 447000 estado 6: en red (44b980, modo 3) no hay oferta de cartas y se sale.
-	if game == "joey" and Game.duel_mode == 3:
-		_state = 7
-		return
-	_state = 6 if _outcome == 1 else 7
+	_state = 6 if _offers_cards() else 7
+
+
+## Joey 447000 estado 6: sin oferta de cartas en red (44b980, modo 3) ni tras rendirse
+## (a54e5c & 0x40), aunque gane el jugador.
+func _offers_cards() -> bool:
+	return _outcome == 1 and not (game == "joey" and (Game.duel_mode == 3 or _surrendered))
 
 
 func _step() -> void:
@@ -282,7 +296,7 @@ func _step() -> void:
 				if not _board.active and _banner >= 0x100:
 					_board.queue_free()
 					_board = null
-					_state = 6 if _outcome == 1 else 7
+					_state = 6 if _offers_cards() else 7
 		6:
 			if _banner < 0x100:
 				# 0x463210: +0x10 por paso; el cartel se dibuja a escala 0x100 - contador.
