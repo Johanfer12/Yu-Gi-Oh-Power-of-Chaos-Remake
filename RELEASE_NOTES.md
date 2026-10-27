@@ -1,9 +1,11 @@
-## v0.1.0-alpha.23
+## v0.1.0-alpha.24
 
-- Faster start, especially on Android: the duel engine is no longer compiled before the first screen, and the imported resource pack is only re-checked when it changes.
-- Android: the start screen and the home-screen icon use the current icon with the ankh.
-- Joey: the duelist level (stars on the duel menu) starts at level 1 as in the original. Players who had cards from Yugi/Kaiba were stuck at the maximum with the hardest CPU decks; their level is moved to 1 once. Surrendering no longer counts as a loss.
+- Joey: the duel now matches recordings of the original game much more closely. Three full recorded duels (normal, spells and traps) replay with every engine command identical to the original.
+- Joey: the card-set effect (frame, light and falling sparkles) is now ported method by method from the original.
+- Joey: the card detail panel follows played and activated cards, including your own spells; a card shown by the duel wins over the pointer on the same frame.
+- Joey: the phase banner no longer delays summons, the end-of-duel banner waits for the shade opening from the centre, and the first portrait reactions use the original turn counter.
+- Joey: the hand keeps cards sharp at 800x600 and hover works under a still pointer.
 
-Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android27 uses the same package and signing certificate as Android26. No new physical-device validation is claimed.
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android28 uses the same package and signing certificate as Android27. No new physical-device validation is claimed.
 
-Arranque más rápido, sobre todo en Android. Android usa el icono actual con el anj al iniciar y en el escritorio. Joey: el nivel del duelista empieza en 1 como el original; quien tenía cartas de Yugi/Kaiba quedaba fijo en el máximo con los mazos más difíciles y pasa una vez al nivel 1. Rendirse ya no cuenta como derrota.
+Joey: el duelo coincide mucho más con grabaciones del original; tres duelos completos (normal, mágicas y trampas) repiten cada comando del motor igual que el original. El efecto de colocar carta está portado del original, el panel de detalle sigue a las cartas jugadas y activadas, el rótulo de fase ya no retrasa las invocaciones y el de fin de duelo espera al sombreado. En Android, actualiza desde el launcher; no desinstales la app ni borres sus datos.
