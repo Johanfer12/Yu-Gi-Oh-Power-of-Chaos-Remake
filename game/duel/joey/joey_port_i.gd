@@ -518,7 +518,8 @@ func f40a3c0() -> int:
 			var info := m.local(4)
 			m.set_u16(info, (((((pos << 1) | (face & 1)) & 0xff) << 8 | (z & 0xff)) << 6 | (p & 1)) & 0xffff)
 			f44fcc0(0, card, info)
-			# Insercion en la lista de efectos y metodo +0x24 de 5f3280+0x3c omitidos.
+			# Insercion en la lista de efectos omitida; 41b050 pone la carta en el panel de detalle.
+			f41b050(card)
 			cmd_advance(0xffffc07f)
 		1:
 			if (cmd_tick() & 0x3f80) >= 0x400:

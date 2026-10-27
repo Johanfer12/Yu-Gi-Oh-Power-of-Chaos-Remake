@@ -108,7 +108,13 @@ func card_object_index(p: int, loc: int) -> int:
 	return table.object_index(_duel_ref, p, loc)
 
 func joey_objects_busy() -> bool:
-	return busy() or not overlays.is_empty()
+	if busy(): return true
+	# El rotulo de fase es el objeto propio de 481040 (espera 4812b0): mientras se desvanece no
+	# ocupa los efectos. Contarlo retrasaba ~5 ticks el comando siguiente (0xe6 -> 0xce al
+	# invocar tras la fase principal; cotejo del duelo completo, 25-10-2026).
+	for overlay in overlays:
+		if overlay["event"].get("mode", "") != "phase_native": return true
+	return false
 
 ## 41cee0: indices de mano; campo suma indice, salvo fallback o copia separada.
 func joey_card_object_exists(p: int, loc: int, i: int) -> bool:
@@ -287,11 +293,17 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			_phase_player = p
 		d = PortraitEffects.normalize(d, duel)
 		if d.is_empty(): return
-		if d.get("mode", "") == "phase_native" and game == "yugi":
+		if d.get("mode", "") == "phase_native" and game in ["yugi", "joey"]:
 			# 402840 espera a 460b80: contador +0x164 > 0x7f (16 ticks; 24 en batalla, que sube
 			# de 4 en 4 entre 0x40 y 0x80). El panel sigue hasta 0x100 sin bloquear.
+			# Joey 4812b0 (desde 404920) libera igual con +0x14c > 0x7f, que 481370 sube de 8 en 8
+			# (de 4 en 4 en batalla); el cotejo del duelo completo (25-10-2026) lo confirma.
 			d["native_lifetime"] = d["frames"]
 			d["frames"] = 24 if int(d.get("phase", 0)) == 3 else 16
+			# En Joey 481370 sube el contador antes de que el motor consulte 4812b0 en el mismo
+			# tick: el comando siguiente llega un tick antes que con la espera de Yugi (todas las
+			# fases iban +1 en el cotejo del duelo completo).
+			if game == "joey": d["frames"] = int(d["frames"]) - 1
 		pending.append(d)
 		if active.is_empty(): _begin()
 		return
@@ -1331,7 +1343,9 @@ func _begin() -> void:
 			active["sounds"] = [[32 if active.get("reflection", false) else 0, "%s/voice/internal/damage.wav" % game]]
 	if mode == "banner":
 		_shade_on = true
-		if game in ["kaiba", "joey"] and int(active.get("op", 0)) == 0x14:
+		# Joey 451b80 (fin) prepara el sombreado de 5f3400 igual que 4516a0 (inicio): el cartel
+		# espera a que se abra desde el centro (cotejo del duelo normal, 26-10-2026).
+		if (game in ["kaiba", "joey"] and int(active.get("op", 0)) == 0x14) or (game == "joey" and int(active.get("op", 0)) == 0x04):
 			_start_banner_shade = true
 			# 44dd00 llama486290 despues de crear el objeto: captura y primer paso16.
 			_tick_shade()

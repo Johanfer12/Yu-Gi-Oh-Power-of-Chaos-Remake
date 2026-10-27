@@ -525,6 +525,10 @@ func _collect_events() -> void:
 		var e: Dictionary = _duel.events[_event_pos]
 		_event_pos += 1
 		var data: Dictionary = e
+		if data.get("kind", "") == "detail":
+			# Joey 41b050: los comandos que ponen o activan una carta la muestran en el panel.
+			_set_preview(int(data["card"]))
+			_detail_this_tick = true
 		if data.get("kind", "") == "cursor" and _duel.ui_key_cursor:
 			# FUN_0053f7e0 -> FUN_00540bd0/00540af0: el teclado desliza el puntero.
 			var at := DuelGeometry.location(int(data["p"]) & 1, int(data["loc"]), int(data["i"]), _duel.m.u8(DuelMem.pl(int(data["p"]) & 1) + 2))

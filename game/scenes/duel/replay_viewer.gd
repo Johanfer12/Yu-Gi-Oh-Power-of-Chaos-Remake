@@ -58,7 +58,10 @@ var _detail_icons: Node2D
 var _preview_card_id := -1
 var _preview_hover_point := Vector2(-9999, -9999)
 var _preview_hover_ticks := 0
+## Joey 41b050 llegado del motor en este tick (normal_duel._collect_events).
+var _detail_this_tick := false
 var _oriented_hand_textures := {}
+var _native_hand_textures := {}
 var _hover_card: Dictionary = {}
 var _hit_cards: Array[Dictionary] = []
 var _hand_positions: Dictionary = {}
@@ -340,6 +343,13 @@ func _advance_hands(delta: float) -> bool:
 		_hand_clock -= 1
 		_description.visible_characters = _detail_reveal.step()
 		_tick_preview_hover()
+		# Joey levanta la carta que queda bajo el puntero quieto cuando la mano se recoloca
+		# (cotejo del duelo completo, 25-10-2026: tras invocar, la siguiente sube sin mover el raton).
+		if game == "joey" and not _hit_cards.is_empty():
+			var hover := _hit_card(_pointer_pos)
+			if hover != _hover_card:
+				_hover_card = hover
+				changed = true
 		_hand_blend.tick()
 		for p in 2:
 			var count: int = _hand_cards[p].size()
@@ -355,6 +365,8 @@ func _advance_hands(delta: float) -> bool:
 
 ##Jo44dbc0/Ka437e50/Yu4378a0: cuatro consultas inmoviles; el reparto no selecciona.
 func _tick_preview_hover() -> void:
+	var detail := _detail_this_tick
+	_detail_this_tick = false
 	if _visual != null and (_visual._shade_on or _visual._shade_c != 0): return
 	if _pointer_pos != _preview_hover_point:
 		_preview_hover_point = _pointer_pos
@@ -362,6 +374,10 @@ func _tick_preview_hover() -> void:
 	else:
 		_preview_hover_ticks += 1
 	if _preview_hover_ticks != 4: return
+	# Jo44dd00 llama a 44dbc0 antes del motor (5c0000): si un comando fija el panel con 41b050
+	# en el mismo tick, su carta queda (Red Medicine en el cotejo de magicas, 26-10-2026). El
+	# port recorre el motor primero.
+	if detail: return
 	var hover := _hit_card(_pointer_pos)
 	if not hover.is_empty(): _set_preview(int(hover.id) if hover.known else -1)
 
@@ -699,6 +715,17 @@ func _redraw() -> void:
 			if sprite != null:
 				sprite.position = _hand_blend.at(p * 256 + i, pos)
 				_hand_sprites.append([p * 256 + i, sprite, pos])
+				# Joey rodea la carta levantada con card_waku#l (108x153, 4 px por lado): visible
+				# en todas las capturas del original con el puntero sobre la mano (25-10-2026).
+				if game == "joey" and _hover_card.get("p", -1) == p and _hover_card.get("loc", -1) == 11 and _hover_card.get("i", -1) == i:
+					var frame := Sprite2D.new()
+					frame.texture = Assets.texture("joey/duel/card/card_waku#l.png")
+					if frame.texture != null:
+						frame.centered = false
+						frame.offset = Vector2(-54, -76)
+						frame.position = sprite.position
+						_board.add_child(frame)
+						_hand_sprites.append([p * 256 + i, frame, pos])
 			_register_card(pos, HAND_SIZE, p, 11, i, hid, p == 0 or _visual == null or not _visual.hidden_hand)
 	var turn := m.u16(0xa133f2)
 	var phase := (turn >> 1) & 7
@@ -782,8 +809,12 @@ func _register_card(pos: Vector2, size: Vector2, p: int, loc: int, i: int, id: i
 func _card(card_id: int, center: Vector2, size: Vector2, face_up: bool, sideways: bool,
 		flipped: bool) -> Sprite2D:
 	if _visual != null and _visual.hides(center): return null
-	# Conservar el arte completo hasta el raster final: las minis y la cache de
-	# mano reducida descartan detalle antes de ampliar la ventana del duelo.
+	# A escala 1 (800x600) se dibuja como el original: minis nativas y cache de mano de
+	# 41f130. Reducir el arte completo con filtro lineal y sin mipmaps produce aliasing en
+	# reversos y pilas (cotejo de inicio de duelo de Joey, 25-10-2026). Con la ventana
+	# ampliada se conserva el arte completo para no perder detalle.
+	if (Engine.get_main_loop() as SceneTree).root.get_stretch_transform().get_scale().y <= 1.0:
+		return _native_card(card_id, center, size, face_up, sideways, flipped)
 	var tex: Texture2D = CardDB.card_texture(card_id) if face_up and card_id >= 0 \
 			else Assets.texture("common/card/card_ura.png")
 	if tex == null:
@@ -807,6 +838,52 @@ func _card(card_id: int, center: Vector2, size: Vector2, face_up: bool, sideways
 		s.rotation = 0
 		s.centered = false
 		s.offset = Vector2(-50,-72) / s.scale
+	_board.add_child(s)
+	return s
+
+
+## Ruta nativa a escala 1: mini de 50x72 en el campo y cache de mano de 41f130.
+func _native_card(card_id: int, center: Vector2, size: Vector2, face_up: bool, sideways: bool,
+		flipped: bool) -> Sprite2D:
+	var mini := size == CARD_SIZE
+	var tex: Texture2D = CardDB.card_texture(card_id, mini) if face_up and card_id >= 0 \
+			else Assets.texture("common/mini/card_ura.png" if mini else "common/card/card_ura.png")
+	if tex == null:
+		return null
+	var s := Sprite2D.new()
+	s.texture = tex
+	# La cache de mano es una textura propia: el id permite reconocer la carta dibujada.
+	s.set_meta("card", card_id if face_up else -1)
+	#41f130 cachea la carta grande a escala0x8000 con muestreo discreto.
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	s.scale = size / tex.get_size()
+	s.position = center
+	s.rotation = (PI / 2 if sideways else 0.0) + (PI if flipped else 0.0)
+	if size == HAND_SIZE and not sideways:
+		#41f130 crea primero la orientacion0/180 y despues la cache a0x8000.
+		var key := "%s:%s" % [tex.get_instance_id(), flipped]
+		if not _native_hand_textures.has(key):
+			var image: Image = tex.get_image().duplicate()
+			if game == "joey":
+				# Joey toma el pixel par (2x, 2y) del arte en su orientacion y gira despues la mano
+				# rival: asi coinciden las dos manos con las capturas del duelo completo
+				# (25-10-2026). Con Image.resize(NEAREST), pixel impar, ~12 % de la mano era distinto.
+				# Kaiba (D24) ya coincide con el muestreo anterior; Yugi no tiene cotejo de la mano.
+				var cache := Image.create(100, 145, false, image.get_format())
+				for y in 145:
+					for x in 100:
+						cache.set_pixel(x, y, image.get_pixel(mini(x * 2, image.get_width() - 1), mini(y * 2, image.get_height() - 1)))
+				image = cache
+			if flipped:
+				image.flip_x()
+				image.flip_y()
+			if game != "joey": image.resize(100, 145, Image.INTERPOLATE_NEAREST)
+			_native_hand_textures[key] = ImageTexture.create_from_image(image)
+		s.texture = _native_hand_textures[key]
+		s.scale = Vector2.ONE
+		s.rotation = 0
+		s.centered = false
+		s.offset = Vector2(-50, -72)
 	_board.add_child(s)
 	return s
 

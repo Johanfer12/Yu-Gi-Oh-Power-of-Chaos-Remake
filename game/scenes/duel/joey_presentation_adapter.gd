@@ -113,7 +113,17 @@ func start_normal(decks: Array[Dictionary], opts: int, rand_seed: int, mode := G
 	file_recording_enabled = true
 	if engine is JoeyReplayEngine:
 		(engine as JoeyReplayEngine).replay_active = false
-	local_native_player = 0 if mode == GAME_NORMAL else int(engine.network_transport.is_host)
+	# Jugador local nativo del duelo normal: 0 en el port. Las trazas recientes del original
+	# llaman a 5bfeb0(1, 1, semilla) (44bee0: 5f3288 = 1) y solo con 1 el duelo completo del
+	# cotejo repite sus 179 comandos; la traza D24 indica 0 y tres pruebas del port dependen de
+	# 0. Pendiente D36: --joey-local-native=1 lo fija para los cotejos.
+	var forced_local := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--joey-local-native="): forced_local = arg.get_slice("=", 1)
+	if mode == GAME_NORMAL:
+		local_native_player = forced_local.to_int() & 1 if forced_local != "" else 0
+	else:
+		local_native_player = int(engine.network_transport.is_host)
 	engine.init_application()
 	native_version = engine.f44baa0()
 	m.set_u32(0xa114b4, 0)
@@ -150,6 +160,9 @@ func start_normal(decks: Array[Dictionary], opts: int, rand_seed: int, mode := G
 		var address := 0xa54e60 + p * 0xe2
 		engine.m.clear(address, 0xe2)
 		for row in [["main", 0, 0xdc, 80], ["side", 0xa0, 0xde, 15], ["fusion", 0xbe, 0xe0, 15]]:
+			# Mazos logicos [local, rival] en los huecos 0 y 1 de a54e60 tambien con el jugador local
+			# nativo 1: 5bfeb0 los reparte. Con mazos distintos (duelo de trampas, 26-10-2026) cambiarlos
+			# de hueco daba al jugador el mazo de la CPU.
 			var ids: Variant = decks[p].get(row[0], [])
 			var count := mini(ids.size(), int(row[3]))
 			for i in count:
@@ -158,7 +171,9 @@ func start_normal(decks: Array[Dictionary], opts: int, rand_seed: int, mode := G
 	if mode == GAME_NETWORK:
 		engine.start_network(decks, opts, rand_seed, engine.network_transport)
 	else:
-		engine.f5bfeb0(0, opts, rand_seed)
+		# Las opciones vienen del janken ya cruzadas con 5f3288 (janken_joey.gd): son el valor
+		# nativo de quien empieza, como el segundo argumento de 48a150.
+		engine.f5bfeb0(local_native_player, opts, rand_seed)
 	engine.ui_enabled = true
 	engine.ui_cursor_ready = false
 	engine.ui_busy = false
@@ -688,6 +703,10 @@ func _collect_native_events() -> void:
 				var sound_ids := {6: 0x10000010, 7: 0x1000000f, 9: 0x10000009, 0x19: 0x1000000a}
 				if sound_ids.has(int(args[0])): _native_sound(sound_ids[int(args[0])])
 			"44ba00": _emit("music_by_lp", {"native_music_mode": engine.m.u32(0x5f3294)})
+			"41b050":
+				# Panel de detalle: indice de la carta del comando (0 = reverso, como 44dbc0).
+				var index := int(args[0]) & 0xfff
+				_emit("detail", {"card": engine.f4022e0(index) & 0xffff if index != 0 else -1})
 			"403ce0":
 				if _native_reactions_enabled():
 					var p := int(args[0]) & 1

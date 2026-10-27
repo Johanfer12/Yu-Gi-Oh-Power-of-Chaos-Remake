@@ -241,7 +241,9 @@ static func render(owner: Node2D, event: Dictionary, frame: int) -> bool:
 		"summon": _summon(owner, event, frame * 8)
 		"special": _special(owner, event, frame * 8)
 		"hand_shuffle": _hand_shuffle(owner, event, frame)
-		"set": _render_set(owner, event, frame * 12)
+		"set":
+			if event.get("game", "") == "joey": _render_joey_set(owner, event, frame)
+			else: _render_set(owner, event, frame * 12)
 		"destroy_effect": _break_card(owner, event, frame * 16)
 		"explosion": _explosion(owner, event, frame * 8)
 		"shuffle": _shuffle(owner, event, frame * 8)
@@ -346,6 +348,22 @@ static func _render_set(owner: Node2D, event: Dictionary, counter: int) -> void:
 		var tick := elapsed / 8
 		var pos: Vector2 = points[index] - Vector2(0, tick * tick / 16)
 		_additive(_asset(owner, "eff_star%d_%s" % [tick & 1, color], pos, 65536, alpha))
+
+## Joey 44efd0: dibujo portado funcion a funcion (JoeyFxSet: 44f370/44f390). La carta base no
+## es de este objeto: la mesa aun no ha escrito la zona mientras espera, igual que en _render_set.
+static func _render_joey_set(owner: Node2D, event: Dictionary, frame: int) -> void:
+	var center: Vector2 = event["center"]
+	_card(owner, event, center, Geometry.FIELD_SIZE, 256, event.get("angle", 0), event.get("face", false))
+	var fx := JoeyFxSet.new()
+	fx.center = Vector2i(center)
+	var flags := int(event.get("flags", 0))
+	# Palabra de 452f20 en coordenadas de la vista (jugador local 0): bit 14 posicion, bit 15 cara.
+	fx.ref = (int(event.get("p", 0)) & 1) | ((flags & 1) << 14) | (((flags >> 1) & 1) << 15)
+	fx.monster = bool(event.get("monster", false))
+	for point: Vector2 in event.get("set_points", []): fx.points.append(Vector2i(point))
+	for i in frame: fx.f44f370()
+	var canvas := JoeyFxCanvas.new(owner, event, PackedStringArray(["eff_set_y", "eff_set_b", "eff_star0_y", "eff_star1_y", "eff_star0_b", "eff_star1_b"]))
+	fx.f44f390(canvas, 0)
 
 static func _explosion(owner: Node2D, event: Dictionary, counter: int) -> void:
 	var center: Vector2 = event["center"]

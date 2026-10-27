@@ -103,7 +103,7 @@ func f40aa40() -> int:
 					created += 1
 			if created == 0:
 				f450730(0, card)
-			# Metodo +0x24 de 5f3280+0x3c omitido.
+			f41b050(card) # Metodo +0x24 de 5f3280+0x3c: panel de detalle.
 			cmd_advance()
 		2:
 			if visual_busy("effects", 0, 0, 0x40ab0b):

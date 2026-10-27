@@ -40,6 +40,14 @@ func visual_reset_input_ack() -> void:
 	m.set_u8(0x5f2fe0, 0)
 
 
+## 41b050: metodo +0x24 del objeto de detalle (5f3280+0x3c); guarda el indice de la carta en
+## +0x10 y el panel la muestra. Lo llaman los comandos que ponen una carta en juego o la activan
+## (4061b0, 4063e0, 4067d0, 406b20, 407120, 407160, 40a3c0, 40aa40) y el cursor (44dbc0).
+func f41b050(index: int) -> int:
+	present("41b050", {"args": [index]})
+	return 0
+
+
 func _visual_object_from_renderer(kind: String, player: int, area: int, index: int) -> int:
 	if not visual_object_query.is_valid():
 		return 0

@@ -6,7 +6,7 @@ static var _joey_flip_turns: Dictionary = {}
 
 ## Estado por duelo de las reacciones (no el MT: el de interfaz es global, ver UiRandom).
 static func reset_duel_state(duel: Duel) -> void:
-	_joey_flip_turns[duel.get_instance_id()] = 0 # DAT_005eb558: ultimo turno de reaction05.
+	_joey_flip_turns[duel.get_instance_id()] = -8 # DAT_005eb558 (vale -8 en .data): ultimo turno de reaction05.
 
 ## FUN_00531140 (Yugi) / 533640 (Kaiba) / 55c140 (Joey): MT de interfaz global, el mismo que
 ## usan janken, bustos y mazo del rival; no se resiembra por duelo.
@@ -229,7 +229,7 @@ static func _joey(d: Dictionary, duel: Duel) -> Dictionary:
 		"reaction_flip": # Jo403700: contador de turnos, no reloj visual ni comandos.
 			if p != 1: return {}
 			var turn := duel.m.u16(0xa133f0)
-			var old := int(_joey_flip_turns.get(duel.get_instance_id(), 0))
+			var old := int(_joey_flip_turns.get(duel.get_instance_id(), -8))
 			if turn >= old and turn < old + 8: return {}
 			_joey_flip_turns[duel.get_instance_id()] = turn
 			return _jo_reaction(d, 5, 0x41)

@@ -514,7 +514,8 @@ func f4061b0() -> int:
 		f44fcc0(0, card, loc)
 	else:
 		f44f630(0, card, loc)
-	# Metodo +0x24 del objeto 5f3280+0x3c con el indice (presentacion, omitido).
+	# Metodo +0x24 del objeto 5f3280+0x3c (41b050): el panel de detalle muestra la carta.
+	f41b050(card)
 	cmd_advance()
 	return 0
 
@@ -536,7 +537,7 @@ func f4063e0() -> int:
 			var card := f568b90(b)
 			var where := _jg_local16((((c_lo * 2) | (c_hi & 1)) << 0xd | (z & 0x1f)) << 1 | (a_lo & 1))
 			f44fcc0(0, card, where)
-			# Metodo +0x24 del objeto 5f3280+0x3c con la carta (presentacion, omitido).
+			f41b050(card) # Metodo +0x24 de 5f3280+0x3c: panel de detalle.
 			var s := m.u32(JoeyMem.CMD_STATE) & 0xffffc07f
 			m.set_u32(JoeyMem.CMD_STATE, s ^ (((s + 1) ^ s) & 0x7f))
 		1:

@@ -65,7 +65,8 @@ func f4067d0() -> int:
 			m.set_u32(info, o18)
 			m.set_u16(info, (((((o10 & 1) | (oc << 1)) & 0xff) << 8) | (o18 & 0xff)) << 6 | (p & 1))
 			f44fcc0(0, card, info)
-			# Insercion en la lista de efectos y metodo +0x24 de 5f3280+0x3c omitidos.
+			# Insercion en la lista de efectos omitida; 41b050 pone la carta en el panel de detalle.
+			f41b050(card)
 			cmd_advance(0xffffc07f)
 		2:
 			if (cmd_tick() & 0x3f80) >= 0x400:
@@ -140,8 +141,9 @@ func f406b20() -> int:
 				var place := m.local(4)
 				m.set_u32(place, key)
 				f450260(0, card, f418b50(obj, place))
-			# Insercion en la lista de efectos, metodo +0x24 de 5f3280+0x3c y el functor
-			# temporal (vtable 5da440) omitidos.
+			# Insercion en la lista de efectos y functor temporal (vtable 5da440) omitidos; 41b050
+			# pone la carta en el panel de detalle.
+			f41b050(card)
 			cmd_advance()
 		3:
 			if visual_busy("effects", 0, 0, 0x406f34):
@@ -171,10 +173,10 @@ func f406f70() -> int:
 	return 0
 
 
-## Joey FUN_00407120: comandos 6e, 75 y 76; solo llaman al metodo +0x24 de 5f3280+0x3c con el
-## indice de la carta (omitido) y terminan.
+## Joey FUN_00407120: comandos 6e, 75 y 76; solo llaman al metodo +0x24 de 5f3280+0x3c (41b050)
+## con el indice de la carta, que pasa al panel de detalle, y terminan.
 func f407120() -> int:
-	f402460(cmd_a())
+	f41b050(f402460(cmd_a()))
 	cmd_finish()
 	return 0
 
@@ -192,7 +194,7 @@ func f407160() -> int:
 				f56c910(p, card)
 				f44ef40(7)
 				f43c730(f41cf60(p, 0xe), card)
-				# Metodo +0x24 de 5f3280+0x3c omitido.
+				f41b050(card) # Metodo +0x24 de 5f3280+0x3c: panel de detalle.
 		else:
 			var pl := (p & 1) * JoeyMem.PLAYER_SIZE
 			var last := m.u32(_JH_GRAVE_LAST + m.u8(_JH_GRAVE_N + pl) * 4 + pl)
@@ -200,7 +202,7 @@ func f407160() -> int:
 				f56c9e0(p, b)
 				f44ef40(7)
 				f43c730(f41cf60(p, 0xe), card)
-				# Metodo +0x24 de 5f3280+0x3c omitido.
+				f41b050(card) # Metodo +0x24 de 5f3280+0x3c: panel de detalle.
 		cmd_advance()
 	elif step != 1:
 		return 0
