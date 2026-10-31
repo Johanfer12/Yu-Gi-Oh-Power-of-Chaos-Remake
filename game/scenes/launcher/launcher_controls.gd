@@ -47,6 +47,8 @@ var _time := 0.0
 var _font := ThemeDB.fallback_font
 var _reset_dialog := ConfirmationDialog.new()
 var _reset_result := AcceptDialog.new()
+var _cloud_dialog: AcceptDialog = preload("res://scenes/launcher/cloud_dialog.gd").new()
+var _save_choice := "reset"  # fila Partida: "reset" o "cloud"
 
 
 func _ready() -> void:
@@ -54,6 +56,8 @@ func _ready() -> void:
 	add_child(_reset_dialog)
 	add_child(_reset_result)
 	_reset_dialog.confirmed.connect(_confirm_reset)
+	add_child(_cloud_dialog)
+	CloudSync.changed.connect(_cloud_changed)
 	# Los iconos se rasterizan grandes y se dibujan reducidos: con mipmaps no se ven dentados.
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	var saved: Dictionary = SaveData.data.get("launcher", {})
@@ -118,6 +122,13 @@ func _reset_row() -> int:
 	return 7 if _mobile_controls() else 6
 
 
+## Fila Partida partida en dos: reiniciar a la izquierda, Google Drive a la derecha.
+func _save_rect(choice: String) -> Rect2:
+	var box := _control_rect(_reset_row())
+	var width := (box.size.x - 8.0) / 2.0
+	return Rect2(box.position + Vector2(width + 8.0 if choice == "cloud" else 0.0, 0), Vector2(width, box.size.y))
+
+
 func _close_center() -> Vector2:
 	var r := _panel_rect()
 	return Vector2(r.end.x - 34, r.position.y + 36)
@@ -147,8 +158,9 @@ func _option_rect(row: int) -> Rect2:
 
 func _hit(pos: Vector2) -> String:
 	if panel_open:
-		if _control_rect(_reset_row()).has_point(pos):
-			return "reset"
+		for choice in ["reset", "cloud"]:
+			if _save_rect(choice).has_point(pos):
+				return choice
 		if _mobile_controls():
 			for mode in ["hold", "menu"]:
 				if _mode_rect(mode).has_point(pos):
@@ -177,7 +189,7 @@ func _hit(pos: Vector2) -> String:
 ## _input: va antes que el _unhandled_input del selector, que asi no mueve la seleccion
 ## ni abre un juego mientras se usan estos botones o el panel.
 func _input(event: InputEvent) -> void:
-	if _reset_dialog.visible or _reset_result.visible:
+	if _reset_dialog.visible or _reset_result.visible or _cloud_dialog.visible:
 		return
 	var local_pos := Vector2.ZERO
 	if event is InputEventMouse:
@@ -208,7 +220,12 @@ func _input(event: InputEvent) -> void:
 				update_requested.emit()
 			"reset":
 				_focused_row = _reset_row()
+				_save_choice = "reset"
 				_request_reset()
+			"cloud":
+				_focused_row = _reset_row()
+				_save_choice = "cloud"
+				_cloud_dialog.popup_centered()
 			"hold", "menu":
 				pointer_mode = _hit(local_pos)
 				_focused_row = 6
@@ -244,9 +261,14 @@ func _input(event: InputEvent) -> void:
 			_save()
 		elif _focused_row < _reset_row():
 			_cycle_option(_focused_row - 1, step)
+		else:
+			_save_choice = "cloud" if _save_choice == "reset" else "reset"
 	elif event.is_action_pressed("ui_accept"):
 		if _focused_row == _reset_row():
-			_request_reset()
+			if _save_choice == "cloud":
+				_cloud_dialog.popup_centered()
+			else:
+				_request_reset()
 		elif _focused_row >= 1:
 			_cycle_option(_focused_row - 1, 1)
 	get_viewport().set_input_as_handled()
@@ -281,6 +303,12 @@ func _confirm_reset() -> void:
 	_reset_result.title = ("Juego reiniciado" if spanish else "Game reset") if result.error == "" else ("Error al reiniciar" if spanish else "Reset failed")
 	_reset_result.dialog_text = (("Estado inicial restaurado.\nCopia de seguridad: " if spanish else "Initial state restored.\nBackup: ") + result.backup) if result.error == "" else str(result.error)
 	_reset_result.popup_centered()
+
+
+## Un conflicto surgido al volver al selector se pregunta en cuanto aparece.
+func _cloud_changed() -> void:
+	if CloudSync.state == "conflict" and not _cloud_dialog.visible and not _reset_dialog.visible and not _reset_result.visible:
+		_cloud_dialog.popup_centered()
 
 
 func _cycle_option(row: int, step: int) -> void:
@@ -443,11 +471,21 @@ func _draw_panel() -> void:
 			var label := ("Mantener" if spanish else "Hold") if mode == "hold" else ("Menú" if spanish else "Menu")
 			var width := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
 			_label_mid(label, box.get_center() - Vector2(width / 2.0, 0), 16, GOLD_LIGHT if selected else GOLD)
-	var reset_box := _control_rect(_reset_row())
-	var reset_hot := _hover == "reset" or _focused_row == _reset_row()
+	var reset_box := _save_rect("reset")
+	var cloud_box := _save_rect("cloud")
+	var reset_hot := _hover == "reset" or (_focused_row == _reset_row() and _save_choice == "reset")
+	var cloud_hot := _hover == "cloud" or (_focused_row == _reset_row() and _save_choice == "cloud")
 	_label_mid("Partida" if spanish else "Save data", Vector2(r.position.x + 36, reset_box.get_center().y), 17, GOLD_LIGHT)
 	_round_rect(reset_box, Color(0.20, 0.035, 0.03), 7, GOLD if reset_hot else Color(GOLD, 0.35))
-	_label_mid("Reiniciar juego…" if spanish else "Reset game…", reset_box.position + Vector2(16, 17), 16, GOLD_LIGHT)
+	var reset_label := "Reiniciar…" if spanish else "Reset…"
+	_label_mid(reset_label, reset_box.get_center() - Vector2(_font.get_string_size(reset_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x / 2.0, 0), 16, GOLD_LIGHT)
+	_round_rect(cloud_box, STONE, 7, GOLD if cloud_hot else Color(GOLD, 0.35))
+	# Punto de estado: gris sin vincular, verde al dia, oro trabajando, rojo error o conflicto.
+	var dot: Color = {"off": Color(0.45, 0.42, 0.38), "idle": Color(0.35, 0.8, 0.4), "syncing": GOLD,
+		"linking": GOLD}.get(CloudSync.state, Color(0.9, 0.3, 0.25))
+	var cloud_left := cloud_box.get_center().x - (_font.get_string_size("Google Drive…", HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 13.0) / 2.0
+	draw_circle(Vector2(cloud_left + 4.0, cloud_box.get_center().y), 4.0, dot, true, -1.0, true)
+	_label_mid("Google Drive…", Vector2(cloud_left + 13.0, cloud_box.get_center().y), 16, GOLD_LIGHT)
 	var foot := r.end.y - 34
 	draw_line(Vector2(r.position.x + 36, foot - 16), Vector2(r.end.x - 36, foot - 16), Color(GOLD, 0.18), 1.0, true)
 	var status: String = CardTranslations.status_text(spanish) if LauncherSettings.improved_card_texts else ("Traducciones: solo nombres y descripciones de cartas" if spanish else "Translations: card names and descriptions only")

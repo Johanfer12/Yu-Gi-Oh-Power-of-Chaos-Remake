@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Power of Chaos Remake"
-config/version="0.1.0-alpha.26"
+config/version="0.1.0-alpha.27"
 config/icon="res://assets/icons/launcher.svg"
 config/windows_native_icon="res://assets/icons/launcher.ico"
 config/description="Reimplementación en Godot de Power of Chaos (Yugi, Kaiba y Joey). Requiere los recursos de las copias del usuario."
@@ -31,11 +31,17 @@ Audio="*res://autoload/audio.gd"
 CardDB="*res://autoload/card_db.gd"
 SaveData="*res://autoload/save_data.gd"
 LauncherSettings="*res://autoload/launcher_settings.gd"
+CloudSync="*res://autoload/cloud_sync.gd"
 CardTranslations="*res://autoload/card_translations.gd"
 Game="*res://autoload/game.gd"
 PlatformInput="*res://autoload/platform_input.gd"
 Debug="*res://autoload/debug.gd"
 Lan="*res://autoload/lan.gd"
+
+[cloud_sync]
+
+client_id="576199955073-1um5de1sbn7uhra0f7llb931pumb96ip.apps.googleusercontent.com"
+client_secret=""
 
 [debug]
 

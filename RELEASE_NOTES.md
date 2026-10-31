@@ -1,3 +1,12 @@
+## v0.1.0-alpha.27
+
+- Optional Google Drive save sync between PC and Android: open the launcher settings, **Save data → Google Drive… → Connect**, enter the code shown at google.com/device and allow access. Cards, decks, results and progress sync when you return to the game selector and shortly after each save. If both devices changed, the launcher asks which save to keep; the other stays as a backup. Each player's save goes to their own Drive, and the game can only see the files it creates. Music volume, touch controls and display options stay per device. Privacy policy: docs/PRIVACY.md.
+- Google may show "unverified app" when connecting; continue with **Advanced → Go to Power of Chaos Remake**.
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android31 uses the same package and signing certificate as Android30. No new physical-device validation is claimed.
+
+Sincronización opcional de la partida con Google Drive entre PC y Android: en los ajustes del launcher, **Partida → Google Drive… → Conectar**, escribe el código en google.com/device y permite el acceso. Cartas, barajas, resultados y progreso se sincronizan al volver al selector y poco después de cada guardado; si cambiaron ambos dispositivos, el launcher pregunta cuál conservar. Cada jugador guarda en su propio Drive. Si Google avisa de «app no verificada», continúa con **Configuración avanzada → Ir a Power of Chaos Remake**. En Android, actualiza desde el launcher; no desinstales la app ni borres sus datos.
+
 ## v0.1.0-alpha.26
 
 - Overlay mode is now as sharp as Stretch: the duel is drawn at your screen's resolution instead of being upscaled from 800×600.

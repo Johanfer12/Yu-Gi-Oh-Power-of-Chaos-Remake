@@ -8,6 +8,9 @@ const VERSION := 2
 const GAMES := ["yugi", "kaiba", "joey"]
 const Store = preload("res://core/save_store.gd")
 
+## Cada guardado correcto; CloudSync lo usa para subir la partida.
+signal saved
+
 var data := {}
 var persistence_error := ""
 var _startup_checked: Dictionary = {}
@@ -71,6 +74,7 @@ func save() -> bool:
 	if err != OK:
 		push_error("No se pudo guardar %s: %s" % [path(), error_string(err)])
 		return false
+	saved.emit()
 	return true
 
 

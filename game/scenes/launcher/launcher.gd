@@ -93,6 +93,8 @@ func _ready() -> void:
 	add_child(_release_footer)
 	Updates.changed.connect(_update_badge)
 	_update_badge()
+	# En el selector ninguna escena usa la partida: momento seguro para traer cambios de Drive.
+	CloudSync.sync_now(true)
 	Audio.stop_music()
 	_music.stream = MUSIC
 	_music.finished.connect(_start_music)

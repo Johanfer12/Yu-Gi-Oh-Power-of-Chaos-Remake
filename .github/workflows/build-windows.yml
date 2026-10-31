@@ -43,6 +43,20 @@ jobs:
         with:
           path: ${{ runner.tool_cache }}/poc-godot-4.7.2
           key: godot-windows-4.7.2-verified-v2
+      # El secreto del cliente OAuth de Google Drive tampoco se publica: se escribe en
+      # project.godot solo en el runner, antes de exportar el APK y el EXE.
+      - name: Anadir el cliente de Google Drive
+        env:
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          if ($env:GOOGLE_OAUTH_CLIENT_SECRET) {
+            $path = "game/project.godot"
+            $text = [IO.File]::ReadAllText($path)
+            if (-not $text.Contains('client_secret=""')) { throw "project.godot debe llevar client_secret vacio" }
+            [IO.File]::WriteAllText($path, $text.Replace('client_secret=""', 'client_secret="' + $env:GOOGLE_OAUTH_CLIENT_SECRET + '"'))
+          } elseif ($env:GITHUB_REF -like "refs/tags/*") {
+            throw "Falta el secreto GOOGLE_OAUTH_CLIENT_SECRET: una version debe incluir la sincronizacion con Drive"
+          }
       # La clave de firma solo existe como secreto del repositorio. Sin ella (forks) se compila
       # con una clave desechable para comprobar el APK, pero una etiqueta exige la publicada.
       - name: Compilar y firmar APK Android
