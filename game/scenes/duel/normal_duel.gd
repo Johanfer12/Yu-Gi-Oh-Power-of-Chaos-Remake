@@ -208,7 +208,7 @@ func _process(_delta: float) -> void:
 	if _help != null: _help.show_between(_engine_clock)
 	var start_shade: bool = _visual != null and _visual._start_banner_shade
 	var presenting := _advance_visual(_delta)
-	if game == "kaiba" and start_shade and not _visual._start_banner_shade:
+	if game in ["yugi", "kaiba"] and start_shade and not _visual._start_banner_shade:
 		_start_banner_ack = true
 	if _wait_label != null:
 		# 44ba10: sin cartel mientras hay objetos de presentacion activos.
@@ -525,10 +525,7 @@ func _collect_events() -> void:
 		var e: Dictionary = _duel.events[_event_pos]
 		_event_pos += 1
 		var data: Dictionary = e
-		if data.get("kind", "") == "detail":
-			# Joey 41b050: los comandos que ponen o activan una carta la muestran en el panel.
-			_set_preview(int(data["card"]))
-			_detail_this_tick = true
+		_detail_event(data)
 		if data.get("kind", "") == "cursor" and _duel.ui_key_cursor:
 			# FUN_0053f7e0 -> FUN_00540bd0/00540af0: el teclado desliza el puntero.
 			var at := DuelGeometry.location(int(data["p"]) & 1, int(data["loc"]), int(data["i"]), _duel.m.u8(DuelMem.pl(int(data["p"]) & 1) + 2))
@@ -708,9 +705,8 @@ func _phase_cell(path: String, at: Vector2, cell: Vector2, alpha: float, add := 
 	_phase_layer.add_child(s)
 
 
-func _card(card_id: int, center: Vector2, size: Vector2, face_up: bool, sideways: bool, flipped: bool) -> Sprite2D:
-	# La mano rival permanece oculta, aunque el visor de repeticiones muestra ambas.
-	return super._card(card_id, center, size, false if size == HAND_SIZE and flipped else face_up, sideways, flipped)
+func _hides_rival_hand() -> bool:
+	return true
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and _duel == null:

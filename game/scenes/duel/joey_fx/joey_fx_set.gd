@@ -2,8 +2,8 @@ class_name JoeyFxSet
 extends RefCounted
 ## Efecto de colocar carta de Joey: clase de 44efd0 (vtable 5db2c4). Port funcion a funcion de
 ## sus metodos por tick: 44f370 (vtable+8, avanza) y 44f390 (vtable+0xc, dibuja). El dibujo pasa
-## por una superficie con las primitivas del original (JoeyFxSurface); la prueba
-## joey_effect_set_test.gd las registra y las compara con joey_effect_set_oracle.py.
+## por la superficie de la libreria de Konami (KonamiSurface, +0xac y +0xb0); el oraculo
+## generico las registra y compara (re/scripts/presentation_specs/joey_set.py, presentation_oracle_test.gd).
 
 const Math := preload("res://scenes/duel/duel_visual_math.gd")
 
@@ -41,7 +41,7 @@ func f44f390(s: Object, mode: int) -> void:
 	var side := ((~mode) & 1) ^ ((~ref) & 1)
 	var card: Variant = s.card_image((((ref >> 14) & 1) + side * 2) * 90)
 	var card_size: Vector2i = s.image_size(card)
-	s.additive(card, center.x - Math.trunc_div(card_size.x, 2), center.y - Math.trunc_div(card_size.y, 2),
+	s.slot_ac(card, center.x - Math.trunc_div(card_size.x, 2), center.y - Math.trunc_div(card_size.y, 2),
 		Math.cos_fx((c - 0x80) & 0x1ff) >> 9, 0, 0, 0)
 	var frame: int = s.frame(int(not monster))
 	s.pick(frame, -1)
@@ -56,5 +56,5 @@ func f44f390(s: Object, mode: int) -> void:
 		frame = s.frame((q & 1) + 2 + int(not monster) * 2)
 		s.pick(frame, -1)
 		var at := points[k]
-		s.blend(s.sprite(frame), at.x - Math.trunc_div(star_size.x, 2),
+		s.slot_b0(s.sprite(frame), at.x - Math.trunc_div(star_size.x, 2),
 			at.y - Math.trunc_div(q * q, 16) - Math.trunc_div(star_size.y, 2), light, 0, 0, 0)

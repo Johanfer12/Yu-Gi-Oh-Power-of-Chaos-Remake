@@ -30,6 +30,10 @@ extends Node
 ##   --ui-seed=N               semilla del MT de interfaz (0x531140) en vez del reloj; manda
 ##                             sobre la de la traza
 ##   --ui-rand-log             imprime cada numero del MT de interfaz (cotejo con ui_rand)
+##   --ui-shots=carpeta        con --ui-replay, guarda solo los fotogramas que corresponden a
+##                             las capturas del original (y +-2), con el nombre de --write-movie
+##                             (port%08d.png); ui_compare.py los lee igual y no hay que codificar
+##                             cada fotograma
 
 const KEY_INTERVAL := 12
 
@@ -54,6 +58,11 @@ var _seed_from_trace := false
 ## Semillas del rand() del CRT de cada duel_start de la traza (lo que el original pasa a
 ## 5418a0, el mismo valor que el srand de 0x5418bc), en orden: una por duelo.
 var _duel_seeds: Array[int] = []
+## --ui-shots: capturas del original [tick relativo, cambios de escena anteriores] y carpeta.
+var _shots: Array = []
+var _shots_dir := ""
+var _shots_saved := 0
+const SHOT_WINDOW := 2
 
 
 func _ready() -> void:
@@ -71,6 +80,10 @@ func _ready() -> void:
 	if replay != "":
 		_load_replay(replay, Paths.cmdline_value("ui-anchor").to_int() if Paths.cmdline_value("ui-anchor") != "" else 2)
 		NativeClock.interpolate = false
+	_shots_dir = Paths.cmdline_value("ui-shots")
+	if _shots_dir != "" and not _shots.is_empty():
+		DirAccess.make_dir_recursive_absolute(_shots_dir)
+		RenderingServer.frame_post_draw.connect(_save_shot)
 	UiRandom.log_draws = OS.get_cmdline_user_args().has("--ui-rand-log")
 	var ui_seed := Paths.cmdline_value("ui-seed")
 	if ui_seed != "":
@@ -116,6 +129,19 @@ func _process(_delta: float) -> void:
 		print("captura: ", _shot)
 		Audio.stop_all()
 		get_tree().quit.call_deferred()
+
+
+## --ui-shots: tras dibujar el fotograma _frame, lo guarda si alguna captura del original cae a
+## SHOT_WINDOW o menos (mismo reanclaje por escena que la entrada).
+func _save_shot() -> void:
+	if _replay_anchor < 0:
+		return
+	for shot: Array in _shots:
+		var at := _port_frame_for(int(shot[0]), int(shot[1]))
+		if at >= 0 and absi(_frame - at) <= SHOT_WINDOW:
+			get_viewport().get_texture().get_image().save_png(_shots_dir.path_join("port%08d.png" % _frame))
+			_shots_saved += 1
+			return
 
 
 ## Clic (pulsar y soltar) en coordenadas de la pantalla de 800x600, con movimiento previo.
@@ -190,6 +216,10 @@ func _load_replay(path: String, anchor_scene: int) -> void:
 			var d: Dictionary = JSON.parse_string(line)
 			if d.get("ev") == "duel_start" and d.has("seed"):
 				_duel_seeds.append(int(d["seed"]))
+			continue
+		if line.contains("\"ui_shot\"") and anchor >= 0:
+			var s: Dictionary = JSON.parse_string(line)
+			_shots.append([int(s.get("tick", s.get("frame", 0))) - anchor, _scene_ticks.size()])
 			continue
 		if line == "" or not (line.contains("ui_frame") or line.contains("ui_scene")):
 			continue

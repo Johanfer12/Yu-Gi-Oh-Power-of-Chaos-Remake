@@ -127,10 +127,20 @@ func joey_card_object_exists(p: int, loc: int, i: int) -> bool:
 		return card_object_index(p, loc + i if loc + i < 11 else loc) >= 0
 	return false
 
+## Efectos de Joey cuyo objeto deja avanzar al motor en el tick en que su contador llega al fin:
+## invocar (44f630). Los de batalla y los movimientos ya terminaban a tiempo (con la regla general
+## salian un tick antes: 0x31, 0x33, 0x34, 0x61, 0xce); con el recuento de LP la reaccion siguiente
+## se adelantaba (duelo de trampas, fotograma 3242).
+func _joey_counted(effect: Dictionary) -> bool:
+	if effect.is_empty() or effect.get("wait_voice", false) or effect.has("native_turn"):
+		return false
+	return String(effect.get("mode", "")) == "summon"
+
+
 func busy() -> bool:
 	# 4054b0 no espera la explosion en el contador del paso 2; en el paso 5
 	# 403c70 si consulta el objeto 439930 hasta que termina su contador.
-	if game == "yugi" and _duel_ref != null and (_duel_ref.cmd_op() & 0xfff) == 0x7a and _duel_ref.step() == 5:
+	if game in ["yugi", "kaiba"] and _duel_ref != null and (_duel_ref.cmd_op() & 0xfff) == 0x7a and _duel_ref.step() == 5:
 		for overlay in overlays:
 			if overlay["event"].get("kind", "") == "cmd7a" and int(overlay["frame"]) < int(overlay["event"]["native_lifetime"]) - 1: return true
 	# 405d10 cuenta ocho ticks (paso 2) y mueve el objeto (paso 3) mientras
@@ -141,9 +151,16 @@ func busy() -> bool:
 		return false
 	# Los objetos se actualizan antes de consultar 403c70: en el tick que
 	# alcanza el umbral el motor ya puede terminar el paso 4.
-	if game == "yugi" and active.get("kind", "") in ["special_summon", "destroy_effect"] and _duel_ref != null and _duel_ref.step() == 4 and frame >= int(active.get("frames", 0)) - 1:
+	# Kaiba igual (mismo orden objetos/motor; cotejo por valores, 30-10-2026: cada 0x43 iba +2/+3).
+	if game in ["yugi", "kaiba"] and active.get("kind", "") in ["special_summon", "destroy_effect"] and _duel_ref != null and _duel_ref.step() == 4 and frame >= int(active.get("frames", 0)) - 1:
 		return false
-	if game == "yugi" and active.get("mode", "") == "lp_total" and _duel_ref != null and (_duel_ref.cmd_op() & 0xfff) in [0x42, 0x43] and _duel_ref.step() == 4 and frame >= int(active.get("frames", 0)) - 1:
+	if game in ["yugi", "kaiba"] and active.get("mode", "") == "lp_total" and _duel_ref != null and (_duel_ref.cmd_op() & 0xfff) in [0x42, 0x43] and _duel_ref.step() == 4 and frame >= int(active.get("frames", 0)) - 1:
+		return false
+	# Joey 44dd00 tambien actualiza los objetos antes que el motor (5c0000): al invocar, el motor
+	# ya avanza el tick en que el contador llega a su fin. Sin esto cada invocacion retrasaba un
+	# tick el comando siguiente (cotejo de los tres duelos, 27-10-2026: 0x6f 26 de 26).
+	# phase_native ya descuenta ese tick en su espera.
+	if game == "joey" and pending.is_empty() and not _start_banner_shade and _joey_counted(active) and frame >= int(active.get("frames", 0)) - 1:
 		return false
 	if game == "yugi" and active.get("mode", "") == "sacrifice_release" and _duel_ref != null and _duel_ref.step() == 2:
 		var mark: Dictionary = _sacrifice.get(active["key"], {})
@@ -286,15 +303,25 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 				d["sound_file"] = "battle_turn"
 			if _phase_player >= 0 and _phase_player != p:
 				pending.append(PortraitEffects.normalize({"kind": "next_turn", "p": _phase_player, "game": game}, duel))
-				if game == "yugi":
-					# 460bb0: con otro jugador el panel cuenta +0x168 hasta 0x200 (64 ticks) antes de
+				if game in ["yugi", "kaiba"]:
+					# 460bb0 (Kaiba igual): con otro jugador el panel cuenta +0x168 hasta 0x200 (64 ticks) antes de
 					# la fase y 460b80 espera todo ese tramo; el dibujo del cambio dura 48.
 					pending.append({"mode": "wait", "frames": 16, "center": Vector2(525, 300)})
 			_phase_player = p
 		d = PortraitEffects.normalize(d, duel)
 		if d.is_empty(): return
-		if d.get("mode", "") == "phase_native" and game in ["yugi", "joey"]:
-			# 402840 espera a 460b80: contador +0x164 > 0x7f (16 ticks; 24 en batalla, que sube
+		# Kaiba 406250 (0x72): el bust-up de la carta activada tampoco retiene el comando (Ka64 y
+		# magic_active en ticks seguidos en el cotejo por valores de la tanda variada).
+		if ((game == "yugi" and d.get("cmd_c5", false)) or (game == "kaiba" and d.get("cmd_72", false))) 				and d.get("mode", "") == "portrait_native":
+			# 405950 paso 0 (402610): el bust-up de la magia activada desde la mano no retiene el
+			# comando; en el cotejo del duelo completo (30-10-2026) 0xc5 dura 14 ticks con el retrato
+			# aun en pantalla. Sigue dibujandose como capa; en ese cotejo desaparece hacia los 30 ticks.
+			d["native_lifetime"] = 30
+			d["frames"] = 1
+			d["wait_voice"] = false
+		if d.get("mode", "") == "phase_native" and game in ["yugi", "kaiba", "joey"]:
+			# 402840 espera a 460b80 (Kaiba igual: sin esta regla cada fase llegaba 17 ticks tarde en el
+			# cotejo de su duelo completo, 29-10-2026): contador +0x164 > 0x7f (16 ticks; 24 en batalla, que sube
 			# de 4 en 4 entre 0x40 y 0x80). El panel sigue hasta 0x100 sin bloquear.
 			# Joey 4812b0 (desde 404920) libera igual con +0x14c > 0x7f, que 481370 sube de 8 en 8
 			# (de 4 en 4 en batalla); el cotejo del duelo completo (25-10-2026) lo confirma.
@@ -303,7 +330,8 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			# En Joey 481370 sube el contador antes de que el motor consulte 4812b0 en el mismo
 			# tick: el comando siguiente llega un tick antes que con la espera de Yugi (todas las
 			# fases iban +1 en el cotejo del duelo completo).
-			if game == "joey": d["frames"] = int(d["frames"]) - 1
+			# Kaiba igual que Joey: cada fase iba +1 en el cotejo de su duelo completo (29-10-2026).
+			if game in ["joey", "kaiba"]: d["frames"] = int(d["frames"]) - 1
 		pending.append(d)
 		if active.is_empty(): _begin()
 		return
@@ -568,7 +596,11 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			if duel.tutorial_interactive: mode = 6
 			d["mode"] = "music"
 			d["music"] = preload("res://scenes/duel/duel_music.gd").path(game, mode, [duel.m.u16(DuelMem.pl(0)), duel.m.u16(DuelMem.pl(1))])
-			if kind == "music_by_lp" and (game == "yugi" or e.has("native_music_mode")):
+			# Con un retrato que pone su musica (music_once: m_sum, m_summon...) activo o pendiente, la
+			# pista del duelo vuelve al terminar el retrato (Joey: 33 ticks despues de m_sum en el
+			# cotejo por valores de la tanda variada, 30-10-2026).
+			var once_waiting: bool = active.get("music_once", "") != "" or pending.any(func(x): return x.get("music_once", "") != "")
+			if kind == "music_by_lp" and (game == "yugi" or e.has("native_music_mode")) and not once_waiting:
 				# 4376e0 cambia la pista dentro del paso 4; no crea otro objeto que esperar.
 				if _restore_music == "": Audio.play_music(d["music"])
 				played["music"] = played.get("music", 0) + 1
@@ -590,9 +622,8 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			var args: Array = e["args"]
 			match e["op"]:
 				0x08:
-					if game == "kaiba": return # Ka sin cotejar con su ejecutable.
-					if game == "yugi":
-						# 4027e0: el objeto de la carta (413170(a, b & 0xff, b >> 8)) pasa al
+					if game in ["yugi", "kaiba"]:
+						# 4027e0 (Kaiba igual: sin el parpadeo llegaba 16 ticks antes en su cotejo): el objeto de la carta (413170(a, b & 0xff, b >> 8)) pasa al
 						# estado 1 con contador 0x100 (-0x10 por tick, 410030) y el comando espera
 						# a que vuelva al reposo (411300); 410ca0 la resalta con el bit 5.
 						var bp: int = int(args[0]) & 1
@@ -621,7 +652,10 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 					d["sound_file"] = "uija"
 					d["frames"] = 98
 				0x33:
-					if e.get("native_battle", false): d["native_attack_counter"] = clampi(int(_battle["counter"]), 0, 128)
+					# Yugi/Kaiba (40ccf0/40cf20): el estado 3 cuenta mientras el jugador apunta; sin pasar ese
+					# contador el ataque llegaba 8 ticks tarde en sus cotejos de duelo completo (29/30-10-2026).
+					if e.get("native_battle", false) or game in ["yugi", "kaiba"]:
+						d["native_attack_counter"] = clampi(int(_battle["counter"]), 0, 128)
 					d["p"] = _attack_player if _attack_player >= 0 else p
 					d["mode"] = "attack"
 					d["from_pos"] = zone(p, args[0])
@@ -760,7 +794,7 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 		# 439930 sigue dibujandola hasta 0xd0.
 		d["native_lifetime"] = d["frames"]
 		d["frames"] = 1
-	if game == "yugi" and kind == "draw":
+	if game in ["yugi", "kaiba"] and kind == "draw":
 		# 548e80 escribe407830; el siguiente tick407f00 despacha407a60.
 		# El vuelo410030 mantiene sus ocho ticks; el buzon añade uno antes de crearlo.
 		pending.append({"mode": "wait", "frames": 1, "center": Vector2.ZERO})
@@ -1134,7 +1168,7 @@ func follow_memory() -> void:
 ## 401c60 y 40e920 consultan el audio real; el contador no sustituye esa consulta.
 func _active_finished() -> bool:
 	# 451980/43a1b0: el objeto desaparece en T320; el sombreado conserva su espera.
-	if game in ["kaiba", "joey"] and active.get("mode", "") == "banner" and int(active.get("op", 0)) == 0x14: return frame >= 40
+	if game in ["yugi", "kaiba", "joey"] and active.get("mode", "") == "banner" and int(active.get("op", 0)) == 0x14: return frame >= 40
 	if active.get("mode", "") == "joey_summon": return int(active["counter"]) > 0x1005f
 	if active.has("native_turn"):
 		DuelCardTable.field_turn_at(active.native_turn, frame)
@@ -1330,6 +1364,17 @@ func _begin() -> void:
 	var sound: String = {"move": "card_move", "flip": "card_open", "change_position": "card_move", "shuffle": "card_move", "summon": "card_open", "set": "card_move", "special": "reborn", "destroy_effect": "card_normal_brake", "explosion": "card_attacked_brake", "card_effect": "magic_active", "attack": "attack", "chain": "chain", "coin": "coin", "dice": "dice", "next_turn": "turn_change", "banner": "start", "exodia": "exodia_a", "fusion": "fusion1"}.get(mode, "")
 	if mode == "fusion" and game == "kaiba": sound = "" # Sin fusion1 en 43f2c0.
 	if mode == "set": sound = "" # Y43e280/Ka43e9b0: el constructor no reproduce audio.
+	# Cotejo por valores (30-10-2026): al invocar (0x6f) los tres juegos solo piden card_move (el
+	# vuelo desde la mano), y en Yugi el ataque directo (0x34, 402b30) pide attack.wav 12 ticks
+	# despues de empezar; el ataque a un monstruo (0x33), al empezar.
+	if mode == "summon": sound = "" # Joey igual (mismo cotejo)
+	# 4062b0 (0x7f) -> 4077f0: el cambio de posicion pide card_open, no card_move.
+	if mode == "change_position" and game in ["yugi", "kaiba"]: sound = "card_open"
+	# 0x84 (equipar): solo equip.wav al llegar (43a970), sin card_move al empezar el vuelo.
+	if mode == "move" and active.get("kind", "") == "cmd84" and game in ["yugi", "kaiba"]: sound = ""
+	if mode == "attack" and game == "yugi" and active.get("kind", "") == "cmd34":
+		sound = ""
+		active["sounds"] = [[12, "yugi/voice/internal/attack.wav"]]
 	if mode == "move" and int(active.get("frames", 0)) == 0: sound = "" # Sin objeto que mover.
 	if mode == "move" and active.get("instant", false): sound = "" # 414810 no suena.
 	if mode == "exodia" and game == "joey": sound = "" # Jo453b60 no pide exodia_a.
@@ -1345,7 +1390,9 @@ func _begin() -> void:
 		_shade_on = true
 		# Joey 451b80 (fin) prepara el sombreado de 5f3400 igual que 4516a0 (inicio): el cartel
 		# espera a que se abra desde el centro (cotejo del duelo normal, 26-10-2026).
-		if (game in ["kaiba", "joey"] and int(active.get("op", 0)) == 0x14) or (game == "joey" and int(active.get("op", 0)) == 0x04):
+		# Yugi 43d740 enciende el sombreado 5af884 igual que Kaiba 43ded0 (cotejo del duelo de Yugi,
+		# 28-10-2026: sin el, el rotulo de inicio terminaba 16 ticks antes).
+		if (game in ["yugi", "kaiba", "joey"] and int(active.get("op", 0)) == 0x14) or (game == "joey" and int(active.get("op", 0)) == 0x04):
 			_start_banner_shade = true
 			# 44dd00 llama486290 despues de crear el objeto: captura y primer paso16.
 			_tick_shade()
@@ -1534,7 +1581,7 @@ func _render() -> void:
 		else:
 			_render_sacrifice(_sacrifice[key])
 	for overlay in overlays:
-		if overlay["event"].get("mode", "") == "phase_native":
+		if overlay["event"].get("mode", "") in ["phase_native", "portrait_native"]:
 			PortraitEffects.render(self, overlay["event"], overlay["frame"])
 		else:
 			BasicEffects.render(self, overlay["event"], overlay["frame"])

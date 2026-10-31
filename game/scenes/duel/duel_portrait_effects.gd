@@ -66,9 +66,19 @@ static func normalize(event: Dictionary, duel: Duel) -> Dictionary:
 			layout = "reaction_o3"
 			voice = "yugi_52"
 		"reaction_flip":
-			var index := duel.cards.index_of(int(d.get("card", 0)))
-			# Este evento procede de 4040f0 -> 402630 -> 401e00.
-			if p != 0 or duel.cards.type_of(index) != 21: return {}
+			var card := int(d.get("card", 0))
+			var index := duel.cards.index_of(card)
+			var type := duel.cards.type_of(index)
+			# Este evento procede de 4040f0/405950 -> 402630 -> 401e00.
+			if p != 0:
+				# CPU: voz por carta (Trap Hole 0x3ea -> Yugi_26...) o Yugi_21 con cualquier tipo 0x15;
+				# 0x15b no habla. Faltaba en el port (cotejo por valores, 30-10-2026).
+				var voices := {0x3f0: 0x36, 0x3b1: 0x61, 0x150: 0x34, 0x15c: 0x63, 0x3c9: 0x64, 0x3ea: 0x37,
+					0x403: 0x35, 0x420: 0x38, 0x4be: 0x62, 0x4c5: 0x65, 0x4d0: 0x5f}
+				if card == 0x15b: return {}
+				if voices.has(card): return _voice(d, voices[card])
+				return _voice(d, 0x32) if type == 0x15 else {}
+			if type != 21: return {}
 			layout = "reaction_o2"
 			voice = "yugi_%02d" % (46 + (visual_rand(duel) & 1))
 		"reaction_card":
@@ -305,9 +315,12 @@ static func _kaiba(d: Dictionary, duel: Duel) -> Dictionary:
 				if type == 21: return _portrait(d, "reaction11", "ka46")
 				if type == 22: return _portrait(d, "reaction03" if card == 0x3f0 else "reaction11", "ka48" if card == 0x3f0 else "ka51")
 			elif card == 0x3c0: return _portrait(d, "reaction12", "ka68")
-			elif type == 21:
-				var voice: String = {0x150: "ka23", 0x294: "ka17", 0x3ab: "ka27", 0x3ea: "ka24", 0x403: "ka25", 0x420: "ka26", 0x4be: "ka66", 0x4db: "ka64"}.get(card, "ka21")
-				if card not in [0x290, 0x3ca]: return _portrait(d, "reaction09", voice)
+			elif card not in [0x290, 0x3ca]:
+				# 401e40: las cartas con voz propia hablan sea cual sea su tipo (Ancient Lamp 0x4db, un
+				# monstruo, dice Ka64); solo la voz por defecto exige tipo 21 (cotejo por valores).
+				var voices := {0x150: "ka23", 0x294: "ka17", 0x3ab: "ka27", 0x3ea: "ka24", 0x403: "ka25", 0x420: "ka26", 0x4be: "ka66", 0x4db: "ka64"}
+				if voices.has(card): return _portrait(d, "reaction09", voices[card])
+				if type == 21: return _portrait(d, "reaction09", "ka21")
 		"reaction_card": # 402600 -> tabla 59d4ac -> 401c80. Humano no retrato.
 			if p == 0 or card == 0x3c0: return {}
 			if card in [0x290, 0x294, 0x3ca, 0x3f0] and type != 22: return {}
@@ -315,7 +328,9 @@ static func _kaiba(d: Dictionary, duel: Duel) -> Dictionary:
 				var variant := (visual_rand(duel) & 1) * 2 if duel.m.u8(0xa133f2) & 1 else visual_rand(duel) % 3
 				return _portrait(d, "reaction05", "ka%02d" % (18 + variant))
 			if type == 22:
-				var voice := "ka%02d" % (31 + (visual_rand(duel) & 1)) if card == 0x3f0 else "ka%02d" % (15 + (visual_rand(duel) & 1)) if card == 0x294 else "ka65" if card == 0x290 else "ka67" if card == 0x3ca else "ka45" if duel.game_mode == 2 else "ka22"
+				# 401c80: Ka45 si 56e150 (Yu53b880, subtipo) vale 2; antes se miraba el modo de juego
+				# (cotejo por valores de la tanda variada, 30-10-2026).
+				var voice := "ka%02d" % (31 + (visual_rand(duel) & 1)) if card == 0x3f0 else "ka%02d" % (15 + (visual_rand(duel) & 1)) if card == 0x294 else "ka65" if card == 0x290 else "ka67" if card == 0x3ca else "ka45" if duel.f53b880(index) == 2 else "ka22"
 				return _portrait(d, "reaction09", voice)
 		"reaction_lp": # 4028e0, selección determinista exacta sin RNG.
 			var delta: int = int(d.get("delta", 0))
@@ -325,7 +340,8 @@ static func _kaiba(d: Dictionary, duel: Duel) -> Dictionary:
 			var selection: int
 			if life + delta <= 0: selection = 5
 			elif life <= 4000: selection = 4 if damage > 2000 else 3 if damage <= 1000 else 2
-			else: selection = clampi((damage - 1) / 1000 - 1, 0, 3)
+			# 4028e0: (-1 - delta) / 500 - 1 (cotejo por valores de la tanda variada, 30-10-2026).
+			else: selection = clampi((damage - 1) / 500 - 1, 0, 3)
 			return _portrait(d, "reaction%02d" % [2, 6, 10, 10, 3, 7][selection], "ka%02d" % (33 + selection))
 		"cmd": # 402640 (args: carta, -, c). Voces de la tabla 0x5b03d8: 0x10000020 + n = Ka(n).
 			var args: Array = d.get("args", [])

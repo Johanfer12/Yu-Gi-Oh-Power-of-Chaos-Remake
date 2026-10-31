@@ -44,7 +44,7 @@ func _process(delta: float) -> void:
 		var visual_busy := _advance_visual(1.0 / NativeClock.HZ)
 		if _cursor_visual._scripted:
 			_pointer_pos = _cursor_visual.pointer_position
-			get_viewport().warp_mouse(_pointer_pos)
+			if PointerGlide.may_warp(): get_viewport().warp_mouse(_pointer_pos)
 		_visual.pointer = _pointer_pos
 		_update_hover()
 		var hover := _hover_card.duplicate()

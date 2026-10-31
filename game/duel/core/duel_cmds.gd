@@ -587,7 +587,7 @@ func f405950() -> int:
 					if game_mode != 6 and p != 0:
 						present("voice", {"id": 0x1000003a})
 				else:
-					f402610(p, f401a70(index))
+					f402610(p, f401a70(index), {"cmd_c5": true})
 			next_step()
 		1:
 			if not anim_busy():

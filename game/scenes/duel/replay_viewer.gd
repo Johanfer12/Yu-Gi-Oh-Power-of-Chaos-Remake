@@ -125,6 +125,7 @@ func _collect_visual_events() -> bool:
 		if _tutorial != null: _tutorial.event(event)
 		if _tutorial != null and event.get("kind", "") == "tutorial_bubble": _log.hide()
 		_visual.enqueue(event, _duel)
+		if kind == "demo": _detail_event(event)
 		if _cursor_visual != null: _cursor_visual.event(event, _duel)
 		_visual_event_pos += 1
 	return _visual.busy() or (_tutorial != null and _tutorial.busy())
@@ -234,6 +235,22 @@ func _setup_detail() -> void:
 		_detail_icons = load("res://scenes/duel/duel_detail_icons.gd").new()
 		_detail_icons.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		add_child(_detail_icons)
+
+
+## Eventos del motor que fijan la carta del panel de detalle (duelo normal y demo).
+func _detail_event(data: Dictionary) -> void:
+	if data.get("kind", "") == "detail":
+		# Joey 41b050: los comandos que ponen o activan una carta la muestran en el panel.
+		_set_preview(int(data["card"]))
+		_detail_this_tick = true
+	# Yugi/Kaiba: 4029d0 (0x6e, 0x75, 0x76) y 405c10 (0x6f) ponen su carta en el panel con el metodo
+	# +0x24 del objeto de detalle (5af76c+0x38), como Joey 41b050; el nucleo los emite como "cmd".
+	# Los manejadores portados (0x1e, 0x71, 0x72, 0xa5, 0xdf) emiten "detail" ellos mismos.
+	if game in ["yugi", "kaiba"] and data.get("kind", "") == "cmd" and int(data.get("op", 0)) & 0x7fff in [0x6e, 0x6f, 0x75, 0x76]:
+		var args: Array = data.get("args", [])
+		if not args.is_empty() and int(args[0]) > 0:
+			_set_preview(int(args[0]))
+			_detail_this_tick = true
 
 func _set_preview(id: int) -> void:
 	if id == _preview_card_id: return
@@ -368,6 +385,17 @@ func _tick_preview_hover() -> void:
 	var detail := _detail_this_tick
 	_detail_this_tick = false
 	if _visual != null and (_visual._shade_on or _visual._shade_c != 0): return
+	# Yu4378a0/Ka437e50 no buscan carta bajo el puntero si la ranura de cuadro (+0x11ec) responde:
+	# con un cuadro abierto (p. ej. el aviso de elegir objetivo, mensaje 102) el panel conserva su
+	# carta. En los cotejos de duelo completo (29/30-10-2026) tampoco cambia durante el parpadeo de
+	# 0x08, el cambio de turno ni la activacion de una carta, y la espera de cuatro ticks quietos
+	# vuelve a empezar despues; con el rotulo de fase si cambia.
+	# Los selectores 8/9 (descartar, materiales) y el cuadro que ya se cierra no bloquean (tanda
+	# variada: el original pone en el panel la carta de la mano que se va a descartar).
+	if game in ["yugi", "kaiba"] and _duel != null and not _duel.dialog_open.is_empty() 			and int(_duel.dialog_open.get("type", 0)) not in [8, 9] and not _duel.dialog_open.get("closing", false): return
+	if game in ["yugi", "kaiba"] and _visual != null and _visual.active.get("mode", "") in ["card_blink", "next_turn", "card_effect"]:
+		_preview_hover_ticks = 0
+		return
 	if _pointer_pos != _preview_hover_point:
 		_preview_hover_point = _pointer_pos
 		_preview_hover_ticks = 0
@@ -805,10 +833,15 @@ func _register_card(pos: Vector2, size: Vector2, p: int, loc: int, i: int, id: i
 	if _visual != null and _visual.hides(pos): return
 	_hit_cards.append({"rect": Rect2(pos - size / 2, size), "p": p, "loc": loc, "i": i, "id": id, "known": known})
 
+func _hides_rival_hand() -> bool:
+	return false
+
 ## Todas las posiciones de cartas son absolutas, compartidas con hitboxes y animaciones.
 func _card(card_id: int, center: Vector2, size: Vector2, face_up: bool, sideways: bool,
 		flipped: bool) -> Sprite2D:
 	if _visual != null and _visual.hides(center): return null
+	# El duelo normal y la demo ocultan la mano rival; las repeticiones muestran ambas.
+	if size == HAND_SIZE and flipped and (kind == "demo" or _hides_rival_hand()): face_up = false
 	# A escala 1 (800x600) se dibuja como el original: minis nativas y cache de mano de
 	# 41f130. Reducir el arte completo con filtro lineal y sin mipmaps produce aliasing en
 	# reversos y pilas (cotejo de inicio de duelo de Joey, 25-10-2026). Con la ventana

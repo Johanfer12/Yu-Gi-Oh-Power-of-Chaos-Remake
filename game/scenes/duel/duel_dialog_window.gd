@@ -45,6 +45,8 @@ var _height := 0
 var _text_height := 0
 ## +0x14: 0x100 al crearse y baja 0x20 por fotograma hasta 0 (la ventana atiende al raton).
 var _t := 0x100
+## Tick en que termino de abrirse: el deslizamiento al boton (6 ticks) no admite clics (Yu/Ka).
+var _opened_tick := 1 << 30
 var _clock := 0.0
 ## Retener el flanco del clic hasta el siguiente tick nativo, aunque Godot dibuje mas rapido.
 var _selection_press_bits := 0
@@ -355,6 +357,7 @@ func _process(delta: float) -> void:
 			_t -= 0x20
 			# 0x42ff70: al terminar de aparecer llama a la ranura +0x24 (0x430600 en OK y Si/No,
 			# 0x430dc0 en N botones: primera opcion), que lleva el puntero al boton (0x45fff0).
+			if _t == 0: _opened_tick = _native_tick
 			if _t == 0 and type <= 5 and not _items.is_empty():
 				_glide_start()
 			if _t < -255:
@@ -433,6 +436,11 @@ func _over_window(at: Vector2) -> bool:
 
 func _input(event: InputEvent) -> void:
 	if _feedback > 0 or _t != 0 or (_icons != null and _icons.complete): return
+	# Yu/Ka: durante los 6 ticks del deslizamiento al boton (45fff0) el clic no cuenta. En la tanda variada
+	# el original ignoro un clic 11 ticks despues de abrirse el cuadro y acepto el de los 23; el port
+	# cerraba con el primero y el segundo elegia un objetivo propio (Hane-Hane, 30-10-2026).
+	# Solo los clics sobre un boton: arrastrar el cuadro por el marco sigue valiendo.
+	if game in ["yugi", "kaiba"] and _native_tick - _opened_tick < 6 and event is InputEventMouseButton 			and _pick(event.position - position) >= 0: return
 	if event is InputEventKey and event.pressed and not event.echo and type not in [8, 9]:
 		# La ventana consume el evento antes de que llegue al autoload: anotar su actividad.
 		Game._input(event)

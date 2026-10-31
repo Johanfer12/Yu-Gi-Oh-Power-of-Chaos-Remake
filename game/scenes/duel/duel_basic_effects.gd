@@ -238,7 +238,9 @@ static func render(owner: Node2D, event: Dictionary, frame: int) -> bool:
 			if counter >= 128: _card(owner, {"card":event.before}, event.center, Geometry.FIELD_SIZE, 256, angle)
 			_card(owner, event, target, Geometry.FIELD_SIZE, 256, angle)
 			if counter < 128: _card(owner, {"card":event.before}, event.center, Geometry.FIELD_SIZE, 256, angle)
-		"summon": _summon(owner, event, frame * 8)
+		"summon":
+			if event.get("game", "") == "joey": _render_joey_summon(owner, event, frame)
+			else: _summon(owner, event, frame * 8)
 		"special": _special(owner, event, frame * 8)
 		"hand_shuffle": _hand_shuffle(owner, event, frame)
 		"set":
@@ -362,8 +364,22 @@ static func _render_joey_set(owner: Node2D, event: Dictionary, frame: int) -> vo
 	fx.monster = bool(event.get("monster", false))
 	for point: Vector2 in event.get("set_points", []): fx.points.append(Vector2i(point))
 	for i in frame: fx.f44f370()
-	var canvas := JoeyFxCanvas.new(owner, event, PackedStringArray(["eff_set_y", "eff_set_b", "eff_star0_y", "eff_star1_y", "eff_star0_b", "eff_star1_b"]))
+	var canvas := JoeyFxCanvas.new(owner, event, "joey/duel/effect/set.txt")
 	fx.f44f390(canvas, 0)
+
+## Joey 44f630: dibujo portado funcion a funcion (JoeyFxSummon: 44f9f0/44fa10). Durante el arco
+## iris la carta base es de la mesa, que aun no ha escrito la zona (como en _summon).
+static func _render_joey_summon(owner: Node2D, event: Dictionary, frame: int) -> void:
+	var center: Vector2 = event["center"]
+	var fx := JoeyFxSummon.new()
+	fx.center = Vector2i(center)
+	var flags := int(event.get("flags", 0))
+	fx.ref = (int(event.get("p", 0)) & 1) | ((flags & 1) << 14) | (((flags >> 1) & 1) << 15)
+	fx.card_size = Vector2i(Geometry.FIELD_SIZE)
+	for i in frame: fx.f44f9f0()
+	if (fx.counter + 0x40) << 8 > 0x8000:
+		_card(owner, event, center, Geometry.FIELD_SIZE, 256, event.get("angle", 0), bool(flags & 2))
+	fx.f44fa10(JoeyFxCanvas.new(owner, event, "joey/duel/effect/summon.txt"), 0)
 
 static func _explosion(owner: Node2D, event: Dictionary, counter: int) -> void:
 	var center: Vector2 = event["center"]

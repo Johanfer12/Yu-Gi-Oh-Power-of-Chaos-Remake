@@ -324,11 +324,18 @@ func _process(delta: float) -> void:
 		_blend.nodes([_panel])
 		_options.draw_alpha = _blend.at("options", _options.alpha)
 		_options.queue_redraw()
-	if _retail and _phase == "menu" and _menu == "main" and _modal == null \
+	# Kaiba 4694b0 comprueba los mismos umbrales que Yugi 467000 (0x1c2 y 0x707) en su menu.
+	if (_retail or game == "kaiba") and _phase == "menu" and _menu == "main" and _modal == null \
 			and _idle >= IDLE_FRAMES and _state_frames >= MENU_DEMO_FRAMES:
 		_idle = 0
 		Audio.stop_music()
 		Game.open_duel_replay(game, "demo")
+		return
+	# Joey 48a150: mismos umbrales; su demostracion es un duelo en directo CPU contra CPU (D35).
+	if game == "joey" and _phase == "menu" and _menu == "main" and _modal == null 			and _idle >= IDLE_FRAMES and _state_frames >= MENU_DEMO_FRAMES:
+		_idle = 0
+		Audio.stop_music()
+		Game.open_joey_demo()
 		return
 	_cursor.advance(delta)
 	_glow_time += delta

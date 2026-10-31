@@ -366,7 +366,7 @@ func _joey_button_rect(index: int) -> Rect2:
 
 func _joey_focus(index: int) -> void:
 	_joey_pointer = _joey_button_rect(index).get_center().floor()
-	if is_inside_tree() and DisplayServer.get_name() != "headless":
+	if is_inside_tree() and PointerGlide.may_warp():
 		get_viewport().warp_mouse(get_global_transform_with_canvas() * _joey_pointer)
 
 func _joey_accept() -> void:

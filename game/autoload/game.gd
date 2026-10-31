@@ -257,6 +257,21 @@ func open_tutorial(game: String) -> void:
 		open_duel_replay(game, "tutorial")
 
 
+## Joey 48a150: con el menu inactivo (mismos umbrales que Yugi 467000) elige un mazo FUL con
+## 44bbe0 para el lado 0 y abre un duelo de tipo 7 (44bee0(7, mazo)): el motor da los dos
+## lados a la CPU (MODE |= 6) y la CPU elige su propio mazo. Sin demoN.ydr (D35).
+var joey_demo := false
+var joey_demo_deck := ""
+
+
+func open_joey_demo() -> void:
+	duel_mode = 0
+	joey_demo = true
+	joey_demo_deck = choose_rival_deck("joey")
+	rival_deck = choose_rival_deck("joey")
+	open_normal_duel("joey", 0)
+
+
 func open_normal_duel(game: String, start_options := -1) -> void:
 	current_game = game
 	if game == "joey":

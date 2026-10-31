@@ -72,7 +72,7 @@ static func step(node: CanvasItem, mouse: Vector2) -> Vector2:
 	_k += 1
 	var f := DuelVisualMath.cos_fx(0x80 * _k / 6 - 0x80)
 	_at = _from + Vector2((int(_delta.x) * f) >> 16, (int(_delta.y) * f) >> 16)
-	if node.is_inside_tree() and DisplayServer.get_name() != "headless":
+	if node.is_inside_tree() and may_warp():
 		node.get_viewport().warp_mouse(node.get_global_transform_with_canvas() * _at)
 	if _k >= 6:
 		active = false
@@ -84,3 +84,12 @@ static func hover(mouse: Vector2) -> Vector2:
 	if active and mouse.distance_to(_at) <= 1.0:
 		return _from + _delta
 	return mouse
+
+
+## El puntero nativo se desliza moviendo el cursor del sistema. En reproducciones y cotejos
+## (--ui-replay, arneses con --capture-dir) no: moveria el raton real del usuario.
+static func may_warp() -> bool:
+	if DisplayServer.get_name() == "headless": return false
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--ui-replay=") or arg.begins_with("--capture-dir="): return false
+	return true

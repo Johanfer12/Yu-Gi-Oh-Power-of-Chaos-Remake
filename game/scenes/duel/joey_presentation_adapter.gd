@@ -62,6 +62,8 @@ var joey_zone_status := PackedInt64Array()
 var engine: JoeyEngine
 ## Scene supplies normal0 / match1; replay and LAN select their own native kind.
 var native_normal_kind := 0
+## Jugador local nativo impuesto (la demostracion usa 1, como 5bfeb0(0, 1, semilla)); -1 sin forzar.
+var forced_local_player := -1
 var native_ticks := 0
 var frame_pressed := 0
 ## Coordenadas de mesa: jugador local siempre abajo; el motor y la red son absolutos.
@@ -122,6 +124,7 @@ func start_normal(decks: Array[Dictionary], opts: int, rand_seed: int, mode := G
 		if arg.begins_with("--joey-local-native="): forced_local = arg.get_slice("=", 1)
 	if mode == GAME_NORMAL:
 		local_native_player = forced_local.to_int() & 1 if forced_local != "" else 0
+		if forced_local_player >= 0: local_native_player = forced_local_player
 	else:
 		local_native_player = int(engine.network_transport.is_host)
 	engine.init_application()

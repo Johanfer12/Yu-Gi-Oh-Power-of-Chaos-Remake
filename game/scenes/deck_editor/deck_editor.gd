@@ -1629,7 +1629,7 @@ func _glide_step() -> void:
 	_glide["at"] = at
 	_mouse = at
 	PointerGlide.note(at)
-	if is_inside_tree() and DisplayServer.get_name() != "headless":
+	if is_inside_tree() and PointerGlide.may_warp():
 		get_viewport().warp_mouse(at)
 	if _glide["k"] >= 6:
 		_glide = {}

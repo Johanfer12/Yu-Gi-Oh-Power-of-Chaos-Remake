@@ -46,8 +46,8 @@ func _a_grave_top(p: int) -> int:
 
 ## FUN_00401ca0: crea el bust-up de reaccion a una carta jugada. Solo presentacion (usa su
 ## propio generador Mersenne Twister, FUN_00531140, que no es el rand() del duelo).
-func f401ca0(p: int, card_id: int) -> int:
-	present("reaction_card", {"p": p, "card": card_id})
+func f401ca0(p: int, card_id: int, extra: Dictionary = {}) -> int:
+	present("reaction_card", {"p": p, "card": card_id}.merged(extra))
 	return 0
 
 
@@ -59,9 +59,9 @@ func f4024c0(p: int, _a2: int, delta: int) -> int:
 
 ## FUN_00402610: reaccion a una carta si la partida no es de tipo 6 (llama por la tabla de
 ## 0x59a4ac, que apunta a FUN_00401ca0).
-func f402610(p: int, card_id: int) -> int:
+func f402610(p: int, card_id: int, extra: Dictionary = {}) -> int:
 	if game_mode != 6:
-		f401ca0(p, card_id)
+		f401ca0(p, card_id, extra)
 	return 0
 
 
@@ -103,6 +103,8 @@ func f402a00() -> int:
 		if _a_grave_top(p) != index:
 			f544890(p, index)
 			present("grave_top", {"p": p, "card": cmd_a()})
+			# 5af76c+0x38, metodo +0x24: la carta queda en el panel de detalle.
+			present("detail", {"card": f401a70(index)})
 		next_step()
 	elif s != 1:
 		return 0
@@ -606,6 +608,7 @@ func f405d10() -> int:
 		1:
 			present("special_summon", {"p": p, "card": f401a70(entry & 0xfff), "from": a & 0xf,
 					"index": (a & 0xff) >> 4, "zone": dst, "a": a})
+			present("detail", {"card": f401a70(entry & 0xfff)}) # 5af76c+0x38, metodo +0x24.
 			_a_step_clear_hi()
 		2:
 			_a_wait_hi()
@@ -637,11 +640,13 @@ func f405f90() -> int:
 			next_step()
 		1:
 			if ctype(index) != 0 and ctype(index) < 0x15:
-				# FUN_00402630: bust-up de reaccion.
-				present("reaction_card", {"p": p, "card": f401a70(index)})
+				# FUN_00402630 -> Yu401e00 / Ka406250 -> 402620 (reaction_flip): voz de la CPU por carta
+				# (Trap Hole -> Yugi_26, 0x4db -> Ka64; cotejo por valores, 30-10-2026).
+				present("reaction_flip", {"p": p, "card": f401a70(index), "cmd_72": true})
 			next_step()
 		2:
 			present("card_effect", {"p": p, "card": f401a70(index), "loc": loc, "c": cmd_c()})
+			present("detail", {"card": f401a70(index)}) # 5af76c+0x38, metodo +0x24.
 			next_step()
 		3:
 			finish()
@@ -752,6 +757,7 @@ func f406d20() -> int:
 			var at := p * PS + 0xa11963 + z * 0x94
 			m.set_u8(at, m.u8(at) | 2)
 			present("token", {"p": p, "zone": z, "card": b + 0x780, "pos": pos})
+			present("detail", {"card": b + 0x780}) # 5af76c+0x38, metodo +0x24.
 			_a_step_clear_hi()
 		1:
 			_a_wait_hi()
@@ -772,6 +778,7 @@ func f407190() -> int:
 	# Paso 1: un efecto de activacion (FUN_0043d490) sobre cada copia boca arriba del jugador
 	# (o de los dos si b != 0) sin el bit 0 de +0x90; el paso 2 espera a que terminen.
 	present("highlight_card", {"p": cmd_player(), "card": cmd_a(), "both": cmd_b()})
+	present("detail", {"card": f401a70(index)}) # 5af76c+0x38, metodo +0x24.
 	finish()
 	return 0
 

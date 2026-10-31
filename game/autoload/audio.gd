@@ -29,9 +29,22 @@ var _fades := {}
 var _fade_clock := 0.0
 
 
+## Reproducciones del original (--ui-replay): el fin de cada sonido se mide en fotogramas del
+## juego (un tick nativo cada uno), no en tiempo real. La reproduccion puede ir mas rapida o mas
+## lenta que el reloj (capturas, motor sin tope) y una voz no debe durar mas o menos ticks por ello.
+var game_clock := false
+## Cotejo por valores (joey_full_duel_capture.gd): nombres de archivo pedidos, como ui_values.js
+## registra las llamadas a 583e10/5865b0/5c03d0 del original.
+var played_log: Array[String] = []
+var log_played := false
+var _game_ends := {}
+var _game_speech_end := 0
+
+
 func _ready() -> void:
 	reload_native_tables()
 	_setup_players()
+	game_clock = Paths.cmdline_value("ui-replay") != ""
 
 
 func reload_native_tables() -> void:
@@ -57,6 +70,7 @@ func _setup_players() -> void:
 
 
 func play_music(rel_path: String, loop := true) -> void:
+	if log_played: played_log.append(rel_path.get_file().to_lower())
 	var path := Assets.resolve(rel_path)
 	if path == "" or path == _music_path:
 		return
@@ -97,11 +111,14 @@ func voice_disabled(rel_path: String) -> bool:
 
 
 func play_sfx(rel_path: String) -> void:
+	if log_played: played_log.append(rel_path.get_file().to_lower())
 	if voice_disabled(rel_path): return
 	if level == 0: return # 583d40/583e10: sonido deshabilitado.
 	var path := Assets.resolve(rel_path)
 	if path == "":
 		return
+	if game_clock:
+		_note_game_end(path, rel_path)
 	if _is_kaiba_speech(rel_path):
 		var stream := _load(path)
 		if stream == null: return
@@ -117,6 +134,18 @@ func play_sfx(rel_path: String) -> void:
 			p.volume_db = _db(rel_path)
 			p.play()
 			return
+
+
+## Fotograma del juego en que acaba el sonido; las frases de Kaiba van en cola, una tras otra.
+func _note_game_end(path: String, rel_path: String) -> void:
+	var stream := _load(path)
+	if stream == null: return
+	var start := Engine.get_process_frames()
+	if _is_kaiba_speech(rel_path):
+		start = maxi(start, _game_speech_end)
+	_game_ends[path] = start + int(ceil(stream.get_length() * NativeClock.HZ))
+	if _is_kaiba_speech(rel_path):
+		_game_speech_end = _game_ends[path]
 
 
 func _is_kaiba_speech(rel_path: String) -> bool:
@@ -141,6 +170,8 @@ func sfx_finished(rel_path: String) -> bool:
 	if voice_disabled(rel_path): return true
 	if level == 0: return true
 	var path := Assets.resolve(rel_path)
+	if game_clock:
+		return Engine.get_process_frames() >= int(_game_ends.get(path, 0))
 	for queued in _speech_queue:
 		if queued.path == path: return false
 	var stream: AudioStream = _cache.get(path)
