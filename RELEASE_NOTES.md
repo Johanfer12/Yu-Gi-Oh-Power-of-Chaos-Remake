@@ -1,3 +1,18 @@
+## v0.1.0-alpha.26
+
+- Overlay mode is now as sharp as Stretch: the duel is drawn at your screen's resolution instead of being upscaled from 800×600.
+- Smoother animations at your display's refresh rate:
+  - Destruction smoke and other frame-by-frame effects blend between frames instead of jumping.
+  - Phase names ("Main Phase"…) no longer flicker when their two copies join.
+  - The darkening and sweeping band at the start of a duel, the Kaiba and Joey title intros and Joey's level-change stars move every frame.
+  - Android: the Display option no longer caps the game at 60 FPS on 90/120 Hz screens.
+- Card collection works like the original: a new game starts empty and each game gives its starter deck the first time you open it. Kaiba and Joey only treat you as a player with previous cards (stronger CPU decks, Joey's full card set) if you really played the earlier games. Existing saves keep their cards; reset from the launcher settings to start over.
+- Yugi and Kaiba: surrendering no longer counts as a loss or breaks your winning streak, as in the original.
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android30 uses the same package and signing certificate as Android29. No new physical-device validation is claimed.
+
+El modo overlay se ve tan nítido como el estirado. Las animaciones se mezclan entre fotogramas (humo al destruir, nombres de fase, sombra del inicio, títulos de Kaiba y Joey) y en Android el modo Display ya no limita a 60 FPS. Una partida nueva empieza sin cartas, como en el original: cada juego da su mazo inicial al abrirlo, y Kaiba y Joey solo endurecen la CPU si de verdad jugaste a los juegos anteriores. En Yugi y Kaiba rendirse ya no cuenta como derrota. En Android, actualiza desde el launcher; no desinstales la app ni borres sus datos.
+
 ## v0.1.0-alpha.25
 
 - Demo mode: leaving the title menu idle starts the attract duel in Kaiba (recorded demos) and in Joey, where two CPU players duel live with the original decks, as in the original game. Any key or click returns to the title.

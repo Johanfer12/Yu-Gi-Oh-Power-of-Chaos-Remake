@@ -130,9 +130,9 @@ func _target() -> Viewport:
 
 
 func _touch_position(position: Vector2) -> Vector2:
-	if is_instance_valid(Game._screen_host) and Game._screen_host.get("_container") != null:
-		var container: Control = Game._screen_host.get("_container")
-		return container.get_global_transform_with_canvas().affine_inverse() * position
+	if is_instance_valid(Game._screen_host) and Game._screen_host.has_method("duel_transform"):
+		var container: Transform2D = Game._screen_host.duel_transform()
+		return container.affine_inverse() * position
 	return position
 
 
@@ -145,9 +145,9 @@ func _process(delta: float) -> void:
 		_motion()
 		_pointer.show()
 	_pointer.position = cursor
-	if is_instance_valid(Game._screen_host) and Game._screen_host.get("_container") != null:
-		var container: Control = Game._screen_host.get("_container")
-		_pointer.position = container.get_global_transform_with_canvas() * cursor
+	if is_instance_valid(Game._screen_host) and Game._screen_host.has_method("duel_transform"):
+		var container: Transform2D = Game._screen_host.duel_transform()
+		_pointer.position = container * cursor
 
 
 func _dispatch(event: InputEvent) -> void:

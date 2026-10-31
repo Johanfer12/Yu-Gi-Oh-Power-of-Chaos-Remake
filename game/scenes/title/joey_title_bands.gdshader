@@ -1,6 +1,6 @@
 shader_type canvas_item;
 render_mode unshaded;
-uniform int counter = 0;
+uniform float counter = 0.0; // mezclado entre ticks
 uniform sampler2D layer1 : filter_nearest;
 uniform sampler2D layer2 : filter_nearest;
 uniform sampler2D mask_image : filter_nearest;
@@ -23,7 +23,7 @@ ivec3 band(ivec3 background, sampler2D image, ivec2 size, ivec2 origin, int weig
 void fragment() {
     ivec2 pixel = ivec2(floor(UV * vec2(800, 600)));
     ivec3 value = rgb565(texture(TEXTURE, UV).rgb);
-    value = band(value, layer1, ivec2(560, 310), origin1, counter * 2, pixel);
-    value = band(value, layer2, ivec2(500, 300), origin2, counter * 2 + 16, pixel);
+    value = band(value, layer1, ivec2(560, 310), origin1, int(counter * 2.0), pixel);
+    value = band(value, layer2, ivec2(500, 300), origin2, int(counter * 2.0) + 16, pixel);
     COLOR = vec4(vec3(value) / vec3(31.0, 63.0, 31.0), 1.0);
 }

@@ -1,5 +1,5 @@
 extends Node2D
-signal background_shade_changed(alpha: float, band_progress: int)
+signal background_shade_changed(alpha: float, band_progress: float)
 const FieldEffects = preload("res://scenes/duel/duel_field_visual.gd")
 const BasicEffects = preload("res://scenes/duel/duel_basic_effects.gd")
 const SpecialEffects = preload("res://scenes/duel/duel_special_effects.gd")
@@ -79,6 +79,8 @@ func reset(duel: Duel) -> void:
 	_shade_c = 0
 	_start_banner_shade = false
 	_shade_draw_c = 0
+	_shade_shown = [0, 0]
+	_shade_shown_tick = -1
 	_start_banner_last_draw = false
 	end_banner = ""
 	_finish_music()
@@ -924,6 +926,9 @@ var _start_banner_last_draw := false
 ## Jo44dd00: los objetos de mascara2 solo avanzan con el fundido completamente opaco.
 var _start_banner_shade := false
 var _start_shade_material := ShaderMaterial.new()
+## Sombreado del tick anterior y del actual: entre ticks se dibuja mezclado (_shown_shade).
+var _shade_shown := [0, 0]
+var _shade_shown_tick := -1
 
 
 func _tick_shade() -> void:
@@ -1508,7 +1513,13 @@ func _snapshot_children(parent: Node, out: Array) -> void:
 			var piece: Variant = node.texture
 			if node.has_meta("blend_key"): piece = node.get_meta("blend_key")
 			elif node.region_enabled: piece = [node.texture, node.region_rect]
-			out.append([node, piece, node.position, node.scale, node.rotation, node.modulate.a])
+			# [6]: lo necesario para volver a dibujarla mientras se desvanece (_fade_out).
+			out.append([node, piece, node.position, node.scale, node.rotation, node.modulate.a,
+					{"texture": node.texture, "region_enabled": node.region_enabled, "region_rect": node.region_rect,
+					"centered": node.centered, "offset": node.offset, "flip_h": node.flip_h, "flip_v": node.flip_v,
+					"material": node.material, "modulate": node.modulate, "self_modulate": node.self_modulate,
+					"texture_filter": node.texture_filter, "z_index": node.z_index, "top": parent == self,
+					"index": node.get_index()}])
 		elif node is Polygon2D:
 			out.append([node, ["polygon", node.texture, node.polygon.size()], node.position, node.polygon, node.color])
 			_snapshot_children(node, out)
@@ -1518,7 +1529,10 @@ func _snapshot_children(parent: Node, out: Array) -> void:
 ## fisica de Godot). Cada sprite se empareja con el del tick anterior de la misma textura que
 ## estaba mas cerca, sin repetir: el orden de los sprites cambia cuando una carta se destruye o
 ## llega al cementerio, y emparejar por orden deslizaba una carta hasta la zona de otra.
-## Lo que no tiene pareja se dibuja como en el tick actual.
+## Lo que no tiene pareja se funde: lo nuevo entra desde transparente y lo que ya no esta sale
+## desde como estaba. Sin esto los fotogramas sueltos (humo de la explosion expl3..7, destellos)
+## cambiaban de golpe a 30 Hz y, al juntarse las dos copias del nombre de la fase, una
+## desaparecia y la otra quedaba a medio fundido durante un fotograma.
 func _interpolate() -> void:
 	var cur := _snapshot()
 	if visual_tick != _snap_tick:
@@ -1528,7 +1542,29 @@ func _interpolate() -> void:
 	var t := clampf(_visual_clock, 0.0, 1.0)
 	if not NativeClock.interpolate or _snap_prev.is_empty() or t >= 1.0:
 		return
-	for pair in _pairs(_snap_prev, cur):
+	var pairs := _pairs(_snap_prev, cur)
+	var paired_prev := {}
+	var paired_cur := {}
+	for pair in pairs:
+		paired_prev[pair[0]] = true
+		paired_cur[pair[1]] = true
+	# Una pieza que se divide o se junta con su gemela (las dos copias del nombre de la fase)
+	# sale o llega desde la posicion de esa gemela; las demas se funden en su sitio.
+	for i in cur.size():
+		# Solo el primer nivel, como _fade_out: dentro de una mascara (bocas y ojos de los
+		# retratos) el fotograma nuevo entraria sin que el anterior saliera y parpadearia.
+		if not paired_cur.has(i) and cur[i][0] is Sprite2D and cur[i].size() > 6 and cur[i][6]["top"]:
+			var sprite: Sprite2D = cur[i][0]
+			var twin := _nearest_twin(cur[i], _snap_prev)
+			if not twin.is_empty():
+				sprite.position = (twin[2] as Vector2).lerp(cur[i][2], t)
+				sprite.scale = (twin[3] as Vector2).lerp(cur[i][3], t)
+				sprite.rotation = lerp_angle(twin[4], cur[i][4], t)
+			sprite.modulate.a *= t
+	for i in _snap_prev.size():
+		if not paired_prev.has(i) and _snap_prev[i].size() > 6:
+			_fade_out(_snap_prev[i], 1.0 - t, _nearest_twin(_snap_prev[i], cur), t)
+	for pair in pairs:
 		var a: Array = _snap_prev[pair[0]]
 		var b: Array = cur[pair[1]]
 		if b[0] is Polygon2D:
@@ -1547,6 +1583,47 @@ func _interpolate() -> void:
 		sprite.modulate.a = lerpf(a[5], b[5], t)
 
 
+## Copia del sprite del tick anterior que ya no esta, con su alfa por `weight`. Solo las del
+## primer nivel: las de una mascara dependen de un poligono que tambien cambia. _clear la libera.
+func _fade_out(entry: Array, weight: float, twin: Array = [], t := 0.0) -> void:
+	var props: Dictionary = entry[6]
+	if not props["top"] or weight <= 0.0: return
+	var ghost := Sprite2D.new()
+	for key in props:
+		if key not in ["top", "index"]: ghost.set(key, props[key])
+	ghost.position = entry[2] if twin.is_empty() else (entry[2] as Vector2).lerp(twin[2], t)
+	ghost.scale = entry[3] if twin.is_empty() else (entry[3] as Vector2).lerp(twin[3], t)
+	ghost.rotation = entry[4] if twin.is_empty() else lerp_angle(entry[4], twin[4], t)
+	ghost.modulate.a = float(entry[5]) * weight
+	add_child(ghost)
+	move_child(ghost, mini(int(props["index"]), get_child_count() - 1))
+
+
+## Sprite de `others` con la misma pieza mas cercano a `entry` ([] si no hay).
+static func _nearest_twin(entry: Array, others: Array) -> Array:
+	var best: Array = []
+	var best_distance := INF
+	for other: Array in others:
+		if other.size() < 6 or other[1] != entry[1]: continue
+		var distance := (other[2] as Vector2).distance_squared_to(entry[2])
+		if distance < best_distance:
+			best_distance = distance
+			best = other
+	return best
+
+
+## El oscurecido y la franja del inicio cambian 16-32 pasos por tick: sin mezclar, avanzaban
+## a saltos de 30 Hz sobre toda la mesa.
+func _shown_shade(value: int) -> float:
+	if visual_tick != _shade_shown_tick:
+		_shade_shown = [_shade_shown[1], value]
+		_shade_shown_tick = visual_tick
+	_shade_shown[1] = value
+	var t := clampf(_visual_clock, 0.0, 1.0)
+	if not NativeClock.interpolate or t >= 1.0: return float(value)
+	return lerpf(_shade_shown[0], value, t)
+
+
 ## Parejas [indice anterior, indice actual] con la misma textura; cada sprite se usa una vez.
 ## Ver NativeBlend.pairs.
 static func _pairs(prev: Array, cur: Array) -> Array:
@@ -1556,11 +1633,11 @@ static func _pairs(prev: Array, cur: Array) -> Array:
 func _render() -> void:
 	_clear()
 	var start_shade_draw := _start_banner_shade or _start_banner_last_draw
-	var shade_progress := _shade_draw_c if start_shade_draw else _shade_c
+	var shade_progress := _shown_shade(_shade_draw_c if start_shade_draw else _shade_c)
 	# La ilustracion exterior vive en otro viewport; comparte el estado del dibujo.
 	var margin_alpha := 0.5 * shade_progress / 256.0
 	if active.get("mode", "") in ["fusion", "exodia"]: margin_alpha = 1.0 - (1.0 - margin_alpha) * 0.5
-	background_shade_changed.emit(margin_alpha, shade_progress if start_shade_draw else -1)
+	background_shade_changed.emit(margin_alpha, shade_progress if start_shade_draw else -1.0)
 	if shade_progress > 0:
 		var shade := ColorRect.new()
 		shade.size = Vector2(800, 600)

@@ -5,6 +5,8 @@ var counter := -4
 var bg: Texture2D
 var logo: Texture2D
 var bands_material: ShaderMaterial
+## Bandas y logo entre ticks (title_screen fija `fraction`).
+var blend := NativeBlend.new()
 func setup(value: Layout) -> void:
 	layout = value
 	bg = Assets.texture("joey/title/" + layout.resource(5))
@@ -25,13 +27,15 @@ static func masked_contribution(color565: int, mask565: int) -> int:
 static func add565(dest: int, source: int) -> int:
 	return (mini(31, (dest >> 11) + (source >> 11)) << 11) | (mini(63, ((dest >> 5) & 63) + ((source >> 5) & 63)) << 5) | mini(31, (dest & 31) + (source & 31))
 func advance(c: int, _tick: int) -> void:
+	blend.tick()
 	counter = c
 	material = bands_material if c < 128 else null
-	bands_material.set_shader_parameter("counter", maxi(0, c))
 	queue_redraw()
 func _draw() -> void:
 	if bg == null: return
+	var shown: float = blend.at("counter", float(counter))
+	bands_material.set_shader_parameter("counter", maxf(0.0, shown))
 	draw_texture(bg, Vector2.ZERO)
 	if counter >= 128:
-		var alpha := mini(256, counter * 4 - 512)
+		var alpha := clampf(shown * 4 - 512, 0.0, 256.0)
 		draw_texture(logo, Vector2(layout.position(6)), Color(1, 1, 1, alpha / 256.0))

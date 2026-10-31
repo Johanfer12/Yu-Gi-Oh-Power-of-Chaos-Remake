@@ -61,7 +61,7 @@ func setup(game_id: String, winner: int, duel_flags: int = 0, surrendered := fal
 	_surrendered = surrendered
 	z_index = 70
 	_lang = Assets.lang if Assets.exists("%s/duel/get/you_get_%s1.png" % [game, Assets.lang]) else "e"
-	_record()
+	_record(duel_flags)
 	_state = 2
 	_match = Game.duel_mode == 1
 	_owns_banner = winner == 1 or _match
@@ -75,10 +75,10 @@ func setup(game_id: String, winner: int, duel_flags: int = 0, surrendered := fal
 
 
 ## 0x433e50: estadisticas comunes y racha (DAT_00a11218, DAT_00a11215/16).
-func _record() -> void:
-	if _surrendered and game == "joey":
-		# 446df0 con a54e5c & 0x40: sin victorias/derrotas, racha ni nivel; una victoria previa
-		# deja la racha a 0.
+func _record(duel_flags := 0) -> void:
+	# 446df0 con a54e5c & 0x40 (Joey) y 433e50 con DAT_a114b4 bit8 (Yugi/Kaiba, comando0x40):
+	# la rendicion no suma victorias/derrotas, racha ni nivel; una victoria previa deja la racha a 0.
+	if (_surrendered and game == "joey") or (game != "joey" and (duel_flags & 0x100) != 0):
 		SaveData.ensure_game(game)
 		var surrendered_stats: Dictionary = SaveData.data["stats"][game]
 		if int(surrendered_stats.get("streak_last", 0)) == 1: surrendered_stats["streak"] = 0

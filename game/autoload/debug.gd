@@ -302,9 +302,9 @@ func _apply_input(e: Array) -> void:
 	var pos := Vector2(e[1], e[2])
 	# ui_frame graba coordenadas nativas800x600; parse_input_event recibe el root.
 	# Ademas actualiza Input global para las consultas sostenidas del motor.
-	if is_instance_valid(Game._screen_host) and Game._screen_host.get("_container") != null:
-		var container: Control = Game._screen_host.get("_container")
-		pos = container.get_global_transform_with_canvas() * pos
+	if is_instance_valid(Game._screen_host) and Game._screen_host.has_method("duel_transform"):
+		var container: Transform2D = Game._screen_host.duel_transform()
+		pos = container * pos
 	pos = get_viewport().get_final_transform() * pos
 	var motion := InputEventMouseMotion.new()
 	motion.device = REPLAY_DEVICE

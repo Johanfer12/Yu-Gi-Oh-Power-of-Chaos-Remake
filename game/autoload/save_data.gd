@@ -363,16 +363,16 @@ func _new_game(initial_game := "") -> Dictionary:
 	var fresh := {"version": VERSION, "collection": {}, "decks": {}, "stats": {}, "seen": {}}
 	for game in GAMES:
 		fresh["stats"][game] = {"wins": 0, "losses": 0, "draws": 0}
-	# En el primer inicio del launcher todos los mazos deben poder jugarse.
-	# initial_game permite modelar por separado un arranque del original.
+	# Como el system.dat de Common: la coleccion empieza vacia y cada titulo recibe su mazo
+	# inicial al abrirse por primera vez (ensure_game). Conceder los tres de golpe hacia que
+	# Kaiba (45fc70) y Joey (5bedd0) vieran "cartas anteriores" sin haber jugado los otros.
 	for game in GAMES:
+		if game != initial_game:
+			continue
 		var starter: Variant = Assets.read_json("%s/file/starter_deck.json" % game)
 		if starter == null:
 			continue
 		fresh["decks"][game] = starter
-		fresh["stats"][game] = {"wins": 0, "losses": 0, "draws": 0}
-		if initial_game != "" and game != initial_game:
-			continue
 		for part in ["main", "fusion", "side"]:
 			for id in starter[part]:
 				var key := str(int(id))
@@ -408,12 +408,13 @@ func ensure_game(game: String, validate_startup := true) -> void:
 			return
 		decks[game] = starter
 		changed = true
-		if game == "joey":
-			# 44aa00 ->5bdc50: archivo ausente, distinto de un mazo existente podado.
-			var initial := _new_game("joey")
-			for key: String in initial.collection:
-				data.collection[key] = maxi(int(data.collection.get(key, 0)), int(initial.collection[key]))
-				data.get_or_add("seen", {})[key] = true
+		# Primera vez en este titulo: su inicial y sus copias minimas. Joey 44aa00 ->5bdc50
+		# (archivo ausente, distinto de un mazo existente podado); Yugi/Kaiba llegan a lo mismo
+		# por la sustitucion nativa del mazo invalido, que tambien se hace sin imagen nativa.
+		var initial := _new_game(game)
+		for key: String in initial.collection:
+			data.collection[key] = maxi(int(data.collection.get(key, 0)), int(initial.collection[key]))
+			data.get_or_add("seen", {})[key] = true
 	for key in GAMES:
 		stats.get_or_add(key, {"wins": 0, "losses": 0, "draws": 0})
 	if data.get("starter_pending", false):

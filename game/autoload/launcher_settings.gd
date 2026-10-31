@@ -45,6 +45,12 @@ func display_fps() -> int:
 	var rate := DisplayServer.screen_get_refresh_rate(get_window().current_screen)
 	return roundi(rate) if rate > 0.0 else 60
 
+## Tope del modo Display. En moviles solo manda VSync: las pantallas adaptativas (90/120 Hz)
+## informan la frecuencia del momento, a menudo 60 al arrancar, y fijar ese tope impedia que el
+## sistema subiera a 120 Hz. El renderer GL de Android no vota frecuencia (Swappy es solo Vulkan).
+func monitor_fps_cap() -> int:
+	return 0 if OS.has_feature("mobile") else display_fps()
+
 ## --max-fps en la linea de comandos (cotejos con el original a 30 Hz) manda sobre la
 ## preferencia del launcher. Godot consume ese argumento (no sale en get_cmdline_args) y el
 ## proyecto no fija max_fps: si ya vale algo al arrancar, viene de la linea de comandos.
@@ -55,7 +61,7 @@ func _cmdline_timing() -> bool:
 
 func apply_timing() -> void:
 	if _cmdline_timing(): return
-	Engine.max_fps = display_fps() if frame_rate == 0 else frame_rate
+	Engine.max_fps = monitor_fps_cap() if frame_rate == 0 else frame_rate
 	if DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if frame_rate == 0 else DisplayServer.VSYNC_DISABLED)
 
@@ -64,4 +70,4 @@ func _process(delta: float) -> void:
 	_refresh_clock += delta
 	if _refresh_clock >= 1.0:
 		_refresh_clock = 0.0
-		if frame_rate == 0 and not _cmdline_timing(): Engine.max_fps = display_fps()
+		if frame_rate == 0 and not _cmdline_timing(): Engine.max_fps = monitor_fps_cap()

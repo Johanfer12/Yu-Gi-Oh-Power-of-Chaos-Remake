@@ -33,7 +33,11 @@ func _ready() -> void:
 	_container.mouse_filter = Control.MOUSE_FILTER_PASS
 	_container.stretch = false
 	add_child(_container)
-	_viewport.size = Vector2i(800, 600)
+	# El duelo sigue en coordenadas 800x600, pero se rasteriza a la densidad de la ventana:
+	# ampliar una imagen de 800x600 emborronaba cartas y textos frente al modo estirado.
+	_viewport.size_2d_override = Vector2i(800, 600)
+	_viewport.size_2d_override_stretch = true
+	_viewport.canvas_item_default_texture_filter = _window.canvas_item_default_texture_filter
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_container.add_child(_viewport)
 	_window.size_changed.connect(_layout)
@@ -49,7 +53,7 @@ func _process(_delta: float) -> void:
 		_duel._visual.background_shade_changed.connect(_sync_shade)
 		_duel._visual._render()
 
-func _sync_shade(alpha: float, band_progress: int) -> void:
+func _sync_shade(alpha: float, band_progress: float) -> void:
 	_shade.visible = alpha > 0.0
 	_shade.color = Color(0, 0, 0, alpha)
 	_shade.material = _shade_material if band_progress >= 0 else null
@@ -62,7 +66,15 @@ func _layout() -> void:
 	_shade.position = area.position
 	_shade.size = area.size
 	_container.position = area.position + (area.size - Vector2(800, 600)) * 0.5
-	_container.size = Vector2(800, 600)
+	var density := maxf(_window.get_stretch_transform().get_scale().y, 1.0)
+	var pixels := Vector2i((Vector2(800, 600) * density).round())
+	_viewport.size = pixels
+	_container.size = Vector2(pixels)
+	_container.scale = Vector2(800, 600) / Vector2(pixels)
+
+## Coordenadas nativas del duelo -> lienzo de la ventana.
+func duel_transform() -> Transform2D:
+	return _container.get_global_transform_with_canvas() * _viewport.get_final_transform()
 
 func _exit_tree() -> void:
 	if is_instance_valid(_window):

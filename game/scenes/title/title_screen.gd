@@ -314,6 +314,13 @@ func _process(delta: float) -> void:
 				_retail_switch("main")
 			elif action == "back": _back()
 	_blend.fraction = _tick_clock
+	# Entrada de Kaiba/Joey: fondo, logo y panel entre ticks.
+	for background: Node2D in [_kaiba_background, _joey_background]:
+		if background != null:
+			background.blend.fraction = _tick_clock
+			background.queue_redraw()
+	if _phase in ["kaiba_intro", "joey_intro"]:
+		_blend.nodes([_panel])
 	if _retail:
 		# Fundidos de 0x466860/0x4666d0/0x4669d0 entre ticks.
 		_blend.nodes([_panel, _panel_other])

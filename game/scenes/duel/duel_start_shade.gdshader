@@ -1,13 +1,14 @@
 shader_type canvas_item;
 render_mode unshaded;
-uniform int progress = 0;
+uniform float progress = 0.0;
 uniform sampler2D screen_texture : hint_screen_texture, filter_nearest, repeat_disable;
 void fragment() {
 	int y = int(floor(UV.y * 600.0));
-	int extent = (300 * progress) / 256;
+	// Entre ticks llega mezclado; las filas siguen siendo enteras.
+	int extent = int(300.0 * progress / 256.0);
 	int weight = clamp(min(y - (300 - extent - 32), 300 + extent + 31 - y) * 8, 0, 256);
-	if (progress >= 256) weight = 256;
-	if (progress < 0) weight = 0;
+	if (progress >= 256.0) weight = 256;
+	if (progress < 0.0) weight = 0;
 	vec3 original = texture(screen_texture, SCREEN_UV).rgb;
 	// 4f6900 / LUT546d70: dark snapshot is eight fifteenths, not one half.
 	vec3 bits = vec3(31.0, 63.0, 31.0);

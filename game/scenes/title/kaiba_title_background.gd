@@ -6,6 +6,8 @@ var tick := 0
 var half_alpha := [0, 0]
 var rays: Array[Dictionary] = []
 var textures := {}
+## Fundido de las mitades y crecimiento del logo entre ticks (title_screen fija `fraction`).
+var blend := NativeBlend.new()
 func setup(value: Layout) -> void:
 	layout = value
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -24,6 +26,7 @@ static func logo_size(c: int, original: Vector2i) -> Vector2i:
 		x = 512 - y
 	return Vector2i((original.x * x) >> 8, (original.y * y) >> 8)
 func advance(c: int, native_tick: int) -> void:
+	blend.tick()
 	counter = c
 	tick = native_tick
 	rays.clear()
@@ -46,11 +49,11 @@ func _draw() -> void:
 	for half in 2:
 		var rect := Rect2(0, half * 300, 800, 300)
 		draw_rect(rect, Color.BLACK)
-		draw_texture_rect_region(bg, rect, rect, Color(1, 1, 1, half_alpha[half] / 256.0))
+		draw_texture_rect_region(bg, rect, rect, Color(1, 1, 1, blend.at(["half", half], float(half_alpha[half])) / 256.0))
 	if counter < 128: return
 	var logo := tex(6)
-	var size := logo_size(counter, Vector2i(logo.get_size()))
-	var origin := Vector2(layout.position(6)) - Vector2(size / 2)
+	var size: Vector2 = blend.at("logo", Vector2(logo_size(counter, Vector2i(logo.get_size()))))
+	var origin := Vector2(layout.position(6)) - (size / 2).floor()
 	draw_texture_rect(logo, Rect2(origin, size), false)
 	if counter >= 160:
 		for ray in rays:
@@ -63,4 +66,5 @@ func _draw() -> void:
 		var index := 44 if group == 107 else (tick >> (1 if group < 104 else 2)) % 6 - 561 + group * 6
 		if group == 100 and (tick >> 1) % 6 == 5: continue
 		var alpha := mini(255, DuelVisualMath.cos_fx((tick * 4 & 255) - 128) >> 8) if group == 107 else 256
-		draw_texture(tex(index), Vector2(layout.position(index)), Color(1, 1, 1, alpha / 256.0))
+		var shown: float = blend.at(["pulse", group], float(alpha)) if group == 107 else float(alpha)
+		draw_texture(tex(index), Vector2(layout.position(index)), Color(1, 1, 1, shown / 256.0))
