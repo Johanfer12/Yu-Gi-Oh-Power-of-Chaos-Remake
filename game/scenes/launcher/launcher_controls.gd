@@ -48,6 +48,7 @@ var _font := ThemeDB.fallback_font
 var _reset_dialog := ConfirmationDialog.new()
 var _reset_result := AcceptDialog.new()
 var _cloud_dialog: AcceptDialog = preload("res://scenes/launcher/cloud_dialog.gd").new()
+const DialogTheme = preload("res://scenes/launcher/dialog_theme.gd")
 var _save_choice := "reset"  # fila Partida: "reset" o "cloud"
 
 
@@ -57,6 +58,9 @@ func _ready() -> void:
 	add_child(_reset_result)
 	_reset_dialog.confirmed.connect(_confirm_reset)
 	add_child(_cloud_dialog)
+	DialogTheme.apply(_reset_dialog, true)
+	DialogTheme.apply(_reset_result)
+	DialogTheme.apply(_cloud_dialog)
 	CloudSync.changed.connect(_cloud_changed)
 	# Los iconos se rasterizan grandes y se dibujan reducidos: con mipmaps no se ven dentados.
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS

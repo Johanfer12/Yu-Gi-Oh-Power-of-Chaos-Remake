@@ -6,6 +6,7 @@ var _github := LinkButton.new()
 var _licenses := LinkButton.new()
 var _row := HBoxContainer.new()
 var _dialog := ConfirmationDialog.new()
+const DialogTheme = preload("res://scenes/launcher/dialog_theme.gd")
 
 
 func _ready() -> void:
@@ -17,6 +18,7 @@ func _ready() -> void:
 	add_child(_row)
 	add_child(_status)
 	add_child(_dialog)
+	DialogTheme.apply(_dialog)
 	for control in [_version, _status, _github, _licenses]:
 		control.add_theme_font_size_override("font_size", 12)
 		control.add_theme_color_override("font_color", Color(0.85, 0.77, 0.57))

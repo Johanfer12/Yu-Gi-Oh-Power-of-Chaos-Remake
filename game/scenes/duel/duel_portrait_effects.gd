@@ -404,6 +404,9 @@ static func render(owner: Node2D, event: Dictionary, frame: int) -> void:
 		_turn_banner(owner, name, int(offset)) # 4158d0: giro trapezoidal, no traslación.
 		return
 	if mode == "phase_native":
+		# Joey 4048c0 avisa del cambio de turno con 4811f0(p, -1): el indicador espera igual, pero
+		# no hay rotulo. Pintarlo como fase 0 repetia "Draw Phase" antes de la fase de robo real.
+		if int(event.get("phase", 0)) < 0: return
 		var phase: int = clampi(int(event.get("phase", 0)), 0, 5)
 		var counter := frame * 8
 		if phase == 3 and frame > 8: counter = 64 + (frame - 8) * 4 if frame <= 24 else 128 + (frame - 24) * 8

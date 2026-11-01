@@ -1,3 +1,15 @@
+## v0.1.0-alpha.28
+
+- Launcher dialogs (reset, Google Drive, update, import errors) now match the gold style of the settings panel.
+- Fixed animation glitches introduced in alpha.26:
+  - Coins and dice no longer show flattened ghost copies beside them, and the coin shine is clean again.
+  - Damage numbers no longer slide in from another digit (most visible when Joey takes damage).
+  - Joey: "Draw Phase" no longer plays twice at the start of each turn.
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android32 uses the same package and signing certificate as Android31. No new physical-device validation is claimed.
+
+Las ventanas del launcher (reiniciar, Google Drive, actualizar, errores de importación) usan el estilo dorado del panel de ajustes. Arreglados los fallos de animación de alpha.26: las monedas y los dados ya no muestran copias fantasma aplanadas, las cifras de daño ya no se deslizan desde otra cifra y en Joey "Draw Phase" ya no sale dos veces al empezar cada turno. En Android, actualiza desde el launcher; no desinstales la app ni borres sus datos.
+
 ## v0.1.0-alpha.27
 
 - Optional Google Drive save sync between PC and Android: open the launcher settings, **Save data → Google Drive… → Connect**, enter the code shown at google.com/device and allow access. Cards, decks, results and progress sync when you return to the game selector and shortly after each save. If both devices changed, the launcher asks which save to keep; the other stays as a backup. Each player's save goes to their own Drive, and the game can only see the files it creates. Music volume, touch controls and display options stay per device. Privacy policy: docs/PRIVACY.md.

@@ -22,6 +22,7 @@ var _busy := false
 var _bundled_importer := false
 var _tools_failed := false
 var _error_dialog := AcceptDialog.new()
+const DialogTheme = preload("res://scenes/launcher/dialog_theme.gd")
 var _error_details := TextEdit.new()
 var _error_link := LinkButton.new()
 var _error_log_button: Button
@@ -146,6 +147,7 @@ func _ready() -> void:
 		elif action == "log":
 			OS.shell_open(_error_log_path))
 	add_child(_error_dialog)
+	DialogTheme.apply(_error_dialog)
 	_error_link.visible = false
 	_error_link.pressed.connect(func() -> void: _error_dialog.popup_centered(Vector2i(650, 400)))
 	add_child(_error_link)

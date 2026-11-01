@@ -1448,6 +1448,9 @@ func _asset(name: String, center: Vector2, scale_factor: float = 1.0, alpha: flo
 	if texture == null: return null
 	var sprite := Sprite2D.new()
 	sprite.texture = texture
+	# Solo el humo de la explosion y el nombre de la fase se funden entre ticks (_interpolate):
+	# en hojas de fotogramas (moneda, dado) y cifras de dano el fundido dejaba dobles.
+	if folder == "phase_name" or name.begins_with("expl"): sprite.set_meta("crossfade", true)
 	# Las espadas nativas impares evitan suavizar texeles vecinos al centrarse.
 	if name in ["atk_icon", "atk_icon2"]:
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -1515,10 +1518,12 @@ func _snapshot_children(parent: Node, out: Array) -> void:
 			elif node.region_enabled: piece = [node.texture, node.region_rect]
 			# [6]: lo necesario para volver a dibujarla mientras se desvanece (_fade_out).
 			out.append([node, piece, node.position, node.scale, node.rotation, node.modulate.a,
-					{"texture": node.texture, "region_enabled": node.region_enabled, "region_rect": node.region_rect,
+					{"texture": node.texture, "hframes": node.hframes, "vframes": node.vframes, "frame": node.frame,
+					"region_enabled": node.region_enabled, "region_rect": node.region_rect,
 					"centered": node.centered, "offset": node.offset, "flip_h": node.flip_h, "flip_v": node.flip_v,
 					"material": node.material, "modulate": node.modulate, "self_modulate": node.self_modulate,
 					"texture_filter": node.texture_filter, "z_index": node.z_index, "top": parent == self,
+					"crossfade": node.has_meta("crossfade"),
 					"index": node.get_index()}])
 		elif node is Polygon2D:
 			out.append([node, ["polygon", node.texture, node.polygon.size()], node.position, node.polygon, node.color])
@@ -1529,7 +1534,8 @@ func _snapshot_children(parent: Node, out: Array) -> void:
 ## fisica de Godot). Cada sprite se empareja con el del tick anterior de la misma textura que
 ## estaba mas cerca, sin repetir: el orden de los sprites cambia cuando una carta se destruye o
 ## llega al cementerio, y emparejar por orden deslizaba una carta hasta la zona de otra.
-## Lo que no tiene pareja se funde: lo nuevo entra desde transparente y lo que ya no esta sale
+## Lo que no tiene pareja y lleva la marca "crossfade" (humo y nombre de fase, ver _asset) se
+## funde: lo nuevo entra desde transparente y lo que ya no esta sale
 ## desde como estaba. Sin esto los fotogramas sueltos (humo de la explosion expl3..7, destellos)
 ## cambiaban de golpe a 30 Hz y, al juntarse las dos copias del nombre de la fase, una
 ## desaparecia y la otra quedaba a medio fundido durante un fotograma.
@@ -1553,7 +1559,7 @@ func _interpolate() -> void:
 	for i in cur.size():
 		# Solo el primer nivel, como _fade_out: dentro de una mascara (bocas y ojos de los
 		# retratos) el fotograma nuevo entraria sin que el anterior saliera y parpadearia.
-		if not paired_cur.has(i) and cur[i][0] is Sprite2D and cur[i].size() > 6 and cur[i][6]["top"]:
+		if not paired_cur.has(i) and cur[i][0] is Sprite2D and cur[i].size() > 6 and cur[i][6]["top"] and cur[i][6]["crossfade"]:
 			var sprite: Sprite2D = cur[i][0]
 			var twin := _nearest_twin(cur[i], _snap_prev)
 			if not twin.is_empty():
@@ -1587,10 +1593,10 @@ func _interpolate() -> void:
 ## primer nivel: las de una mascara dependen de un poligono que tambien cambia. _clear la libera.
 func _fade_out(entry: Array, weight: float, twin: Array = [], t := 0.0) -> void:
 	var props: Dictionary = entry[6]
-	if not props["top"] or weight <= 0.0: return
+	if not props["top"] or not props["crossfade"] or weight <= 0.0: return
 	var ghost := Sprite2D.new()
 	for key in props:
-		if key not in ["top", "index"]: ghost.set(key, props[key])
+		if key not in ["top", "index", "crossfade"]: ghost.set(key, props[key])
 	ghost.position = entry[2] if twin.is_empty() else (entry[2] as Vector2).lerp(twin[2], t)
 	ghost.scale = entry[3] if twin.is_empty() else (entry[3] as Vector2).lerp(twin[3], t)
 	ghost.rotation = entry[4] if twin.is_empty() else lerp_angle(entry[4], twin[4], t)
@@ -1604,7 +1610,9 @@ static func _nearest_twin(entry: Array, others: Array) -> Array:
 	var best: Array = []
 	var best_distance := INF
 	for other: Array in others:
-		if other.size() < 6 or other[1] != entry[1]: continue
+		# La pieza puede ser una textura o una lista [textura, region]: comparar tipos antes, o
+		# GDScript corta _interpolate a mitad del fotograma.
+		if other.size() < 6 or typeof(other[1]) != typeof(entry[1]) or other[1] != entry[1]: continue
 		var distance := (other[2] as Vector2).distance_squared_to(entry[2])
 		if distance < best_distance:
 			best_distance = distance
