@@ -67,6 +67,11 @@ static func validate_pack(path: String) -> Dictionary:
 		var field := "res://data/" + game + "/duel/field/fie_normal"
 		if not entries.has(field + ".webp") and not entries.has(field + ".png"):
 			return {"ok": false, "error": "resources"}
+		# Same lookup as Duel.create/create_native: without it the duel stops on
+		# "Faltan los datos del motor de duelo" after the pack was accepted.
+		var engine_files: Array = ["joey_image.bin"] if game == "joey" else ["yugi_image.bin", "kaiba_image.bin"]
+		if not engine_files.any(func(name: String) -> bool: return entries.has("res://data/common/duel/" + name)):
+			return {"ok": false, "error": "engine", "game": game}
 	var cards_entry: Dictionary = entries["res://data/common/db/cards.json"]
 	if cards_entry.size < 2 or cards_entry.size > 32 * 1024 * 1024:
 		return {"ok": false, "error": "resources"}

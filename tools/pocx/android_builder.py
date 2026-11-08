@@ -15,6 +15,8 @@ import sys
 import tempfile
 from datetime import datetime
 
+from .messages import error as user_error, t
+
 
 def configuration(launcher: Path) -> dict:
     config = launcher / "android-builder.json"
@@ -43,17 +45,17 @@ def preflight(config: dict) -> None:
         for path in (config["root"] / "tools/android/build_apk.py", config["root"] / "game/project.godot",
                      config["godot"]):
             if not path.is_file():
-                raise ValueError(f"Falta una herramienta Android: {path}")
+                raise user_error("android_tool_missing", path=path)
         return
     for key, relative in (("root", "tools/android/build_apk.py"), ("root", "game/project.godot"),
                           ("java", "bin/keytool.exe"), ("sdk", "build-tools")):
         if not (config[key] / relative).exists():
-            raise ValueError(f"Falta una herramienta Android: {config[key] / relative}")
+            raise user_error("android_tool_missing", path=config[key] / relative)
     for key in ("godot", "keystore"):
         if not config[key].is_file():
-            raise ValueError(f"Falta {key}: {config[key]}")
+            raise user_error("android_file_missing", name=key, path=config[key])
     if "previous" in config and not config["previous"].is_file():
-        raise ValueError(f"Falta el APK de referencia: {config['previous']}")
+        raise user_error("android_reference_missing", path=config["previous"])
 
 
 def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | None = None) -> Path:
@@ -90,7 +92,7 @@ def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | No
                 shutil.copytree(base, data)
                 optimize_tree(data)
             else:
-                raise ValueError("Selecciona un ISO o prepara un juego antes de crear los recursos")
+                raise user_error("android_need_game")
             sys.argv = [str(config["root"] / "tools/android/build_apk.py"),
                         "--data", str(data), "--work", str(evidence / "build"),
                         "--godot", str(config["godot"])]
@@ -103,19 +105,18 @@ def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | No
                     sys.argv += ["--previous-apk", str(config["previous"])]
                 else:
                     sys.argv += ["--first-build"]
-            print("Preparando tus recursos privados para Android…" if public_mode else
-                  "Compilando con los controles de la copia Android…", flush=True)
+            print(t("android_preparing") if public_mode else t("android_compiling"), flush=True)
             runpy.run_path(sys.argv[0], run_name="__main__")
         manifests = list((evidence / "build").glob("*-build-manifest.json"))
         if len(manifests) != 1:
-            raise ValueError("La compilación no generó un único informe de validación")
+            raise user_error("android_no_report")
         manifest = manifests[0]
         report = json.loads(manifest.read_text(encoding="utf8"))
         if public_mode:
             from .android_toolchain import digest
             if (not staged.is_file() or Path(report.get("content_pack", "")).resolve() != staged.resolve()
                     or digest(staged) != report.get("sha256")):
-                raise ValueError("El paquete privado de recursos no supera la validación SHA-256")
+                raise user_error("android_pack_sha")
             report.update(content_pack=str(target), content_pack_sha256=digest(staged))
             if config.get("version"):
                 report["public_apk_version"] = config["version"]
@@ -129,7 +130,7 @@ def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | No
         try:
             for source, destination in outputs:
                 if destination.exists():
-                    raise ValueError(f"Ya existe una salida Android: {destination}")
+                    raise user_error("android_output_exists", path=destination)
                 source.rename(destination)
                 published.append(destination)
         except BaseException:
@@ -137,10 +138,9 @@ def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | No
                 destination.unlink(missing_ok=True)
             raise
         if public_mode:
-            print(f"Recursos privados: {target}\nInstala el APK público y selecciona este archivo .pck una sola vez al abrirlo. "
-                  "Las actualizaciones conservarán tus recursos y partidas.", flush=True)
+            print(t("android_pack_ready", path=target), flush=True)
         else:
-            print(f"APK creado: {target}", flush=True)
+            print(t("apk_created", path=target), flush=True)
         return target
     finally:
         sys.argv = old_argv

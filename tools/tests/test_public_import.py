@@ -162,6 +162,22 @@ class ImportTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "encontradas: 0"):
                 locate(Path(directory), "yugi")
 
+    def test_foreign_data_names_the_real_game(self):
+        from test_media_import import archive
+        cases = ({"k/file/deck_k.txt": b"x"}, "Kaiba the Revenge"), ({"y/other.txt": b"x"}, "mod")
+        for entries, expected in cases:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                archive(root / "Data.dat", entries)
+                archive(root / "Voice.dat", {"y/voice.wav": b"x"})
+                (root / "Region.dat").write_bytes(b"x")
+                (root / "Yugi_Pc.exe").write_bytes(b"MZ")
+                with self.assertRaisesRegex(ValueError, expected):
+                    locate(root, "yugi")
+                with patch("pocx.messages.LANGUAGE", "e"), \
+                     self.assertRaisesRegex(ValueError, "belongs to Kaiba" if expected != "mod" else "unmodified"):
+                    locate(root, "yugi")
+
     def test_archive_cannot_escape_destination(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "Data.dat"
@@ -204,8 +220,11 @@ class ImportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "data"
             with patch("pocx.import_games.unpack", side_effect=ValueError("bad media")):
-                with self.assertRaisesRegex(ValueError, "bad media"):
+                with self.assertRaises(ImportFailure) as caught:
                     import_games({"yugi": Path(directory)}, output)
+            # Internal text stays as technical detail; the reason is the translated stage summary.
+            self.assertIn("bad media", caught.exception.diagnostics)
+            self.assertIn("ISO", caught.exception.reason)
             self.assertFalse(output.exists())
             self.assertEqual(list(Path(directory).iterdir()), [])
 

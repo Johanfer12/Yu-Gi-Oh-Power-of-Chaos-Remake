@@ -1,3 +1,13 @@
+## v0.1.0-alpha.29
+
+- Clearer import errors. If a Data.dat belongs to another game (for example, several games installed in the same folder) the launcher names that game; if the Data.dat or the executable looks modified by a mod or card pack, it says so and asks for an original installation or ISO. When an ISO contains the installer, the real reason from inside it is shown instead of "found: 0".
+- Import, Android pack and error messages now follow the launcher language (English, Spanish, German, French, Italian and Japanese). Technical details stay available under "Technical details" and in the log.
+- Android: a .pck that lacks a game's duel engine data is rejected when you select it, with a message naming the game, instead of failing later with "Faltan los datos del motor de duelo".
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android33 uses the same package and signing certificate as Android32. No new physical-device validation is claimed.
+
+Errores de importación más claros: si un Data.dat es de otro juego el launcher dice de cuál, y si el Data.dat o el ejecutable parecen modificados por un mod lo indica y pide una instalación o ISO original. Los mensajes de importación y de error salen en el idioma del launcher. En Android, un .pck sin los datos del motor de duelo de algún juego se rechaza al seleccionarlo, nombrando el juego.
+
 ## v0.1.0-alpha.28
 
 - Launcher dialogs (reset, Google Drive, update, import errors) now match the gold style of the settings panel.

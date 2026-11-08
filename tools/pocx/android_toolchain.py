@@ -11,6 +11,8 @@ import tempfile
 import urllib.request
 import zipfile
 
+from .messages import error as user_error, t
+
 VERSION = "4.7.2"
 SDK_LICENSE_URL = "https://developer.android.com/studio/terms"
 # CI builds the public APK and its source snapshot in the same run and embeds both, with
@@ -51,7 +53,7 @@ def fetch(url: str, target: Path, expected: str, progress=None) -> None:
                 if progress:
                     progress(received, total)
         if digest(partial) != expected:
-            raise ValueError(f"La descarga no supera SHA-256: {url}")
+            raise user_error("download_sha", url=url)
         partial.replace(target)
     finally:
         partial.unlink(missing_ok=True)
@@ -66,12 +68,12 @@ def extract(archive: Path, target: Path, select=None, strip=0) -> None:
             if (not parts or member.filename.startswith(("/", "\\")) or
                     any(p in ("..", ".") or ":" in p for p in parts) or
                     (member.external_attr >> 16) & 0o170000 == 0o120000):
-                raise ValueError("Ruta insegura en el kit Android: " + member.filename)
+                raise user_error("kit_unsafe_path", name=member.filename)
             if member.is_dir() or (select and not select(member.filename)) or len(parts) <= strip:
                 continue
             destination = target.joinpath(*parts[strip:])
             if not destination.resolve().is_relative_to(target):
-                raise ValueError("Ruta fuera del kit Android")
+                raise user_error("kit_outside")
             destination.parent.mkdir(parents=True, exist_ok=True)
             with zipped.open(member) as source, destination.open("wb") as output:
                 shutil.copyfileobj(source, output)
@@ -85,7 +87,7 @@ def bundle_source(root: Path, target: Path) -> str:
         for name, expected in files.items():
             path = root / name
             if not path.resolve().is_relative_to(root.resolve()) or digest(path) != expected:
-                raise ValueError("Fuente Android no válida: " + name)
+                raise user_error("android_source_invalid", name=name)
             output.write(path, name)
         # The launcher revalidates extracted sources before packing private data.
         output.write(manifest, "PUBLICATION_MANIFEST.json")
@@ -95,14 +97,14 @@ def bundle_source(root: Path, target: Path) -> str:
 def release_info() -> dict:
     """APK and source identity embedded by the CI build of this launcher."""
     if not RELEASE_INFO.is_file():
-        raise ValueError("Esta compilación del launcher no incluye el APK público Android")
+        raise user_error("no_public_apk")
     info = json.loads(RELEASE_INFO.read_text(encoding="utf8"))
     for key in ("sha256", "source_manifest_sha256"):
         value = info.get(key, "")
         if not isinstance(value, str) or len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
-            raise ValueError("Esta compilación aún no incluye el SHA-256 auditado del APK público Android")
+            raise user_error("no_audited_sha")
     if info.get("original_game_data_included", True):
-        raise ValueError("El APK público Android no debe incluir datos originales")
+        raise user_error("apk_has_data")
     return info
 
 
@@ -121,11 +123,11 @@ def prepare(launcher: Path, *, private_build: bool = False) -> dict:
 def _verify_source(source: Path, expected: str) -> None:
     manifest = source / "PUBLICATION_MANIFEST.json"
     if not manifest.is_file() or digest(manifest) != expected:
-        raise ValueError("Las fuentes Android no coinciden con la revisión auditada")
+        raise user_error("sources_mismatch")
     for name, expected in json.loads(manifest.read_text(encoding="utf8"))["files"].items():
         path = source / name
         if not path.resolve().is_relative_to(source.resolve()) or not path.is_file() or digest(path) != expected:
-            raise ValueError("Fuente Android no válida: " + name)
+            raise user_error("android_source_invalid", name=name)
 
 
 def _prepare_public(launcher: Path) -> dict:
@@ -150,7 +152,7 @@ def _prepare_public(launcher: Path) -> dict:
         expected = PACKAGES["godot"][1]
         marker = godot.parent / ".verified"
         if not godot.is_file() or not marker.is_file() or marker.read_text() != expected:
-            status("Android: preparando el empaquetador de recursos…")
+            status(t("st_packer"))
             with tempfile.TemporaryDirectory(prefix="godot-", dir=root) as temporary:
                 stage = Path(temporary)
                 archive = stage / "godot.zip"
@@ -158,7 +160,7 @@ def _prepare_public(launcher: Path) -> dict:
                 installed = stage / "installed"
                 extract(archive, installed)
                 if not (installed / godot.name).is_file():
-                    raise ValueError("El archivo oficial no contiene Godot")
+                    raise user_error("no_godot")
                 (installed / ".verified").write_text(expected)
                 if godot.parent.exists():
                     assert godot.parent.resolve().is_relative_to(root.resolve())
@@ -169,15 +171,15 @@ def _prepare_public(launcher: Path) -> dict:
         if not source.is_dir():
             source_zip = Path(__file__).with_name("android-source.zip")
             if not source_zip.is_file():
-                raise ValueError("Faltan las fuentes Android incluidas en esta compilación del launcher")
-            status("Android: preparando el formato privado de recursos…")
+                raise user_error("missing_sources")
+            status(t("st_format"))
             with tempfile.TemporaryDirectory(prefix="source-", dir=root) as temporary:
                 stage = Path(temporary) / "source"
                 extract(source_zip, stage)
                 _verify_source(stage, info["source_manifest_sha256"])
                 stage.rename(source)
         _verify_source(source, info["source_manifest_sha256"])
-        status("Android: preparando tus recursos privados…")
+        status(t("st_resources"))
         # The PCK matches the public APK built from this same source (info["version"]).
         return dict(root=source, godot=godot, version=info["version"])
     finally:
@@ -190,7 +192,7 @@ def _prepare_public(launcher: Path) -> dict:
 def _prepare_private(launcher: Path) -> dict:
     storage = launcher / "PoC Data/android"
     if not (storage / "sdk-license.accepted").is_file():
-        raise ValueError("Acepta la licencia del SDK Android desde Crear APK en el launcher: " + SDK_LICENSE_URL)
+        raise user_error("sdk_license", url=SDK_LICENSE_URL)
     root = storage / "tools" / "kit-1"
     root.mkdir(parents=True, exist_ok=True)
     progress_file = storage / "progress.json"
@@ -236,7 +238,7 @@ def _prepare_private(launcher: Path) -> dict:
                 else:
                     extract(archive, installed, strip=0 if name == "godot" else 1)
                 if not all((installed / p).is_file() for p in required[name]):
-                    raise ValueError("El archivo oficial no contiene las herramientas esperadas: " + name)
+                    raise user_error("missing_tool_archive", name=name)
                 (installed / ".verified").write_text(expected)
                 if component.exists():
                     # Only this managed kit component; never a user's SDK installation.
@@ -247,9 +249,9 @@ def _prepare_private(launcher: Path) -> dict:
         source_zip = Path(__file__).with_name("android-source.zip")
         source = _source_dir(root, release_info())
         if not source.is_dir():
-            status("Android: preparando el motor táctil incluido…")
+            status(t("st_engine"))
             if not source_zip.is_file():
-                raise ValueError("Faltan las fuentes Android incluidas en esta compilación del launcher")
+                raise user_error("missing_sources")
             with tempfile.TemporaryDirectory(prefix="source-", dir=root) as temporary:
                 stage = Path(temporary) / "source"
                 extract(source_zip, stage)
@@ -265,8 +267,8 @@ def _prepare_private(launcher: Path) -> dict:
         identity = key.with_suffix(".sha256")
         if not key.exists():
             if identity.exists() or any((storage / "apks").glob("*.apk")):
-                raise ValueError("Falta tu firma Android anterior. Restaura PoC Data/android/signing de tu respaldo para actualizar tus APK.")
-            status("Android: creando tu firma local…")
+                raise user_error("signing_missing")
+            status(t("st_signing"))
             temporary_key = key.with_suffix(".tmp")
             try:
                 subprocess.run([str(root / "java/bin/keytool.exe"), "-genkeypair", "-noprompt",
@@ -283,7 +285,7 @@ def _prepare_private(launcher: Path) -> dict:
                                      check=True, capture_output=True)
         certificate_hash = hashlib.sha256(certificate.stdout).hexdigest()
         if identity.is_file() and identity.read_text() != certificate_hash:
-            raise ValueError("La firma Android cambió. Restaura tu clave anterior de PoC Data/android/signing.")
+            raise user_error("signing_changed")
         identity.write_text(certificate_hash)
         settings = editor / "editor_settings-4.7.tres"
         def gd(path):
@@ -295,7 +297,7 @@ def _prepare_private(launcher: Path) -> dict:
                             f'export/android/debug_keystore = {gd(key)}\n' +
                             'export/android/debug_keystore_user = "androiddebugkey"\n' +
                             'export/android/debug_keystore_pass = "android"\n', encoding="utf8")
-        status("Android: herramientas listas; preparando tus juegos…")
+        status(t("st_ready"))
         config = dict(root=source, godot=godot, java=root / "java", sdk=sdk, keystore=key)
         previous = sorted((storage / "apks").glob("PowerOfChaos-Android-*.apk"))
         if previous:

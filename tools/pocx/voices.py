@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 from .archive import Archive
+from .messages import error as user_error
 
 LANGUAGES = {"spanish": "s", "english": "e", "french": "f", "german": "g", "italian": "i", "japanese": "j"}
 
@@ -22,7 +23,7 @@ def export_voice(source: Path, output: Path, game: str, manifest: dict) -> int:
                 continue
             parts = entry.name.lower().split("/")
             if len(parts) != 4 or parts[0] != game or parts[1] not in LANGUAGES or parts[2] not in ("internal", "stream"):
-                raise ValueError(f"{game}: ruta de voces no compatible: {entry.name}")
+                raise user_error("voice_path_bad", game=game, name=entry.name)
             language = LANGUAGES[parts[1]]
             languages.add(language)
             destination = output / game / "voice" / language / parts[2] / parts[3]
@@ -31,17 +32,17 @@ def export_voice(source: Path, output: Path, game: str, manifest: dict) -> int:
             raw_hash = hashlib.sha256(raw).hexdigest()
             if destination.with_suffix(".ogg").exists():
                 if raw_files.get(relative) != raw_hash:
-                    raise ValueError(f"{game}: dos paquetes distintos para el mismo idioma {language}; no se sobrescriben")
+                    raise user_error("voice_duplicate", game=game, language=language)
                 count += 1
                 continue
             if destination.exists() and destination.read_bytes() != raw:
-                raise ValueError(f"{game}: dos paquetes distintos para el mismo idioma {language}; no se sobrescriben")
+                raise user_error("voice_duplicate", game=game, language=language)
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(raw)
             raw_files[relative] = raw_hash
             count += 1
     if not languages:
-        raise ValueError(f"{game}: el paquete de voces no contiene WAV compatibles")
+        raise user_error("voice_empty", game=game)
     pack.setdefault("default", sorted(languages)[0])
     pack["languages"] = sorted(set(pack["languages"]) | languages)
     if digest not in pack["sources"]:

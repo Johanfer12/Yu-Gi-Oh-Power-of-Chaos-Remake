@@ -18,6 +18,8 @@ from .archive import Archive
 from .executable import validate
 from .voices import add_voice
 from .compact import optimize_tree
+from . import messages
+from .messages import UserError, error as user_error, t
 
 
 class ImportFailure(ValueError):
@@ -46,8 +48,30 @@ def import_context(stage, game=None, source=None):
         if error.source is None and source is not None:
             error.source = str(source)
         raise
-    except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
+    except UserError as error:
         raise ImportFailure(stage, str(error), game, source) from error
+    except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
+        # Internal/technical text: translated summary for the stage, original as details.
+        raise ImportFailure(stage, t("stage." + stage), game, source, str(error)) from error
+
+
+class MissingInstallation(UserError):
+    """No folder with the expected files: other media layouts may still contain one."""
+
+
+TITLES = {"yugi": "Yugi the Destiny", "kaiba": "Kaiba the Revenge", "joey": "Joey the Passion"}
+
+
+def _foreign_data_message(game: str, names: dict[str, Path], archive: Archive) -> str:
+    """Say which game the Data.dat beside the executable really belongs to."""
+    folder, title = names["data.dat"].parent, TITLES[game]
+    owners = [other for other, letter in GAMES.items()
+              if other != game and f"{letter}/file/deck_{letter}.txt" in archive.by_name]
+    if owners:
+        return t("foreign_owner", game=game, folder=folder, title=title,
+                 found=", ".join(TITLES[other] for other in owners))
+    return t("foreign_unknown", game=game, folder=folder, title=title,
+             missing=f"{GAMES[game]}/file/deck_{GAMES[game]}.txt")
 
 
 def locate(root: Path, game: str) -> dict[str, Path]:
@@ -60,16 +84,24 @@ def locate(root: Path, game: str) -> dict[str, Path]:
         if required <= names.keys():
             matches.append(names)
     if len(matches) != 1:
-        raise ValueError(f"{game}: se esperaba una instalación con Data.dat, Voice.dat, "
-                         f"Region.dat y {exe_name}; encontradas: {len(matches)}")
+        raise MissingInstallation(t("install_count", game=game, exe=exe_name, count=len(matches)))
     names = matches[0]
     for archive_name in ("data.dat", "voice.dat"):
-        with Archive(names[archive_name]) as archive:
+        try:
+            archive = Archive(names[archive_name])
+        except ValueError as error:
+            raise ImportFailure("installation", t("archive_damaged", game=game, name=names[archive_name].name),
+                                game, diagnostics=str(error)) from error
+        with archive:
             if not archive.entries:
-                raise ValueError(f"{game}: {archive_name} vacío")
+                raise user_error("archive_empty", game=game, name=names[archive_name].name)
             if archive_name == "data.dat" and f"{GAMES[game]}/file/deck_{GAMES[game]}.txt" not in archive.by_name:
-                raise ValueError(f"{game}: el archivo pertenece a otro juego")
-    validate(names[exe_name].read_bytes(), game)
+                raise UserError(_foreign_data_message(game, names, archive))
+    try:
+        validate(names[exe_name].read_bytes(), game)
+    except ValueError as error:
+        raise ImportFailure("installation", t("exe_incompatible", game=game, exe=names[exe_name].name,
+                                              title=TITLES[game]), game, diagnostics=str(error)) from error
     return names
 
 
@@ -85,22 +117,21 @@ def find_sevenzip() -> str:
             path = Path(os.environ[variable]) / "7-Zip/7z.exe"
             if path.is_file():
                 return str(path)
-    raise ValueError("No se encuentra 7-Zip. Instálalo o selecciona una carpeta instalada.")
+    raise user_error("no_7zip")
 
 
 def unpack(source: Path, destination: Path) -> Path:
     if source.is_dir():
         return source
     if source.suffix.lower() != ".iso" or not source.is_file():
-        raise ValueError("Selecciona una carpeta instalada o un archivo .iso")
+        raise user_error("select_media")
     sevenzip = find_sevenzip()
     result = subprocess.run([sevenzip, "x", str(source), f"-o{destination}", "-y"],
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if result.returncode != 0:
         details = result.stdout.decode("utf-8", errors="replace").strip()
-        reason = ("La ISO está incompleta o truncada. Selecciona una imagen completa o una carpeta instalada."
-                  if "Unexpected end of archive" in details else
-                  f"7-Zip no pudo extraer la ISO (código {result.returncode}). Revisa el detalle técnico.")
+        reason = (t("iso_truncated") if "Unexpected end of archive" in details else
+                  t("iso_failed", code=result.returncode))
         raise ImportFailure("iso", reason, source=source, diagnostics=details)
     return destination
 
@@ -109,6 +140,8 @@ def installation(root: Path, game: str, workspace: Path) -> dict[str, Path]:
     try:
         return locate(root, game)
     except ValueError as error:
+        # A specific problem inside the installer media says more than "found: 0" at its root.
+        specific = None if isinstance(error, MissingInstallation) else error
         cabinets = [p for p in root.rglob("*") if p.is_file() and p.name.lower() == "data1.cab"]
         for index, cabinet in enumerate(cabinets):
             sevenzip = find_sevenzip()
@@ -119,15 +152,15 @@ def installation(root: Path, game: str, workspace: Path) -> dict[str, Path]:
             if result.returncode == 0:
                 try:
                     return locate(destination, game)
-                except ValueError:
-                    pass
+                except ValueError as inner:
+                    specific = specific or (None if isinstance(inner, MissingInstallation) else inner)
         # Only extract recognized Inno installers; never launch setup.exe.
         candidates = [p for p in root.rglob("*") if p.suffix.lower() == ".exe" and p.stem.lower().startswith(("setup", "install"))]
         if not candidates:
-            raise error
+            raise specific or error
         inno = shutil.which("innoextract")
         if not inno:
-            raise ValueError("El medio contiene un instalador. Instala innoextract en PATH o selecciona el juego ya instalado.") from error
+            raise (specific or user_error("installer_needs_inno")) from error
         for index, candidate in enumerate(candidates):
             dest = workspace / f"installer-{index}"
             result = subprocess.run([inno, "--extract", "--output-dir", str(dest), str(candidate)],
@@ -135,9 +168,9 @@ def installation(root: Path, game: str, workspace: Path) -> dict[str, Path]:
             if result.returncode == 0:
                 try:
                     return locate(dest, game)
-                except ValueError:
-                    pass
-        raise ValueError(f"{game}: no se encontró una instalación compatible en el medio") from error
+                except ValueError as inner:
+                    specific = specific or (None if isinstance(inner, MissingInstallation) else inner)
+        raise (specific or user_error("no_compatible_install", game=game)) from error
 
 
 def export_audio(src: Path, out: Path, games=None) -> None:
@@ -177,19 +210,19 @@ def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tupl
                  compact: bool = False, replace: bool = False) -> None:
     output = output.resolve()
     if output.exists() and not replace:
-        raise ValueError("La carpeta de destino ya existe; se conserva intacta. Selecciona un destino nuevo.")
+        raise user_error("dest_exists_kept")
     if output.is_symlink() or (output.exists() and not (output / "inventory.json").is_file()):
-        raise ValueError("El destino no es una biblioteca de recursos compatible")
+        raise user_error("dest_not_library")
     if (not sources and not (base is not None and (extra_voices or compact))) or not set(sources) <= GAMES.keys():
-        raise ValueError("Selecciona al menos un juego compatible")
+        raise user_error("select_one_game")
     previous = None
     if base is not None:
         base = base.resolve()
         if output.is_relative_to(base) and not (replace and output == base):
-            raise ValueError("El destino debe estar fuera de los datos existentes")
+            raise user_error("dest_inside_base")
         previous = json.loads((base / "inventory.json").read_text(encoding="utf-8"))
         if set(sources) & previous["games"].keys():
-            raise ValueError("Ese juego ya está preparado")
+            raise user_error("game_already")
     output.parent.mkdir(parents=True, exist_ok=True)
     # Same volume: rename publishes only a fully converted installation.
     with tempfile.TemporaryDirectory(prefix=".poc-import-", dir=output.parent) as temporary:
@@ -199,12 +232,12 @@ def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tupl
             shutil.copytree(base, converted)
             for game, voice_path in extra_voices or []:
                 if game not in previous["games"]:
-                    raise ValueError(f"{game}: prepara el juego antes de añadir voces")
+                    raise user_error("prepare_before_voices", game=game)
                 _import_voice(voice_path, converted, game)
             _publish(converted, output, compact, replace)
             return
         for game in sources:
-            print(f"Validando {game}…", flush=True)
+            print(t("validating", game=game), flush=True)
             with import_context("iso", game, sources[game]):
                 root = unpack(sources[game].resolve(), work / f"media-{game}")
             with import_context("installation", game, sources[game]):
@@ -221,7 +254,7 @@ def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tupl
             if game in sources:
                 _import_voice(voice_path, converted, game)
             elif previous is None or game not in previous["games"]:
-                raise ValueError(f"Juego no reconocido para voces: {game}")
+                raise user_error("unknown_voice_game", game=game)
         with import_context("audio"):
             export_audio(work / "sources", converted, sources)
         if base is None:
@@ -265,7 +298,7 @@ def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tupl
                 if game not in sources:
                     _import_voice(voice_path, merged, game)
             _publish(merged, output, compact, replace)
-    print("Importación completa.", flush=True)
+    print(t("import_done"), flush=True)
 
 
 def _publish(staging: Path, output: Path, compact: bool, replace: bool) -> None:
@@ -280,7 +313,7 @@ def _publish_ready(staging: Path, output: Path, replace: bool) -> None:
     backup = output.with_name(".poc-previous-" + uuid.uuid4().hex)
     if output.exists():
         if not replace:
-            raise ValueError("El destino ya existe")
+            raise user_error("dest_exists")
         output.rename(backup)
     try:
         staging.rename(output)
@@ -307,12 +340,14 @@ def _main() -> None:
     parser.add_argument("--no-compact", action="store_true", help="conserva PNG/WAV para herramientas de desarrollo")
     parser.add_argument("--voice", action="append", default=[], metavar="GAME=VOICE.DAT",
                         help="añade otro doblaje; repetible, sin reemplazar idiomas distintos")
+    parser.add_argument("--lang", default="s", help="idioma del launcher para los mensajes (s = español; otro = inglés)")
     args = parser.parse_args()
+    messages.set_language(args.lang)
     try:
         extra = []
         for spec in args.voice:
             if "=" not in spec:
-                raise ValueError("Usa --voice juego=ruta/Voice.dat")
+                raise user_error("voice_usage")
             game, path = spec.split("=", 1)
             extra.append((game, Path(path)))
         sources = {game: getattr(args, game) for game in GAMES if getattr(args, game) is not None}
@@ -323,9 +358,11 @@ def _main() -> None:
             import_games(sources, args.out, extra, args.base,
                          compact=not args.no_compact, replace=args.replace)
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError, SystemExit) as error:
-        failure = error if isinstance(error, ImportFailure) else ImportFailure("setup", str(error))
+        failure = (error if isinstance(error, ImportFailure) else
+                   ImportFailure("setup", str(error)) if isinstance(error, UserError) else
+                   ImportFailure("setup", t("stage.setup"), diagnostics=str(error)))
         print("POC_IMPORT_ERROR " + json.dumps(failure.payload()), file=sys.stderr, flush=True)
-        parser.exit(1, f"No se pudo importar: {error}\n")
+        parser.exit(1, t("cli_failed", error=failure) + "\n")
 
 
 def main() -> None:

@@ -50,12 +50,12 @@ func _run() -> void:
 	var setup: Script = load("res://scenes/launcher/android_content_setup.gd")
 	check(setup != null, "first-run importer is available in the public engine bundle")
 	if setup != null:
-		for spanish: bool in [true, false]:
+		for lang: String in ["s", "e", "g", "f", "i", "j"]:
 			var screen: Control = setup.new()
-			screen._spanish = spanish
+			screen._lang = lang
 			root.add_child(screen)
 			await process_frame
-			check(screen._choose.text == ("Seleccionar paquete .pck" if spanish else "Select .pck resource pack"), "import action is localized")
+			check(screen._choose.text == load("res://scenes/launcher/import_texts.gd").text("pack_choose", lang), "import action is localized")
 			check(screen._choose.custom_minimum_size.y >= 60, "import action has a touch-sized target")
 			check(screen._picker.use_native_dialog and screen._picker.access == FileDialog.ACCESS_FILESYSTEM, "Android uses the native system file picker")
 			check(screen._picker.file_mode == FileDialog.FILE_MODE_OPEN_FILE and not screen._picker.filters.is_empty(), "picker selects a single resource pack")
