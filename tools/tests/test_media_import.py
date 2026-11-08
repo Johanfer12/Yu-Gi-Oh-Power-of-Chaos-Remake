@@ -98,6 +98,13 @@ class MediaImportTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             PE(b"MZ")
 
+    def test_import_dll_names_are_compared_case_insensitively(self):
+        from pocx.executable import _lower_dll_names
+        # US retail Kaiba writes "KERNEL32.dll"; the local layout "kernel32.dll".
+        data = b"\x00FindResourceA\x00KERNEL32.dll\x00\x00wsprintfA\x00USER32.dll\x00"
+        self.assertEqual(_lower_dll_names(data),
+                         b"\x00FindResourceA\x00kernel32.dll\x00\x00wsprintfA\x00user32.dll\x00")
+
 
 if __name__ == "__main__":
     unittest.main()

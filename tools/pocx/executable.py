@@ -1,6 +1,7 @@
 """Read compatible PE data tables without running or modifying executable code."""
 from __future__ import annotations
 import hashlib
+import re
 import struct
 
 # Only hashes/addresses, never original game bytes. Profiles verified against local and CD media.
@@ -13,6 +14,15 @@ PROFILES = {
              (0x5EB000, 32768, "f03246bf8dfd003a2769e484b04bf96fed59b9abf8532e6b80e1cb3775aeff02")),
 }
 KAIBA_LOCAL_MD5 = "11c64e931e29b13637a1b617fe2a19a4"
+# Engine tables of that local layout. The US retail disc (Konami of America, 2004) has
+# the same bytes except the case of the import DLL names ("KERNEL32.dll"), which the
+# port never reads; names are lower-cased before hashing.
+KAIBA_LOCAL_TABLES = ((0x59D000, 65536, "2fb4cd4ac200d3ca1905078f497f5c12087b336c96a52a7fac4e8ae411f74802"),
+                      (0x5AD000, 20480, "b68e6d6f14bdb6dcd67b945f02c4fae3d6d498772cd3e45475442b60c6e2dc34"))
+
+
+def _lower_dll_names(data: bytes) -> bytes:
+    return re.sub(rb"[A-Za-z0-9_]+\.dll\x00", lambda match: match.group(0).lower(), data)
 JOEY_RESOURCE_HASH = "534d03a19a8f71a55a40163805396f0917b8294ff254a010b624eaf63a8a9f84"
 
 
@@ -88,6 +98,10 @@ def validate(raw: bytes, game: str) -> PE:
     pe = PE(raw)
     if game == "kaiba" and hashlib.md5(raw).hexdigest() == KAIBA_LOCAL_MD5:
         return pe # Existing verified local layout has rewritten section names/imports.
+    if game == "kaiba" and all(
+            hashlib.sha256(_lower_dll_names(pe.read(address, size))).hexdigest() == expected
+            for address, size, expected in KAIBA_LOCAL_TABLES):
+        return pe # US retail disc: local tables; only its import DLL names are upper case.
     for address, size, expected in PROFILES[game]:
         if hashlib.sha256(pe.read(address, size)).hexdigest() != expected:
             raise ValueError(f"{game}: tablas del motor no compatibles en 0x{address:x}")

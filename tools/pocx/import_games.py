@@ -31,7 +31,9 @@ class ImportFailure(ValueError):
         super().__init__(self.reason)
 
     def __str__(self):
-        return (f"{self.game}: " if self.game else "") + self.reason
+        prefix = f"{self.game}: " if self.game else ""
+        # Most reasons already name their game; avoid "kaiba: kaiba: …".
+        return self.reason if self.reason.startswith(prefix) else prefix + self.reason
 
     def payload(self):
         return dict(stage=self.stage, game=self.game, source=self.source,

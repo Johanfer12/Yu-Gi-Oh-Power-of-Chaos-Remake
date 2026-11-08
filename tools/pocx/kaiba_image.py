@@ -1,6 +1,5 @@
 """Adapt Kaiba data addresses to the shared port memory model; no game bytes."""
 import struct
-import hashlib
 
 # Function identities from the corresponding native dispatch tables.
 FUNCTIONS = {
@@ -454,7 +453,11 @@ RETAIL_FUNCTIONS[0x53de90] = 0x53b790
 
 
 def build(pe):
-    functions = FUNCTIONS if hashlib.md5(pe.raw).hexdigest() == "11c64e931e29b13637a1b617fe2a19a4" else RETAIL_FUNCTIONS
+    # The dispatch identity tells the layouts apart: the local and US retail EXEs point
+    # at 0x53de80, the Spanish retail CD at 0x53de90 (an MD5 would miss the US disc).
+    tables = pe.read(0x5ad6f0, 0x2d00)
+    pointers = {struct.unpack_from('<I', tables, offset)[0] for offset in range(0, len(tables), 4)}
+    functions = FUNCTIONS if 0x53de80 in pointers else RETAIL_FUNCTIONS
     output = bytearray(0x15000)
     # Kaiba engine constants; these virtual-address ranges are validated by its profile.
     for target, source, size in ((0x59a5b8, 0x59d5ec, 20),

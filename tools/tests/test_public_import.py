@@ -67,6 +67,10 @@ class ImportTests(unittest.TestCase):
             self.assertIsNone(caught.exception.game)
             self.assertTrue(staging.exists())
 
+    def test_failure_text_names_the_game_once(self):
+        self.assertEqual(str(ImportFailure("installation", "kaiba: no data", "kaiba")), "kaiba: no data")
+        self.assertEqual(str(ImportFailure("iso", "truncated", "joey")), "joey: truncated")
+
     def test_cli_emits_structured_error_for_launcher(self):
         failure = ImportFailure("iso", "ISO truncada", "joey", "C:/Mis juegos/Joey.iso", "Unexpected end of archive")
         stderr = io.StringIO()

@@ -1,3 +1,13 @@
+## v0.1.0-alpha.30
+
+- Kaiba the Revenge: the US retail disc (Konami of America, 2004) is now accepted. Its executable only differs from the supported one in how DLL names are written, so the duel engine data is identical; all 16 original Kaiba replays play back exactly with it.
+- Import errors no longer repeat the game name ("kaiba: kaiba: …").
+- Known limitation: Yugi the Destiny from the US release (2003, and its December 2003 update) is a different build of the game and is not supported yet. Yugi currently works with the later European/Spanish edition.
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android34 uses the same package and signing certificate as Android33. No new physical-device validation is claimed.
+
+Kaiba: se acepta el CD estadounidense; su ejecutable solo cambia la forma de escribir los nombres de DLL y las 16 repeticiones originales se reproducen igual. Los errores de importación ya no repiten el nombre del juego. Limitación conocida: el Yugi estadounidense (2003 y su actualización de diciembre de 2003) es otra compilación y aún no es compatible; Yugi funciona con la edición europea/española posterior.
+
 ## v0.1.0-alpha.29
 
 - Clearer import errors. If a Data.dat belongs to another game (for example, several games installed in the same folder) the launcher names that game; if the Data.dat or the executable looks modified by a mod or card pack, it says so and asks for an original installation or ISO. When an ISO contains the installer, the real reason from inside it is shown instead of "found: 0".
