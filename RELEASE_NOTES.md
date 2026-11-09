@@ -1,3 +1,12 @@
+## v0.1.0-alpha.32
+
+- New **Voices +** button in the import screen: add another dub from a compatible copy of the same game (its `Voice.dat`), for example the English voices from a US disc on top of a European Yugi. Pick the game, select the `Voice.dat`, then click **Extract for PC**. Both dubs are kept; the launcher uses the one matching its language.
+- The import actions are now four compact buttons: Extract for PC, Voices +, Create .pck and Download APK.
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android36 uses the same package and signing certificate as Android35. No new physical-device validation is claimed.
+
+Nuevo botón **Voces +** en la pantalla de importación para añadir el doblaje de otra copia compatible del mismo juego (su `Voice.dat`), por ejemplo las voces inglesas sobre un Yugi europeo. Las acciones de importación pasan a ser cuatro botones compactos.
+
 ## v0.1.0-alpha.31
 
 - Installations made by some third-party installers, which unpack `Data.dat` into a `data` folder of loose files, can now be imported: the launcher checks that the folder belongs to the selected game and packs it back automatically. Tested with an unpacked US Kaiba the Revenge: same engine data, and all 16 original Kaiba replays play back exactly.

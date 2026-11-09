@@ -25,6 +25,9 @@ var _error_dialog := AcceptDialog.new()
 const DialogTheme = preload("res://scenes/launcher/dialog_theme.gd")
 var _error_details := TextEdit.new()
 var _error_link := LinkButton.new()
+# Extra dubs (another Voice.dat): second action button, not on the game cards.
+var _voices := Button.new()
+var _voice_menu := PopupMenu.new()
 var _error_log_button: Button
 var _error_copy_button: Button
 var _error_log_path := ""
@@ -156,6 +159,25 @@ func _ready() -> void:
 	_error_link.visible = false
 	_error_link.pressed.connect(func() -> void: _error_dialog.popup_centered(Vector2i(650, 400)))
 	add_child(_error_link)
+	_style_control(_voices)
+	_voices.pressed.connect(_open_voice_menu)
+	add_child(_voices)
+	_voice_menu.id_pressed.connect(func(id: int) -> void: _browse_voice(Game.GAMES[id]))
+	var menu_panel := StyleBoxFlat.new()
+	menu_panel.bg_color = Color(0.075, 0.05, 0.06)
+	menu_panel.border_color = Color(GOLD_LIGHT.darkened(0.15), 0.7)
+	menu_panel.set_border_width_all(1)
+	menu_panel.set_corner_radius_all(6)
+	menu_panel.set_content_margin_all(6)
+	var menu_hover := StyleBoxFlat.new()
+	menu_hover.bg_color = Color(GOLD_LIGHT, 0.12)
+	menu_hover.set_corner_radius_all(4)
+	_voice_menu.add_theme_stylebox_override("panel", menu_panel)
+	_voice_menu.add_theme_stylebox_override("hover", menu_hover)
+	_voice_menu.add_theme_color_override("font_color", GOLD_LIGHT)
+	_voice_menu.add_theme_color_override("font_hover_color", Color.WHITE)
+	_voice_menu.add_theme_font_size_override("font_size", 15)
+	add_child(_voice_menu)
 
 	get_tree().root.close_requested.connect(_close)
 	get_tree().root.mouse_exited.connect(_pointer_left_window)
@@ -171,9 +193,12 @@ func _language_updated() -> void:
 	_subtitle.text = str(LIBRARY_HINT[Assets.lang]) if Paths.has_data() else _copy(1)
 	_convert.text = _copy(4)
 	_convert.visible = true
-	_apk.text = {"s": "Crear recursos .pck", "e": "Create .pck resources", "g": ".pck-Ressourcen erstellen", "f": "Créer les ressources .pck", "i": "Crea risorse .pck", "j": ".pckリソースを作成"}.get(Assets.lang, "Create .pck resources")
+	_apk.text = {"s": "Crear .pck", "e": "Create .pck", "g": ".pck erstellen", "f": "Créer le .pck", "i": "Crea .pck", "j": ".pckを作成"}.get(Assets.lang, "Create .pck")
 	_download_apk.text = {"s": "Descargar APK", "e": "Download APK", "g": "APK herunterladen", "f": "Télécharger l'APK", "i": "Scarica APK", "j": "APKをダウンロード"}.get(Assets.lang, "Download APK")
 	_download_apk.disabled = _busy
+	_voices.text = _copy(3)
+	_voices.tooltip_text = _copy(11)
+	_update_voices()
 	_apk.disabled = _busy or _tools_failed or Paths.storage_error or (not _has_pending() and not Paths.has_data())
 	if not _busy:
 		_status.text = _copy(5)
@@ -212,12 +237,11 @@ func _layout() -> void:
 	var actions_y := 446.0 if _python.visible else 414.0
 	_python.position = _origin + Vector2(250, 404)
 	_python.size = Vector2(300, 32)
-	_convert.position = _origin + Vector2(20, actions_y)
-	_convert.size = Vector2(240, 42)
-	_apk.position = _origin + Vector2(280, actions_y)
-	_apk.size = Vector2(240, 42)
-	_download_apk.position = _origin + Vector2(540, actions_y)
-	_download_apk.size = Vector2(240, 42)
+	# Four actions in one row: extract, extra dubs, Android .pck and APK download.
+	for index in 4:
+		var action: Button = [_convert, _voices, _apk, _download_apk][index]
+		action.position = _origin + Vector2(20 + index * 195, actions_y)
+		action.size = Vector2(175, 42)
 	_status.position = _origin + Vector2(90, actions_y + 52)
 	_status.size = Vector2(620, 24)
 	if _error_link.visible:
@@ -282,6 +306,36 @@ func _browse(game: String, iso: bool) -> void:
 	_dialog.popup_centered_ratio(0.8)
 
 
+## A dub belongs to a game that is prepared or selected in this same import.
+func _voice_games() -> Array[String]:
+	var games: Array[String] = []
+	for game: String in Game.GAMES:
+		if Paths.has_game(game) or _sources.has(game):
+			games.append(game)
+	return games
+
+
+func _update_voices() -> void:
+	_voices.disabled = _busy or _tools_failed or Paths.storage_error or _voice_games().is_empty()
+
+
+func _open_voice_menu() -> void:
+	_voice_menu.clear()
+	for game in _voice_games():
+		_voice_menu.add_item(Game.TITLES[game], Game.GAMES.find(game))
+	var at := _voices.get_screen_position() + Vector2(0, _voices.size.y + 4)
+	_voice_menu.popup(Rect2i(Vector2i(at), Vector2i.ZERO))
+
+
+func _browse_voice(game: String) -> void:
+	_pending_game = game
+	_pending_voice = true
+	_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_dialog.filters = PackedStringArray(["*.dat ; Voice.dat"])
+	_dialog.title = "%s · %s" % [Game.TITLES[game], _copy(11)]
+	_dialog.popup_centered_ratio(0.8)
+
+
 func _selected(path: String) -> void:
 	if _pending_voice:
 		var packs: Array = _voice_sources.get_or_add(_pending_game, [])
@@ -299,6 +353,7 @@ func _selected(path: String) -> void:
 	_convert.visible = true
 	_apk.disabled = _tools_failed or Paths.storage_error or not _has_pending()
 	_status.text = "%s: %s" % [_copy(10), _sources.size()]
+	_update_voices()
 
 
 func _start(migrate := false, build_apk := false) -> void:
@@ -325,6 +380,9 @@ func _start(migrate := false, build_apk := false) -> void:
 		args.append("--" + game)
 		args.append(str(_sources[game]))
 	for game in _voice_sources:
+		# A dub needs its game: already prepared or selected in this same import.
+		if not Paths.has_game(game) and not _sources.has(game):
+			continue
 		for voice_path in _voice_sources[game]:
 			args.append("--voice")
 			args.append(game + "=" + str(voice_path))
@@ -336,6 +394,7 @@ func _start(migrate := false, build_apk := false) -> void:
 	_convert.disabled = true
 	_apk.disabled = true
 	_download_apk.disabled = true
+	_voices.disabled = true
 	_back.disabled = true
 	_python.editable = false
 	_status.text = _text("apk_preparing") if build_apk else _copy(8)
@@ -400,6 +459,7 @@ func _finish(result: Dictionary) -> void:
 	_convert.disabled = not _has_pending() or _tools_failed
 	_apk.disabled = _tools_failed or Paths.storage_error or (not _has_pending() and not Paths.has_data())
 	_download_apk.disabled = false
+	_update_voices()
 	_back.disabled = false
 	_python.editable = true
 	if int(result["code"]) != 0:

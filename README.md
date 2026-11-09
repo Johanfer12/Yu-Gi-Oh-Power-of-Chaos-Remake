@@ -6,11 +6,11 @@
 
 **English** | [Español](README.es.md)
 
-[![Download EXE for Windows](https://img.shields.io/badge/Download_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.31/PowerOfChaos.exe)
+[![Download EXE for Windows](https://img.shields.io/badge/Download_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.32/PowerOfChaos.exe)
 
-[![Download Android APK](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.31/PowerOfChaos-Android.apk)
+[![Download Android APK](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.32/PowerOfChaos-Android.apk)
 
-**Direct download · Windows · v0.1.0-alpha.31 preview · No ZIP required**
+**Direct download · Windows · v0.1.0-alpha.32 preview · No ZIP required**
 
 **Bring your Power of Chaos games together in one modern Windows launcher.**
 
@@ -70,7 +70,7 @@ Enable it with an internet connection to prepare the local pack. The first downl
 Select your ISO images or installed game folders, then choose:
 
 - **Extract for PC** to prepare the games for Windows.
-- **Create .pck resources** to prepare a private **`.pck` resource pack** made from your games, saved with its validation receipt in **`PoC Data/android/pck/`**. Already prepared games can also be reused.
+- **Create .pck** to prepare a private **`.pck` resource pack** made from your games, saved with its validation receipt in **`PoC Data/android/pck/`**. Already prepared games can also be reused.
 - **Download APK** to download this version's public Android APK from GitHub.
 
 **Android setup is handled by the launcher.** The public APK is built and signed by GitHub Actions; the launcher prepares the resource pack locally. No account, Android SDK, JDK, signing-key setup or author signing key is needed for this normal workflow. Install the APK, open it and select your `.pck` once. Later compatible updates keep those resources and your saves. [Prepare your Android files](#build-your-android-apk).
@@ -115,7 +115,7 @@ You provide a compatible copy of the game you want to play. The launcher reads i
 
 ## Get started on Windows
 
-1. [Download **`PowerOfChaos.exe`** directly](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.31/PowerOfChaos.exe). Development builds are also available in [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
+1. [Download **`PowerOfChaos.exe`** directly](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.32/PowerOfChaos.exe). Development builds are also available in [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
 2. Put the EXE in a folder where you want to keep the launcher and its saves, then open it.
 3. In **ADD YOUR RESOURCES**, move over the game you want to add and choose **ISO** or **Folder**.
 4. Select a compatible disc image or installed game folder, then click **Extract for PC** and wait for conversion to finish.
@@ -131,7 +131,9 @@ GitHub may package Actions artifacts in a ZIP. Release downloads expose the EXE 
 - A compatible copy of at least one original game.
 - Enough free disk space for the converted resources and temporary extraction files.
 
-An installed game folder must contain `Data.dat`, `Voice.dat`, `Region.dat` and the corresponding original executable. The executable is read to obtain supported engine tables; it is not launched.
+An installed game folder must contain `Data.dat`, `Voice.dat`, `Region.dat` and the corresponding original executable. Some third-party installers unpack `Data.dat` into a `data` folder of loose files; that layout is accepted too. The executable is read to obtain supported engine tables; it is not launched.
+
+Yugi the Destiny currently works with the later European/Spanish edition. The original 2003 US release (and its December 2003 update) is a different build of the game and is not supported yet. Kaiba the Revenge and Joey the Passion work with their English editions.
 
 ## How it works
 
@@ -194,7 +196,7 @@ The language selector controls the launcher and the game's available text resour
 
 Voice packs are detected from the supplied `Voice.dat`. Switching language uses the matching installed dub when available, otherwise the primary imported dub remains in use. Selecting a language does not download its voices.
 
-Additional voice packs from another compatible copy of the same game can be imported from the source tools:
+To add a voice pack from another compatible copy of the same game, click **Voices +** in the import screen, choose the game and select that copy's `Voice.dat`, then click **Extract for PC**. The source tools can do the same:
 
 ```powershell
 python -m pocx.import_games --base "existing-data" --voice "joey=C:\My Joey Copy\Voice.dat" --out "new-data"
@@ -253,7 +255,7 @@ Third-party components retain their own licenses. See [THIRD_PARTY_NOTICES.md](T
 ## Build your Android APK
 
 1. Select your ISO images/folders or reuse the library already prepared for PC.
-2. Click **Create .pck resources**. The launcher downloads Godot's resource packer when needed, verifies its SHA-256 checksum and prepares your private resources locally. It opens **`PoC Data/android/pck/`**, containing the **`.pck`** and a JSON validation receipt.
+2. Click **Create .pck**. The launcher downloads Godot's resource packer when needed, verifies its SHA-256 checksum and prepares your private resources locally. It opens **`PoC Data/android/pck/`**, containing the **`.pck`** and a JSON validation receipt.
 3. Click **Download APK** to get this version's public APK from GitHub. Copy both the APK and PCK to your Android device.
 4. Install the APK. At first launch, choose **Select .pck resource pack** and select that PCK. Import it once; the app keeps its own copy alongside your saves.
 

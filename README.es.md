@@ -6,11 +6,11 @@
 
 [English](README.md) | **Español**
 
-[![Descargar EXE para Windows](https://img.shields.io/badge/Descargar_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.31/PowerOfChaos.exe)
+[![Descargar EXE para Windows](https://img.shields.io/badge/Descargar_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.32/PowerOfChaos.exe)
 
-[![Descargar APK Android](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.31/PowerOfChaos-Android.apk)
+[![Descargar APK Android](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.32/PowerOfChaos-Android.apk)
 
-**Descarga directa · Windows · Preliminar v0.1.0-alpha.31 · Sin ZIP**
+**Descarga directa · Windows · Preliminar v0.1.0-alpha.32 · Sin ZIP**
 
 **Tus juegos de Power of Chaos reunidos en un launcher moderno para Windows.**
 
@@ -71,7 +71,7 @@ Actívalo con conexión para preparar el paquete local. La primera descarga es d
 Selecciona los ISO o las carpetas instaladas de tus juegos y elige:
 
 - **Extraer para PC** para preparar los juegos en Windows.
-- **Crear recursos .pck** para preparar un **paquete privado de recursos `.pck`** generado desde tus juegos, que queda con su informe de validación en **`PoC Data/android/pck/`**. También puedes reutilizar los juegos ya preparados.
+- **Crear .pck** para preparar un **paquete privado de recursos `.pck`** generado desde tus juegos, que queda con su informe de validación en **`PoC Data/android/pck/`**. También puedes reutilizar los juegos ya preparados.
 - **Descargar APK** para bajar de GitHub el APK público Android de esta versión.
 
 **Android se prepara desde el launcher.** El APK público lo compila y firma GitHub Actions; el launcher genera el paquete de recursos en tu equipo. El flujo normal no requiere cuentas, SDK Android, JDK, configurar una firma ni acceder a la clave del autor. Instala el APK, ábrelo y selecciona tu `.pck` una vez. Las actualizaciones compatibles posteriores conservan esos recursos y tus partidas. [Preparar tus archivos Android](#crear-tu-apk-android).
@@ -112,7 +112,7 @@ Tú aportas una copia compatible del juego que quieras usar. El launcher lee sus
 
 ## Empezar en Windows
 
-1. [Descarga **`PowerOfChaos.exe`** directamente](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.31/PowerOfChaos.exe). También hay compilaciones de desarrollo en [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
+1. [Descarga **`PowerOfChaos.exe`** directamente](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.32/PowerOfChaos.exe). También hay compilaciones de desarrollo en [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
 2. Pon el EXE en una carpeta donde quieras guardar el launcher y tus partidas, y ábrelo.
 3. En **SUBE TUS RECURSOS**, pasa el cursor por el juego que quieras añadir y elige **ISO** o **Carpeta**.
 4. Selecciona una imagen de disco o carpeta instalada compatible, pulsa **Extraer para PC** y espera a que termine.
@@ -120,7 +120,9 @@ Tú aportas una copia compatible del juego que quieras usar. El launcher lee sus
 
 La descarga es un único EXE, sin asistente de instalación. La primera importación prepara las herramientas incluidas en `PoC Data/tools/`; abrir el menú no espera esa extracción. Los archivos de Actions pueden venir en ZIP; los de Releases permiten descargar directamente el EXE.
 
-Necesitas Windows con soporte para el renderizador OpenGL de compatibilidad de Godot, una copia compatible de al menos un juego y espacio libre para los recursos y archivos temporales. Una carpeta instalada debe contener `Data.dat`, `Voice.dat`, `Region.dat` y el ejecutable original correspondiente; este se lee para obtener tablas del motor, sin ejecutarlo.
+Necesitas Windows con soporte para el renderizador OpenGL de compatibilidad de Godot, una copia compatible de al menos un juego y espacio libre para los recursos y archivos temporales. Una carpeta instalada debe contener `Data.dat`, `Voice.dat`, `Region.dat` y el ejecutable original correspondiente; este se lee para obtener tablas del motor, sin ejecutarlo. También se acepta la carpeta `data` de archivos sueltos que dejan algunos instaladores de terceros en lugar de `Data.dat`.
+
+Yugi the Destiny funciona hoy con la edición europea/española posterior. La edición estadounidense original de 2003 (y su actualización de diciembre de 2003) es otra compilación del juego y aún no es compatible. Kaiba the Revenge y Joey the Passion funcionan con sus ediciones en inglés.
 
 ## Cómo funciona
 
@@ -179,7 +181,7 @@ El selector controla el launcher y los textos disponibles del juego. La disponib
 
 Los doblajes se detectan desde `Voice.dat`. Al cambiar de idioma se usa el doblaje correspondiente si está importado; de lo contrario, se conserva el principal. El selector no descarga voces.
 
-Puedes añadir voces de otra copia compatible del mismo juego mediante las herramientas de código fuente:
+Para añadir el doblaje de otra copia compatible del mismo juego, pulsa **Voces +** en la pantalla de importación, elige el juego y selecciona el `Voice.dat` de esa copia; después pulsa **Extraer para PC**. Las herramientas de código fuente hacen lo mismo:
 
 ```powershell
 python -m pocx.import_games --base "datos-existentes" --voice "joey=C:\Mi copia de Joey\Voice.dat" --out "datos-nuevos"
@@ -230,7 +232,7 @@ Cada componente de terceros conserva su licencia. Consulta [THIRD_PARTY_NOTICES.
 ## Crear tu APK Android
 
 1. Selecciona tus ISO/carpetas o reutiliza la biblioteca preparada para PC.
-2. Pulsa **Crear recursos .pck**. Cuando hace falta, el launcher descarga el empaquetador Godot, verifica su SHA-256 y prepara tus recursos privados en tu equipo. Después abre **`PoC Data/android/pck/`**, donde quedan el **`.pck`** y el informe JSON.
+2. Pulsa **Crear .pck**. Cuando hace falta, el launcher descarga el empaquetador Godot, verifica su SHA-256 y prepara tus recursos privados en tu equipo. Después abre **`PoC Data/android/pck/`**, donde quedan el **`.pck`** y el informe JSON.
 3. Pulsa **Descargar APK** para bajar de GitHub el APK público de esta versión. Copia el APK y el PCK a tu Android.
 4. Instala el APK. Al abrirlo por primera vez, pulsa **Seleccionar paquete .pck** y elige ese archivo. Basta con importarlo una vez; la aplicación guarda su propia copia junto a tus partidas.
 

@@ -4,7 +4,7 @@ The public APK is identical for every user. Its package is
 `org.porttesting.powerofchaos`; updates retain the established signing certificate.
 Original game resources are never uploaded. GitHub Actions builds and signs the APK;
 the Windows launcher downloads it from the release (**Download APK**) and prepares the
-separate private PCK locally (**Create .pck resources**). Android imports
+separate private PCK locally (**Create .pck**). Android imports
 the PCK once into app storage and retains it, saves and preferences across APK updates.
 Repacking an APK would invalidate its signature.
 
