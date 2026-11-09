@@ -166,6 +166,31 @@ class ImportTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "encontradas: 0"):
                 locate(Path(directory), "yugi")
 
+    def test_unpacked_data_folder_is_accepted_and_repacked(self):
+        from test_media_import import archive
+        from pocx.archive import pack_folder
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            loose = {"y/file/deck_y.txt": b"deck", "card/a.bmp": b"BM" + bytes(40)}
+            for name, data in loose.items():
+                (root / "data" / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / "data" / name).write_bytes(data)
+            archive(root / "Voice.dat", {"y/voice.wav": b"x"})
+            (root / "Region.dat").write_bytes(b"x")
+            (root / "Yugi_Pc.exe").write_bytes(b"MZ")
+            # Identity passes; only the synthetic executable is rejected afterwards.
+            with self.assertRaisesRegex(ValueError, "Yugi_Pc.exe no es una versión compatible"):
+                locate(root, "yugi")
+            pack_folder(root / "data", root / "Data.dat")
+            with Archive(root / "Data.dat") as packed:
+                self.assertEqual({name: packed.read(name) for name in loose}, loose)
+            (root / "Data.dat").unlink()
+            (root / "data/y/file/deck_y.txt").rename(root / "data/y/file/other.txt")
+            (root / "data/k/file").mkdir(parents=True)
+            (root / "data/k/file/deck_k.txt").write_bytes(b"deck")
+            with self.assertRaisesRegex(ValueError, "Kaiba the Revenge"):
+                locate(root, "yugi")
+
     def test_foreign_data_names_the_real_game(self):
         from test_media_import import archive
         cases = ({"k/file/deck_k.txt": b"x"}, "Kaiba the Revenge"), ({"y/other.txt": b"x"}, "mod")

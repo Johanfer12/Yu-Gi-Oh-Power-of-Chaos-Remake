@@ -1,3 +1,11 @@
+## v0.1.0-alpha.31
+
+- Installations made by some third-party installers, which unpack `Data.dat` into a `data` folder of loose files, can now be imported: the launcher checks that the folder belongs to the selected game and packs it back automatically. Tested with an unpacked US Kaiba the Revenge: same engine data, and all 16 original Kaiba replays play back exactly.
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android35 uses the same package and signing certificate as Android34. No new physical-device validation is claimed.
+
+Se pueden importar las instalaciones que algunos instaladores de terceros dejan con `Data.dat` desempaquetado en una carpeta `data`: el launcher comprueba que es del juego elegido y la vuelve a empaquetar automáticamente.
+
 ## v0.1.0-alpha.30
 
 - Kaiba the Revenge: the US retail disc (Konami of America, 2004) is now accepted. Its executable only differs from the supported one in how DLL names are written, so the duel engine data is identical; all 16 original Kaiba replays play back exactly with it.

@@ -14,7 +14,7 @@ import uuid
 
 from .__main__ import (GAMES, STARTER_TABLES, _read_va, extract,
                        export_duel_image)
-from .archive import Archive
+from .archive import Archive, folder_names, pack_folder
 from .executable import validate
 from .voices import add_voice
 from .compact import optimize_tree
@@ -64,11 +64,11 @@ class MissingInstallation(UserError):
 TITLES = {"yugi": "Yugi the Destiny", "kaiba": "Kaiba the Revenge", "joey": "Joey the Passion"}
 
 
-def _foreign_data_message(game: str, names: dict[str, Path], archive: Archive) -> str:
-    """Say which game the Data.dat beside the executable really belongs to."""
-    folder, title = names["data.dat"].parent, TITLES[game]
+def _foreign_data_message(game: str, folder: Path, entries) -> str:
+    """Say which game the Data.dat (or unpacked data folder) really belongs to."""
+    title = TITLES[game]
     owners = [other for other, letter in GAMES.items()
-              if other != game and f"{letter}/file/deck_{letter}.txt" in archive.by_name]
+              if other != game and f"{letter}/file/deck_{letter}.txt" in entries]
     if owners:
         return t("foreign_owner", game=game, folder=folder, title=title,
                  found=", ".join(TITLES[other] for other in owners))
@@ -80,15 +80,28 @@ def locate(root: Path, game: str) -> dict[str, Path]:
     """Find one coherent installation, accepting mixed-case filenames."""
     exe_name = STARTER_TABLES[game][0].lower()
     matches = []
-    for directory, _, files in os.walk(root):
+    for directory, folders, files in os.walk(root):
         names = {name.lower(): Path(directory) / name for name in files}
-        required = {exe_name, "data.dat", "voice.dat", "region.dat"}
-        if required <= names.keys():
+        if "data.dat" not in names:
+            # Some third-party installers unpack Data.dat into a "data" folder of loose files.
+            unpacked = next((Path(directory) / name for name in folders if name.lower() == "data"), None)
+            if unpacked is not None:
+                names["data/"] = unpacked
+        required = {exe_name, "voice.dat", "region.dat"}
+        if required <= names.keys() and ("data.dat" in names or "data/" in names):
             matches.append(names)
     if len(matches) != 1:
         raise MissingInstallation(t("install_count", game=game, exe=exe_name, count=len(matches)))
     names = matches[0]
+    if "data/" in names:
+        entries = folder_names(names["data/"])
+        if not entries:
+            raise user_error("archive_empty", game=game, name="data")
+        if f"{GAMES[game]}/file/deck_{GAMES[game]}.txt" not in entries:
+            raise UserError(_foreign_data_message(game, names["data/"], entries))
     for archive_name in ("data.dat", "voice.dat"):
+        if archive_name not in names:
+            continue
         try:
             archive = Archive(names[archive_name])
         except ValueError as error:
@@ -98,7 +111,7 @@ def locate(root: Path, game: str) -> dict[str, Path]:
             if not archive.entries:
                 raise user_error("archive_empty", game=game, name=names[archive_name].name)
             if archive_name == "data.dat" and f"{GAMES[game]}/file/deck_{GAMES[game]}.txt" not in archive.by_name:
-                raise UserError(_foreign_data_message(game, names, archive))
+                raise UserError(_foreign_data_message(game, names["data.dat"].parent, archive.by_name))
     try:
         validate(names[exe_name].read_bytes(), game)
     except ValueError as error:
@@ -248,7 +261,10 @@ def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tupl
                 app = work / "sources" / game / "app"
                 app.mkdir(parents=True)
                 for name in ("Data.dat", "Voice.dat", "Region.dat", STARTER_TABLES[game][0]):
-                    shutil.copyfile(names[name.lower()], app / name)
+                    if name == "Data.dat" and "data.dat" not in names:
+                        pack_folder(names["data/"], app / name)
+                    else:
+                        shutil.copyfile(names[name.lower()], app / name)
         converted = work / "converted"
         with import_context("conversion"):
             extract(work / "sources", converted)

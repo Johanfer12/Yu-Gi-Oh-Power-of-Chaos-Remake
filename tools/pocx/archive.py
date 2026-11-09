@@ -81,6 +81,36 @@ class Archive:
         self.close()
 
 
+def folder_names(folder: Path) -> dict[str, Path]:
+    """Loose resources of an unpacked Data.dat: archive-style lower-case name -> file."""
+    return {path.relative_to(folder).as_posix().lower(): path
+            for path in sorted(folder.rglob("*")) if path.is_file()}
+
+
+def pack_folder(folder: Path, destination: Path) -> int:
+    """Write the loose files of an unpacked Data.dat back as an uncompressed KCEJYUGI
+    archive, so the rest of the import reads it like the original. Returns the count."""
+    files = folder_names(folder)
+    if not files:
+        raise ValueError(f"{folder}: carpeta de recursos vacía")
+    offset = 12 + len(files) * ENTRY_SIZE
+    index = bytearray()
+    for name, path in files.items():
+        encoded = _nibble_swap(name.encode("latin-1"))
+        if len(encoded) >= NAME_SIZE:
+            raise ValueError(f"Nombre de recurso demasiado largo: {name}")
+        size = path.stat().st_size
+        index += encoded.ljust(NAME_SIZE, b"\0") + struct.pack("<III", offset, size, size)
+        offset += size
+    with open(destination, "wb") as output:
+        output.write(MAGIC + struct.pack("<I", len(files)) + index)
+        for path in files.values():
+            with open(path, "rb") as source:
+                while chunk := source.read(1 << 20):
+                    output.write(chunk)
+    return len(files)
+
+
 def lzss_decompress(src: bytes, out_size: int) -> bytes:
     """LZSS estilo Okumura: flag bit 1 = literal; referencia = 12 bits de posicion
     en ventana de 4096 (inicio 0xFEE, relleno con ceros) + 4 bits de longitud (+3)."""
