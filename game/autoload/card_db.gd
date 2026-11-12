@@ -6,7 +6,7 @@ extends Node
 ## - se pueden USAR las del juego en curso y las de los anteriores:
 ##   Yugi=1, Kaiba=3, Joey=7 (mascaras acumulativas del validador nativo).
 
-## type_id de card_prop.bin (deducido de cartas conocidas, ver INVENTARIO.md 4)
+## type_id de card_prop.bin (deducido de cartas conocidas, ver docs/INVENTARIO.md 4)
 const TYPE_NAMES := {
 	1: "Dragón", 2: "Zombi", 3: "Demonio", 4: "Piro", 5: "Serpiente Marina", 6: "Roca",
 	7: "Máquina", 8: "Pez", 9: "Dinosaurio", 10: "Insecto", 11: "Bestia",

@@ -34,6 +34,10 @@ extends Node
 ##                             las capturas del original (y +-2), con el nombre de --write-movie
 ##                             (port%08d.png); ui_compare.py los lee igual y no hay que codificar
 ##                             cada fotograma
+##   --ui-values=archivo.jsonl con --ui-replay, cotejo por valores de las pantallas anteriores al
+##                             duelo: escribe cada cambio de pantalla y cada sonido o pista con
+##                             su fotograma desde el ancla, y cierra el juego al abrirse el duelo
+##                             (re/scripts/frida/ui_prelude_compare.py)
 
 const KEY_INTERVAL := 12
 
@@ -62,6 +66,11 @@ var _duel_seeds: Array[int] = []
 var _shots: Array = []
 var _shots_dir := ""
 var _shots_saved := 0
+## --ui-values: archivo de valores de las pantallas anteriores al duelo.
+var _values: FileAccess
+## Con --ui-values el barrido entre escenas tambien cuenta sus ticks sin ventana (Game.goto).
+var headless_wipe := false
+const VALUES_LIMIT := 6000 # Fotogramas sin llegar al duelo: la entrada grabada no lo abre.
 const SHOT_WINDOW := 2
 
 
@@ -84,6 +93,11 @@ func _ready() -> void:
 	if _shots_dir != "" and not _shots.is_empty():
 		DirAccess.make_dir_recursive_absolute(_shots_dir)
 		RenderingServer.frame_post_draw.connect(_save_shot)
+	var values_path := Paths.cmdline_value("ui-values")
+	if values_path != "" and not _replay.is_empty():
+		_values = FileAccess.open(values_path, FileAccess.WRITE)
+		headless_wipe = true
+		Audio.log_played = true
 	UiRandom.log_draws = OS.get_cmdline_user_args().has("--ui-rand-log")
 	var ui_seed := Paths.cmdline_value("ui-seed")
 	if ui_seed != "":
@@ -271,12 +285,35 @@ func _step_replay() -> void:
 		_port_scene_frames.append(_frame)
 		print("ui-port-scene: %d %d %s" % [_port_scene_frames.size(), _frame,
 				_last_screen.get_script().resource_path.get_file()])
+		_value("scene", _last_screen.get_script().resource_path.get_file())
+	_step_values()
 	while _replay_at < _replay.size():
 		var at := _port_frame_for(int(_replay[_replay_at][0]), int(_replay[_replay_at][4]))
 		if at < 0 or _frame < at:
 			break
 		_apply_input(_replay[_replay_at])
 		_replay_at += 1
+
+
+func _value(key: String, value: String) -> void:
+	if _values != null:
+		_values.store_line(JSON.stringify({"frame": _frame - _replay_anchor, "key": key, "value": value}))
+
+
+## --ui-values: sonidos pedidos en este fotograma; al abrirse el duelo (o al agotar el limite)
+## cierra el archivo y el juego.
+func _step_values() -> void:
+	if _values == null: return
+	for sound: String in Audio.played_log: _value("sound", sound)
+	Audio.played_log.clear()
+	var script: String = _last_screen.get_script().resource_path.get_file() if is_instance_valid(_last_screen) else ""
+	var in_duel := script in ["normal_duel.gd", "joey_native_normal.gd"]
+	if not in_duel and _frame - _replay_anchor < VALUES_LIMIT: return
+	_value("end", "duel" if in_duel else "limit")
+	_values.close()
+	_values = null
+	Audio.stop_all()
+	get_tree().quit(0 if in_duel else 3)
 
 
 ## Fotograma del port para el tick T del original, que ocurre tras `n` cambios de escena, o -1

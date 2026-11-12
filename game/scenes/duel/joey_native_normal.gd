@@ -48,12 +48,12 @@ func make_replay() -> Ydr:
 	var adapter := _duel as JoeyPresentationAdapter
 	replay.local_player = adapter.local_native_player
 	replay.commands = adapter.file_recorded.duplicate()
-	if _lan:
-		# Los comandos usan jugadores absolutos. La cabecera debe describir el
-		# mismo orden; host=1, invitado=0, mientras la sala guarda local/rival.
-		var local := adapter.local_native_player
-		if local == 1: replay.decks.reverse()
-		replay.options = (replay.options & ~1) | ((replay.options & 1) ^ local)
+	# Los comandos usan jugadores absolutos. La cabecera debe describir el mismo orden: el
+	# duelo guarda mazos y quien empieza como local/rival, y el local es el nativo 1 (en LAN,
+	# host=1 e invitado=0).
+	var local := adapter.local_native_player
+	if local == 1: replay.decks.reverse()
+	replay.options = (replay.options & ~1) | ((replay.options & 1) ^ local)
 	return replay
 
 

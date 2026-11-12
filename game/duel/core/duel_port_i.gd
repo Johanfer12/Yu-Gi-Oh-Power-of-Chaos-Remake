@@ -1181,6 +1181,10 @@ func f557070(a: int) -> int:
 		0x80:
 			m.set_u8(0xa15fe1, 2)
 			return 0x7f
+		_:
+			# Original: default -> 0. Sin esto el estado 10 (tras barajar) caia al
+			# return 100 y la CPU barajaba sin fin tras el efecto (issue 2 publico).
+			return 0
 	return 100
 
 ## FUN_00557ff0: destruye monstruos adversarios de ATK >=1500 y descarta de la mano.

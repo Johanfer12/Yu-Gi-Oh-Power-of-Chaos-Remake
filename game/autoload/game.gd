@@ -123,10 +123,14 @@ func goto(screen: Node) -> void:
 	var effect := _scene_wipe_mode(_screen, screen)
 	var old_frame: Texture2D
 	# El launcher es propio del port; el primer arranque no tiene snapshot previo.
-	if not LauncherSettings.fast_play and current_game != "" and DisplayServer.get_name() != "headless" \
+	var headless := DisplayServer.get_name() == "headless"
+	if not LauncherSettings.fast_play and current_game != "" and (not headless or Debug.headless_wipe) \
 			and is_instance_valid(_screen) and _screen.is_inside_tree() \
 			and _screen.get_script().resource_path.get_file() not in ["launcher.gd", "launcher_android.gd", "content_setup.gd"]:
-		var old_image := _screen.get_viewport().get_texture().get_image()
+		# Sin ventana no hay imagen que barrer; el cotejo por valores (--ui-values) conserva el
+		# barrido con una imagen vacia porque retiene la pantalla nueva los mismos ticks.
+		var old_image := Image.create(1, 1, false, Image.FORMAT_RGBA8) if headless \
+				else _screen.get_viewport().get_texture().get_image()
 		if old_image != null and not old_image.is_empty():
 			old_frame = ImageTexture.create_from_image(old_image)
 	if is_instance_valid(_screen_host):
@@ -181,6 +185,11 @@ func _start_scene_wipe(old_frame: Texture2D, screen: Node, effect := 0x13) -> vo
 	_scene_wipe = wipe
 	screen.get_viewport().add_child(wipe)
 	wipe.set_process(false)
+	if DisplayServer.get_name() == "headless":
+		# Sin ventana (Debug.headless_wipe) no hay fotograma que esperar ni imagen de destino:
+		# el barrido solo cuenta sus ticks y retiene la pantalla hasta el 240.
+		wipe.set_process(true)
+		return
 	await RenderingServer.frame_post_draw
 	if not is_instance_valid(wipe) or not is_instance_valid(screen) or screen != _screen:
 		return
@@ -269,7 +278,8 @@ func open_joey_demo() -> void:
 	joey_demo = true
 	joey_demo_deck = choose_rival_deck("joey")
 	rival_deck = choose_rival_deck("joey")
-	open_normal_duel("joey", 0)
+	# Empieza el lado de arriba (nativo 0 con el local 1 de la demostracion), como hasta ahora.
+	open_normal_duel("joey", 1)
 
 
 func open_normal_duel(game: String, start_options := -1) -> void:

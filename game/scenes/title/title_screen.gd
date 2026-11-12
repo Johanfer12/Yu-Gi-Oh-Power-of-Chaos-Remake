@@ -284,7 +284,12 @@ func _process(delta: float) -> void:
 			if _c == 8: Audio.play_music(MUSIC[game])
 			var render_counter := _c
 			var background: Node2D = _kaiba_background if game == "kaiba" else _joey_background
-			background.advance(_c, background_tick)
+			# Kaiba 4687c0 lee el contador global (5b1d38) antes de que el bucle principal 40c370 lo
+			# incremente: en la portada va un tick por detras de Game.native_tick. Las trazas del
+			# original sacan los dos numeros del MT de los rayos del logo 64 ticks despues de abrir
+			# la escena (contador 316) y ninguno mas hasta el menu; con el tick del port salian en
+			# el 312 y otros tres en el 316 (cotejo de pantallas previas, 10-11-2026).
+			background.advance(_c, maxi(0, background_tick - 1) if game == "kaiba" else background_tick)
 			if _c == 192: _c = 252 if game == "kaiba" else 256
 			if render_counter >= 256:
 				_open_menu("main")

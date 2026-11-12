@@ -1,3 +1,13 @@
+## v0.1.0-alpha.33
+
+- Fixed a freeze in Yugi and Kaiba duels: after the CPU used Thunder Dragon's effect from the hand (discard it to add two Thunder Dragons from the deck), the game kept showing "Shuffling Deck..." forever. The deck is now shuffled once and the duel continues.
+- Joey the Passion: normal duels start with the original's native local player, so who goes first and the saved replays match the original game.
+- Kaiba the Revenge: the title screen uses the original random number sequence.
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android37 uses the same package and signing certificate as Android36. No new physical-device validation is claimed.
+
+Arreglado un bloqueo en los duelos de Yugi y Kaiba: tras el efecto de mano de Thunder Dragon de la CPU, la partida se quedaba en "Shuffling Deck..." para siempre; ahora baraja una vez y el duelo sigue. Joey arranca el duelo normal con el jugador local nativo del original, y la portada de Kaiba usa la secuencia aleatoria original.
+
 ## v0.1.0-alpha.32
 
 - New **Voices +** button in the import screen: add another dub from a compatible copy of the same game (its `Voice.dat`), for example the English voices from a US disc on top of a European Yugi. Pick the game, select the `Voice.dat`, then click **Extract for PC**. Both dubs are kept; the launcher uses the one matching its language.

@@ -2,7 +2,7 @@ class_name Layout
 extends RefCounted
 ## Script de maquetacion del original, ya convertido por pocx a <script>.layout.json.
 ## El motor original lee las lineas por posicion; aqui se conservan en orden y solo las que
-## tienen recurso. Que significa cada numero depende de la pantalla (ver INVENTARIO.md 3.2).
+## tienen recurso. Que significa cada numero depende de la pantalla (ver docs/INVENTARIO.md 3.2).
 
 var path := ""
 var items: Array[Dictionary] = []   # {line, resource, value, comment}

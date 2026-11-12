@@ -115,16 +115,16 @@ func start_normal(decks: Array[Dictionary], opts: int, rand_seed: int, mode := G
 	file_recording_enabled = true
 	if engine is JoeyReplayEngine:
 		(engine as JoeyReplayEngine).replay_active = false
-	# Jugador local nativo del duelo normal: 0 en el port. Las trazas recientes del original
-	# llaman a 5bfeb0(1, 1, semilla) (44bee0: 5f3288 = 1) y solo con 1 el duelo completo del
-	# cotejo repite sus 179 comandos; la traza D24 indica 0 y tres pruebas del port dependen de
-	# 0. Pendiente D36: --joey-local-native=1 lo fija para los cotejos.
+	# Jugador local nativo del duelo normal y del match: 1, como el original (44bee0, casos 0 y
+	# 1: 0044c0ed mov [5f3288], 1 sin condicion; 44c3e0 llama a 5bfeb0(5f3288, 5f328c, 5f3290)).
+	# --joey-local-native=N lo fija para cotejar una traza (la demostracion grabada usa 0).
 	var forced_local := ""
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--joey-local-native="): forced_local = arg.get_slice("=", 1)
 	if mode == GAME_NORMAL:
-		local_native_player = forced_local.to_int() & 1 if forced_local != "" else 0
+		local_native_player = 1
 		if forced_local_player >= 0: local_native_player = forced_local_player
+		if forced_local != "": local_native_player = forced_local.to_int() & 1
 	else:
 		local_native_player = int(engine.network_transport.is_host)
 	engine.init_application()
@@ -174,9 +174,9 @@ func start_normal(decks: Array[Dictionary], opts: int, rand_seed: int, mode := G
 	if mode == GAME_NETWORK:
 		engine.start_network(decks, opts, rand_seed, engine.network_transport)
 	else:
-		# Las opciones vienen del janken ya cruzadas con 5f3288 (janken_joey.gd): son el valor
-		# nativo de quien empieza, como el segundo argumento de 48a150.
-		engine.f5bfeb0(local_native_player, opts, rand_seed)
+		# Las opciones del port dicen quien empieza visto desde el jugador de abajo (0 = el local),
+		# como en Yugi y Kaiba. 5f328c es su indice nativo: se cruza con el jugador local.
+		engine.f5bfeb0(local_native_player, (opts & 1) ^ local_native_player, rand_seed)
 	engine.ui_enabled = true
 	engine.ui_cursor_ready = false
 	engine.ui_busy = false
@@ -268,7 +268,8 @@ func _apply_pending_scenario() -> void:
 	_scenario = {}
 	var hands: Array = scenario.get("hands", [])
 	for p in mini(hands.size(), 2):
-		var pl := JoeyMem.pl(p)
+		# El escenario numera desde el jugador de abajo; la memoria, por jugador nativo.
+		var pl := JoeyMem.pl(_native_player(p))
 		var hand_n := engine.m.u8(pl + JoeyMem.P_HAND_N)
 		var deck_n := engine.m.u8(pl + JoeyMem.P_DECK_N)
 		var slot := 0
@@ -295,10 +296,11 @@ func _apply_pending_scenario() -> void:
 	if not lp.is_empty():
 		var projection := engine.lp_projection_state()
 		for p in mini(lp.size(), 2):
-			engine.m.set_u16(JoeyMem.pl(p) + JoeyMem.P_LP, int(lp[p]))
-			_lp_targets[p] = int(lp[p])
-			if p < projection.size(): projection[p]["visual"] = int(lp[p])
-			_emit("lp_set", {"p": p, "value": int(lp[p])})
+			var native := _native_player(p)
+			engine.m.set_u16(JoeyMem.pl(native) + JoeyMem.P_LP, int(lp[p]))
+			_lp_targets[native] = int(lp[p])
+			if native < projection.size(): projection[native]["visual"] = int(lp[p])
+			_emit("lp_set", {"p": native, "value": int(lp[p])})
 		engine.set_lp_projection_state(projection)
 	synchronize_view()
 

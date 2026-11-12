@@ -2,7 +2,7 @@ class_name SystemDat
 extends RefCounted
 ## Lectura del system.dat del original (carpeta "Yu-Gi-Oh! Power of Chaos Common"), comun a
 ## Yugi, Kaiba y Joey. Formato y rutinas (0x4628e0 / 0x4627c0 de Yugi) documentados en
-## tools/pocx/systemdat.py e INVENTARIO.md seccion 7. La exportacion escribe solo en la
+## tools/pocx/systemdat.py y docs/INVENTARIO.md seccion 7. La exportacion escribe solo en la
 ## ruta elegida; conserva cabecera y campos desconocidos del bloque importado.
 ##
 ##   4 bytes de suma por carriles (0x42d510) + 562 grupos de 9 bytes; cada grupo guarda 8
