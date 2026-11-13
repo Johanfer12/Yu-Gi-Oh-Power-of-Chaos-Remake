@@ -1,3 +1,11 @@
+## v0.1.0-alpha.34
+
+- Joey the Passion: the tournament (best of three) result board now shows the right banner and marks. Winning the match showed the small "DRAW" stamp instead of "YOU WIN", the rival's row used the player's blue "LOSE" mark, and a drawn duel would have shown "LOSE".
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android38 uses the same package and signing certificate as Android37. No new physical-device validation is claimed.
+
+Joey: el tablero del torneo (al mejor de tres) muestra el rótulo y las marcas correctos. Al ganar el match salía el sello "EMPATE" en vez de "HAS GANADO", la fila del rival usaba el "PIERDES" azul del jugador y un duelo empatado habría mostrado "PIERDES".
+
 ## v0.1.0-alpha.33
 
 - Fixed a freeze in Yugi and Kaiba duels: after the CPU used Thunder Dragon's effect from the hand (discard it to add two Thunder Dragons from the deck), the game kept showing "Shuffling Deck..." forever. The deck is now shuffled once and the duel continues.

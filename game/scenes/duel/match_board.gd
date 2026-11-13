@@ -130,7 +130,7 @@ func _draw() -> void:
 	if _state == 1 and _c < 0x20 and (_c & 4) == 0:
 		_marks(top_left, k, duels - 1, 0x40 / 256.0)
 	if p != 0 and outcome >= 1 and outcome <= 3:
-		var label := _tex[outcome + 4]
+		var label := _tex[outcome + 4 + _extra()]
 		var text_scale := 0x100
 		if p < 0x40:
 			text_scale = 0x180 - (DuelVisualMath.cos_fx((2 * p - 0x80) & 0x1ff) >> 9)
@@ -144,15 +144,23 @@ func _marks(top_left: Vector2, k: float, i: int, alpha: float) -> void:
 	var x := _v(1) + (_v(3) % 1000) * i
 	var y := _v(2)
 	var row := _v(4) % 1000
+	# Yugi/Kaiba: pwin, cwin, lose, draw. Joey añade close_m (PIERDES rosa de la fila rival)
+	# tras plose_m (azul, fila propia), asi que draw y los rotulos van un indice despues.
+	var extra := _extra()
 	match int(results[i]):
 		1:
-			_mark(3, top_left, Vector2(x, y), k, alpha)
+			_mark(3 + extra, top_left, Vector2(x, y), k, alpha)
 			_mark(1, top_left, Vector2(x, y + row), k, alpha)
 		2:
 			_mark(2, top_left, Vector2(x, y), k, alpha)
 			_mark(3, top_left, Vector2(x, y + row), k, alpha)
 		3:
-			_mark(4, top_left, Vector2(x, y + row / 2), k, alpha)
+			_mark(4 + extra, top_left, Vector2(x, y + row / 2), k, alpha)
+
+
+## 1 si el layout trae close_m (Joey), 0 si no.
+func _extra() -> int:
+	return 1 if _layout != null and _layout.index_of("close_m_?.bmp") >= 0 else 0
 
 
 func _mark(index: int, top_left: Vector2, center: Vector2, k: float, alpha: float) -> void:
