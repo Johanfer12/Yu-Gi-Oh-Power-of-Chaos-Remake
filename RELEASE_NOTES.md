@@ -1,3 +1,11 @@
+## v0.1.0-alpha.35
+
+- Android: choosing the target of a card with a tap works again. After activating an equip card such as Sword of Dark Destruction and pressing OK, tapping the monster kept bringing back "Designate the monster that you wish to equip" instead of equipping it. A single tap now selects the target in Yugi and Kaiba duels (issue #4).
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android39 uses the same package and signing certificate as Android38. No new physical-device validation is claimed.
+
+Android: elegir el objetivo de una carta con un toque vuelve a funcionar. Tras activar una carta de equipo como Espada de la destrucción oscura y pulsar OK, tocar el monstruo volvía a mostrar "Designa al monstruo que deseas equipar" en lugar de equiparlo. Ahora un toque elige el objetivo en los duelos de Yugi y Kaiba (issue #4).
+
 ## v0.1.0-alpha.34
 
 - Joey the Passion: the tournament (best of three) result board now shows the right banner and marks. Winning the match showed the small "DRAW" stamp instead of "YOU WIN", the rival's row used the player's blue "LOSE" mark, and a drawn duel would have shown "LOSE".

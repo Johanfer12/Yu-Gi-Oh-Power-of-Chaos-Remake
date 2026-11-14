@@ -44,7 +44,7 @@ func _has_right_action(point: Vector2) -> bool:
 	var script_path: String = scene.get_script().resource_path
 	var local := _scene_point(point)
 	if PlatformInput._normal_duel_active():
-		if scene._duel == null or _material_selection(scene) or not scene._waiting_for_player() or scene._visual.busy(): return false
+		if scene._duel == null or _target_selection(scene) or not scene._waiting_for_player() or scene._visual.busy(): return false
 		# Los botones Si/No y las fases se eligen directamente. El derecho alterna acciones de cartas.
 		if not scene._duel.dialog_open.is_empty() or not scene._duel.list_open.is_empty(): return false
 		var hit: Dictionary = scene._hit_card(local)
@@ -475,7 +475,7 @@ func _card_identity(point: Vector2) -> String:
 	if path.ends_with("deck_editor.gd") and scene._modal == null:
 		var hit: Dictionary = scene._hit_at(at)
 		if not hit.is_empty(): return "deck:%s" % hit["key"]
-	if PlatformInput._normal_duel_active() and scene._duel != null and scene._duel.dialog_open.is_empty() and scene._duel.list_open.is_empty() and not _material_selection(scene):
+	if PlatformInput._normal_duel_active() and scene._duel != null and scene._duel.dialog_open.is_empty() and scene._duel.list_open.is_empty() and not _target_selection(scene):
 		var hit: Dictionary = scene._hit_card(at)
 		if not hit.is_empty(): return "duel:%s:%s:%s:%s" % [hit["p"], hit["loc"], hit["i"], hit["id"]]
 	return ""
@@ -498,6 +498,16 @@ func _material_selection(scene: Node) -> bool:
 	if scene._duel == null: return false
 	var action: int = scene._duel.m.u32(0xa13408)
 	return (action & 2) != 0
+
+
+## Sacrificios o el objetivo de una accion ya elegida, como el monstruo a equipar: el toque es
+## un clic izquierdo directo. 0x53a1a0 deja 0xa1340c en 0/1 mientras se elige la accion de la
+## carta y lo sube a 2 al ejecutarla; vuelve a 0 en reposo (el paso 0xa1340d se conserva).
+## Seleccionar primero y ejecutar "Activar" pulsaba el derecho, que cancela y vuelve a
+## preguntar (issue 4).
+func _target_selection(scene: Node) -> bool:
+	if scene._duel == null: return false
+	return _material_selection(scene) or scene._duel.m.u8(0xa1340c) >= 2
 
 func _update_tribute_hint() -> void:
 	_tribute_hint.hide()
