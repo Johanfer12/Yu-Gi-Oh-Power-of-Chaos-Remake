@@ -6,11 +6,11 @@
 
 **English** | [Español](README.es.md)
 
-[![Download EXE for Windows](https://img.shields.io/badge/Download_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.35/PowerOfChaos.exe)
+[![Download EXE for Windows](https://img.shields.io/badge/Download_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.36/PowerOfChaos.exe)
 
-[![Download Android APK](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.35/PowerOfChaos-Android.apk)
+[![Download Android APK](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.36/PowerOfChaos-Android.apk)
 
-**Direct download · Windows · v0.1.0-alpha.35 preview · No ZIP required**
+**Direct download · Windows · v0.1.0-alpha.36 preview · No ZIP required**
 
 **Bring your Power of Chaos games together in one modern Windows launcher.**
 
@@ -115,7 +115,7 @@ You provide a compatible copy of the game you want to play. The launcher reads i
 
 ## Get started on Windows
 
-1. [Download **`PowerOfChaos.exe`** directly](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.35/PowerOfChaos.exe). Development builds are also available in [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
+1. [Download **`PowerOfChaos.exe`** directly](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.36/PowerOfChaos.exe). Development builds are also available in [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
 2. Put the EXE in a folder where you want to keep the launcher and its saves, then open it.
 3. In **ADD YOUR RESOURCES**, move over the game you want to add and choose **ISO** or **Folder**.
 4. Select a compatible disc image or installed game folder, then click **Extract for PC** and wait for conversion to finish.
@@ -258,6 +258,7 @@ Third-party components retain their own licenses. See [THIRD_PARTY_NOTICES.md](T
 2. Click **Create .pck**. The launcher downloads Godot's resource packer when needed, verifies its SHA-256 checksum and prepares your private resources locally. It opens **`PoC Data/android/pck/`**, containing the **`.pck`** and a JSON validation receipt.
 3. Click **Download APK** to get this version's public APK from GitHub. Copy both the APK and PCK to your Android device.
 4. Install the APK. At first launch, choose **Select .pck resource pack** and select that PCK. Import it once; the app keeps its own copy alongside your saves.
+5. **Adding another game later** (for example Kaiba after Yugi): add it in the PC launcher and click **Create .pck** again; the new pack includes every prepared game. Copy it to the device, then in the Android launcher open **Settings → Save data → Import .pck…**, select it and reopen the app. Your saves and settings are kept.
 
 The normal workflow needs no account, SDK, JDK, Android Studio or personal signing key. The APK is the same public, consistently signed application for every player; the private PCK contains the resources from your games and is never uploaded. Original game resources and the author's signing key are not included in the public download. Initial preparation requires internet and free space; downloaded tools are reused.
 

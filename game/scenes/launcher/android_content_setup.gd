@@ -7,6 +7,10 @@ var _choose: Button
 var _picker: FileDialog
 var _worker: Thread
 var _lang := TEXTS.device_language()
+## true desde el boton Importar .pck de los ajustes: ya hay recursos y se sustituyen; las
+## partidas se conservan y la app se reabre para montar el paquete nuevo.
+var replace := false
+var _back: Button
 
 func _text(key: String) -> String:
 	return TEXTS.text(key, _lang)
@@ -25,12 +29,12 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 22)
 	center.add_child(box)
 	var title := Label.new()
-	title.text = _text("pack_title")
+	title.text = _text("pack_replace_title" if replace else "pack_title")
 	title.add_theme_font_size_override("font_size", 34)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 	var instructions := Label.new()
-	instructions.text = _text("pack_instructions")
+	instructions.text = _text("pack_replace_instructions" if replace else "pack_instructions")
 	instructions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	instructions.custom_minimum_size = Vector2(620, 180)
 	box.add_child(instructions)
@@ -39,6 +43,12 @@ func _ready() -> void:
 	_choose.custom_minimum_size.y = 64
 	_choose.pressed.connect(_select_pack)
 	box.add_child(_choose)
+	if replace:
+		_back = Button.new()
+		_back.text = _text("pack_back")
+		_back.custom_minimum_size.y = 52
+		_back.pressed.connect(Game.open_launcher)
+		box.add_child(_back)
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.custom_minimum_size = Vector2(620, 65)
@@ -62,9 +72,10 @@ func _import_selected(source: String) -> void:
 	if _worker != null:
 		return
 	_choose.disabled = true
+	if _back != null: _back.disabled = true
 	_status.text = _text("pack_copying")
 	_worker = Thread.new()
-	var started := _worker.start(PACK.install_pack.bind(source, Paths.user_content_pack_path()))
+	var started := _worker.start(PACK.install_pack.bind(source, Paths.user_content_pack_path(), replace))
 	if started != OK:
 		_worker = null
 		_show_error("copy")
@@ -75,6 +86,11 @@ func _import_selected(source: String) -> void:
 	_worker = null
 	if not result is Dictionary or not result.get("ok", false):
 		_show_error(str(result.get("error", "copy")) if result is Dictionary else "copy", str(result.get("game", "")) if result is Dictionary else "")
+		return
+	if replace:
+		# El paquete anterior sigue montado en memoria: el nuevo se carga al reabrir la app.
+		_status.text = _text("pack_replaced")
+		if _back != null: _back.disabled = false
 		return
 	if not Paths.mount_user_content_pack():
 		_show_error("resources")
@@ -88,6 +104,7 @@ func _import_selected(source: String) -> void:
 
 func _show_error(reason: String, game := "") -> void:
 	_choose.disabled = false
+	if _back != null: _back.disabled = false
 	match reason:
 		"engine":
 			var title: String = {"yugi": "Yugi", "kaiba": "Kaiba", "joey": "Joey"}.get(game, game)

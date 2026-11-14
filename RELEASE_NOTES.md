@@ -1,3 +1,15 @@
+## v0.1.0-alpha.36
+
+- Android: new **Import .pck…** option in Settings → Save data. To add a game later (for example Kaiba after Yugi), create a new .pck with all your games in the PC launcher, select it there and reopen the app. Your saves and settings are kept (issue #6).
+- Google Drive now has its own cloud button next to Exit, with a status dot, and opens its menu directly.
+- At 2× simulation speed, Yugi's voice lines no longer overlap (for example when he activates Swords of Revealing Light) (issue #5).
+- Exodia: the five pieces are now revealed by a top-to-bottom sweep as in the original, instead of flashing back to white; sparks, arm fade-in and the falling ball also follow the original (issue #5).
+- Smoother card destruction: breaking a card and the character cut-in drops no longer create hundreds of objects per frame, which caused hiccups, especially on phones (issue #5).
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android40 uses the same package and signing certificate as Android39. No new physical-device validation is claimed.
+
+Android: nueva opción **Importar .pck…** en Configuración → Partida para añadir juegos más tarde (por ejemplo Kaiba después de Yugi) sin perder partidas ni ajustes. Google Drive tiene su propio botón de nube junto a Salir. A velocidad x2 las frases de Yugi ya no se pisan; las piezas de Exodia se descubren con el barrido del original, y destruir una carta ya no da tirones.
+
 ## v0.1.0-alpha.35
 
 - Android: choosing the target of a card with a tap works again. After activating an equip card such as Sword of Dark Destruction and pressing OK, tapping the monster kept bringing back "Designate the monster that you wish to equip" instead of equipping it. A single tap now selects the target in Yugi and Kaiba duels (issue #4).

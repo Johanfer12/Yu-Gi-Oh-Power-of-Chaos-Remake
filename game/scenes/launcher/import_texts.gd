@@ -122,6 +122,34 @@ const TEXT := {
 		"f": "Un pack de ressources est déjà enregistré. Ferme puis rouvre l’application pour le charger.",
 		"i": "C'è già un pacchetto di risorse salvato. Chiudi e riapri l'app per caricarlo.",
 		"j": "リソースパックは既に保存されています。読み込むにはアプリを閉じて開き直してください。"},
+	"pack_replace_title": {"s": "Importar otro .pck", "e": "Import another .pck", "g": "Weitere .pck importieren", "f": "Importer un autre .pck", "i": "Importa un altro .pck", "j": "別の .pck を読み込む"},
+	"pack_replace_instructions": {
+		"s": "Para añadir juegos, crea en el launcher de PC un .pck nuevo con todos los juegos que quieras (por ejemplo Yugi y Kaiba), cópialo a este dispositivo y selecciónalo aquí.
+
+Sustituye a los recursos actuales. Tus partidas y ajustes se conservan.",
+		"e": "To add games, use the PC launcher to create a new .pck with every game you want (for example Yugi and Kaiba), copy it to this device and select it here.
+
+It replaces the current resources. Your saved games and settings are kept.",
+		"g": "Um Spiele hinzuzufügen, erstelle im PC-Launcher eine neue .pck mit allen gewünschten Spielen (zum Beispiel Yugi und Kaiba), kopiere sie auf dieses Gerät und wähle sie hier aus.
+
+Sie ersetzt die aktuellen Ressourcen. Spielstände und Einstellungen bleiben erhalten.",
+		"f": "Pour ajouter des jeux, crée dans le lanceur PC un nouveau .pck avec tous les jeux voulus (par exemple Yugi et Kaiba), copie-le sur cet appareil et sélectionne-le ici.
+
+Il remplace les ressources actuelles. Tes sauvegardes et réglages sont conservés.",
+		"i": "Per aggiungere giochi, crea nel launcher per PC un nuovo .pck con tutti i giochi che vuoi (per esempio Yugi e Kaiba), copialo su questo dispositivo e selezionalo qui.
+
+Sostituisce le risorse attuali. Salvataggi e impostazioni vengono conservati.",
+		"j": "ゲームを追加するには、PC ランチャーで追加したいゲームをすべて含む新しい .pck（例：遊戯と海馬）を作成し、この端末にコピーしてここで選択してください。
+
+現在のリソースと置き換わります。セーブデータと設定は保持されます。"},
+	"pack_replaced": {
+		"s": "Recursos sustituidos. Cierra la aplicación por completo y vuelve a abrirla para cargarlos.",
+		"e": "Resources replaced. Close the app completely and reopen it to load them.",
+		"g": "Ressourcen ersetzt. Schließe die App vollständig und öffne sie erneut, um sie zu laden.",
+		"f": "Ressources remplacées. Ferme complètement l’application puis rouvre-la pour les charger.",
+		"i": "Risorse sostituite. Chiudi completamente l'app e riaprila per caricarle.",
+		"j": "リソースを置き換えました。読み込むにはアプリを完全に閉じてから開き直してください。"},
+	"pack_back": {"s": "Volver", "e": "Back", "g": "Zurück", "f": "Retour", "i": "Indietro", "j": "戻る"},
 	"pack_copy_failed": {
 		"s": "No se pudo copiar el archivo. Comprueba el espacio disponible y vuelve a seleccionarlo.",
 		"e": "The file could not be copied. Check available storage and select it again.",

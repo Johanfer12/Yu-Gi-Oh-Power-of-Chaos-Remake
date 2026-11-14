@@ -32,6 +32,7 @@ const SVG_GEAR := SVG_HEAD + "<circle cx='12' cy='12' r='3'/><path d='M19.4 15a1
 const SVG_CLOSE := SVG_HEAD + "<line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg>"
 const SVG_EXIT := SVG_HEAD + "<path d='M18.36 6.64a9 9 0 1 1-12.73 0'/><line x1='12' y1='2' x2='12' y2='12'/></svg>"
 const SVG_UPDATE := SVG_HEAD + "<path d='M20 7a9 9 0 1 0 1 9'/><polyline points='20 2 20 8 14 8'/></svg>"
+const SVG_CLOUD := SVG_HEAD + "<path d='M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z'/></svg>"
 
 const DEFAULT_VOLUME := 0.5
 var volume := DEFAULT_VOLUME
@@ -49,7 +50,7 @@ var _reset_dialog := ConfirmationDialog.new()
 var _reset_result := AcceptDialog.new()
 var _cloud_dialog: AcceptDialog = preload("res://scenes/launcher/cloud_dialog.gd").new()
 const DialogTheme = preload("res://scenes/launcher/dialog_theme.gd")
-var _save_choice := "reset"  # fila Partida: "reset" o "cloud"
+var _save_choice := "reset"  # fila Partida: "reset" o "pack" (Importar .pck, solo Android)
 
 
 func _ready() -> void:
@@ -69,7 +70,7 @@ func _ready() -> void:
 	muted = bool(saved.get("music_muted", false))
 	pointer_mode = str(saved.get("pointer_mode", "menu"))
 	for pair in [["sound", SVG_SOUND], ["muted", SVG_MUTED], ["gear", SVG_GEAR],
-			["close", SVG_CLOSE], ["exit", SVG_EXIT], ["update", SVG_UPDATE]]:
+			["close", SVG_CLOSE], ["exit", SVG_EXIT], ["update", SVG_UPDATE], ["cloud", SVG_CLOUD]]:
 		_icons[pair[0]] = _rasterize(pair[1])
 
 
@@ -99,8 +100,13 @@ func _exit_center() -> Vector2:
 	return Vector2(_screen().x - MARGIN - RADIUS, _screen().y - MARGIN - RADIUS)
 
 
-func _update_center() -> Vector2:
+## Google Drive: medallon propio junto al de salir (antes en el panel de ajustes).
+func _cloud_center() -> Vector2:
 	return _exit_center() - Vector2(RADIUS * 2.0 + 14.0, 0)
+
+
+func _update_center() -> Vector2:
+	return _cloud_center() - Vector2(RADIUS * 2.0 + 14.0, 0)
 
 
 func _settings_center() -> Vector2:
@@ -126,11 +132,18 @@ func _reset_row() -> int:
 	return 7 if _mobile_controls() else 6
 
 
-## Fila Partida partida en dos: reiniciar a la izquierda, Google Drive a la derecha.
+## Android con recursos importados: Importar .pck sustituye el paquete (p. ej. para añadir Kaiba).
+func _pack_available() -> bool:
+	return Paths.android_platform() and FileAccess.file_exists(Paths.user_content_pack_path())
+
+
+## Fila Partida: reiniciar; en Android con recursos, a la derecha Importar .pck.
 func _save_rect(choice: String) -> Rect2:
 	var box := _control_rect(_reset_row())
+	if not _pack_available():
+		return box if choice == "reset" else Rect2()
 	var width := (box.size.x - 8.0) / 2.0
-	return Rect2(box.position + Vector2(width + 8.0 if choice == "cloud" else 0.0, 0), Vector2(width, box.size.y))
+	return Rect2(box.position + Vector2(width + 8.0 if choice == "pack" else 0.0, 0), Vector2(width, box.size.y))
 
 
 func _close_center() -> Vector2:
@@ -162,7 +175,7 @@ func _option_rect(row: int) -> Rect2:
 
 func _hit(pos: Vector2) -> String:
 	if panel_open:
-		for choice in ["reset", "cloud"]:
+		for choice in ["reset", "pack"]:
 			if _save_rect(choice).has_point(pos):
 				return choice
 		if _mobile_controls():
@@ -183,6 +196,8 @@ func _hit(pos: Vector2) -> String:
 		return "settings"
 	if pos.distance_to(_exit_center()) <= RADIUS:
 		return "exit"
+	if pos.distance_to(_cloud_center()) <= RADIUS:
+		return "cloud"
 	if update_available and pos.distance_to(_update_center()) <= RADIUS:
 		return "update"
 	return ""
@@ -227,9 +242,11 @@ func _input(event: InputEvent) -> void:
 				_save_choice = "reset"
 				_request_reset()
 			"cloud":
-				_focused_row = _reset_row()
-				_save_choice = "cloud"
 				_cloud_dialog.popup_centered()
+			"pack":
+				_focused_row = _reset_row()
+				_save_choice = "pack"
+				_import_pack()
 			"hold", "menu":
 				pointer_mode = _hit(local_pos)
 				_focused_row = 6
@@ -265,17 +282,23 @@ func _input(event: InputEvent) -> void:
 			_save()
 		elif _focused_row < _reset_row():
 			_cycle_option(_focused_row - 1, step)
-		else:
-			_save_choice = "cloud" if _save_choice == "reset" else "reset"
+		elif _pack_available():
+			_save_choice = "pack" if _save_choice == "reset" else "reset"
 	elif event.is_action_pressed("ui_accept"):
 		if _focused_row == _reset_row():
-			if _save_choice == "cloud":
-				_cloud_dialog.popup_centered()
+			if _save_choice == "pack" and _pack_available():
+				_import_pack()
 			else:
 				_request_reset()
 		elif _focused_row >= 1:
 			_cycle_option(_focused_row - 1, 1)
 	get_viewport().set_input_as_handled()
+
+
+func _import_pack() -> void:
+	var setup: Control = load("res://scenes/launcher/android_content_setup.gd").new()
+	setup.replace = true
+	Game.goto(setup)
 
 
 func _request_reset() -> void:
@@ -377,6 +400,8 @@ func _draw() -> void:
 	_medallion(_settings_center(), RADIUS, "gear", _hover == "settings" or panel_open)
 	_medallion(_sound_center(), RADIUS, "muted" if muted else "sound", _hover == "sound")
 	_medallion(_exit_center(), RADIUS, "exit", _hover == "exit")
+	_medallion(_cloud_center(), RADIUS, "cloud", _hover == "cloud")
+	draw_circle(_cloud_center() + Vector2(17, -17), 5, _cloud_dot())
 	if update_available:
 		_medallion(_update_center(), RADIUS, "update", _hover == "update")
 		draw_circle(_update_center() + Vector2(17, -17), 5, GOLD_LIGHT)
@@ -390,12 +415,21 @@ func _draw() -> void:
 		draw_rect(bubble, Color(0.04, 0.03, 0.05, 0.97))
 		draw_rect(bubble, Color(GOLD, 0.45), false, 1.0)
 		_label(text, pos)
+	if _hover == "cloud" and not panel_open:
+		var width := _font.get_string_size("Google Drive", HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
+		_label("Google Drive", _cloud_center() + Vector2(-width / 2.0, -RADIUS - 10))
 	if _hover == "exit" and not panel_open:
 		var text: String = {"s": "Salir", "e": "Exit", "g": "Beenden", "f": "Quitter", "i": "Esci", "j": "終了"}.get(Assets.lang, "Exit")
 		var width := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
 		_label(text, _exit_center() + Vector2(-width / 2.0, -RADIUS - 10))
 	if panel_open:
 		_draw_panel()
+
+
+## Punto de estado de Drive: gris sin vincular, verde al dia, oro trabajando, rojo error o conflicto.
+func _cloud_dot() -> Color:
+	return {"off": Color(0.45, 0.42, 0.38), "idle": Color(0.35, 0.8, 0.4), "syncing": GOLD,
+		"linking": GOLD}.get(CloudSync.state, Color(0.9, 0.3, 0.25))
 
 
 ## Medallon dorado: sombra, aro de oro con bisel y brillo superior, fondo de piedra oscura.
@@ -476,20 +510,17 @@ func _draw_panel() -> void:
 			var width := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
 			_label_mid(label, box.get_center() - Vector2(width / 2.0, 0), 16, GOLD_LIGHT if selected else GOLD)
 	var reset_box := _save_rect("reset")
-	var cloud_box := _save_rect("cloud")
 	var reset_hot := _hover == "reset" or (_focused_row == _reset_row() and _save_choice == "reset")
-	var cloud_hot := _hover == "cloud" or (_focused_row == _reset_row() and _save_choice == "cloud")
 	_label_mid("Partida" if spanish else "Save data", Vector2(r.position.x + 36, reset_box.get_center().y), 17, GOLD_LIGHT)
 	_round_rect(reset_box, Color(0.20, 0.035, 0.03), 7, GOLD if reset_hot else Color(GOLD, 0.35))
 	var reset_label := "Reiniciar…" if spanish else "Reset…"
 	_label_mid(reset_label, reset_box.get_center() - Vector2(_font.get_string_size(reset_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x / 2.0, 0), 16, GOLD_LIGHT)
-	_round_rect(cloud_box, STONE, 7, GOLD if cloud_hot else Color(GOLD, 0.35))
-	# Punto de estado: gris sin vincular, verde al dia, oro trabajando, rojo error o conflicto.
-	var dot: Color = {"off": Color(0.45, 0.42, 0.38), "idle": Color(0.35, 0.8, 0.4), "syncing": GOLD,
-		"linking": GOLD}.get(CloudSync.state, Color(0.9, 0.3, 0.25))
-	var cloud_left := cloud_box.get_center().x - (_font.get_string_size("Google Drive…", HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 13.0) / 2.0
-	draw_circle(Vector2(cloud_left + 4.0, cloud_box.get_center().y), 4.0, dot, true, -1.0, true)
-	_label_mid("Google Drive…", Vector2(cloud_left + 13.0, cloud_box.get_center().y), 16, GOLD_LIGHT)
+	if _pack_available():
+		var pack_box := _save_rect("pack")
+		var pack_hot := _hover == "pack" or (_focused_row == _reset_row() and _save_choice == "pack")
+		_round_rect(pack_box, STONE, 7, GOLD if pack_hot else Color(GOLD, 0.35))
+		var pack_label := "Importar .pck…" if spanish else "Import .pck…"
+		_label_mid(pack_label, pack_box.get_center() - Vector2(_font.get_string_size(pack_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x / 2.0, 0), 16, GOLD_LIGHT)
 	var foot := r.end.y - 34
 	draw_line(Vector2(r.position.x + 36, foot - 16), Vector2(r.end.x - 36, foot - 16), Color(GOLD, 0.18), 1.0, true)
 	var status: String = CardTranslations.status_text(spanish) if LauncherSettings.improved_card_texts else ("Traducciones: solo nombres y descripciones de cartas" if spanish else "Translations: card names and descriptions only")

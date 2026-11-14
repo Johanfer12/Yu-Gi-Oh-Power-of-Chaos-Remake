@@ -203,8 +203,10 @@ static func exodia_particles(event: Dictionary, frame: int) -> void:
 	if counter < 316 or counter >= 444:
 		return
 	var scan := (counter - 316) * 2
+	# 43d168..43d1f0: fila del barrido dentro del brillo card_hikari (201 de alto) y margen 28
+	# de exodia.txt por arriba y por abajo.
 	var height := int(201 * scan / 256)
-	if height <= 28 or height >= scan - 28:
+	if height <= 28 or height >= 201 - 28:
 		return
 	var visual_rng: UiRandom = event.get("particle_rng")
 	var particles: Array = event.get_or_add("particles", [])
@@ -212,7 +214,8 @@ static func exodia_particles(event: Dictionary, frame: int) -> void:
 		var center := exodia_card_position(n)
 		for pair in 2:
 			var x := int((visual_rng.next() if visual_rng else UiRandom.draw()) % 100) - 50
-			particles.append({"birth": frame, "pos": center + Vector2(x, height - int(scan / 2))})
+			# 43d232..43d245: nacen sobre la linea del barrido (centro - 201/2 + fila).
+			particles.append({"birth": frame, "pos": center + Vector2(x, height - 100)})
 
 static func _exodia(owner: Node2D, event: Dictionary, frame: int) -> void:
 	var counter := maxi(0, frame * 4)
@@ -234,14 +237,18 @@ static func _exodia(owner: Node2D, event: Dictionary, frame: int) -> void:
 				var card: Sprite2D = owner._card(EXODIA_CARDS[n],pos,true,CARD_SIZE*factor)
 				if card: card.modulate.a=clampf(alpha,0,1)
 				if counter < 444:
+					# 43d168..43d1d5: el brillo solo queda por debajo de la linea del barrido
+					# (RECT {0, fila, ancho, alto} copiado en su sitio), de modo que la carta se
+					# descubre de arriba abajo.
 					var scan := (counter-316)*2
 					var texture := _texture(owner,"card_hikari","exodia")
 					var glow: Sprite2D = owner._asset("card_hikari",pos,1,1,0,"exodia")
 					if glow:
-						var visible_height := int(texture.get_height()*scan/256)
+						var h := texture.get_height()
+						var row := int(h*scan/256)
 						glow.region_enabled=true
-						glow.region_rect=Rect2(0,0,texture.get_width(),visible_height)
-						glow.position.y=pos.y-int(scan/2)+int(visible_height/2)
+						glow.region_rect=Rect2(0,row,texture.get_width(),h-row)
+						glow.position.y=pos.y-int(h/2)+row+(h-row)/2.0
 		for particle in event.get("particles",[]):
 			var age := frame-int(particle.birth)
 			if age>=0 and age<6:
@@ -258,7 +265,8 @@ static func _exodia(owner: Node2D, event: Dictionary, frame: int) -> void:
 	_exodia_pose(owner, stage, counter)
 	if counter >= 644 and counter < 836 and ((counter - 644) / 8 % 2) != 0:
 		_exodia_pose(owner, 2, counter)
-	var drop := int((255-clampi((counter-572)*4,0,255))/4) if counter<644 else 0
+	# 43cc54..43cd2a: la bola cae segun su propia opacidad (4p - 32), no la de la cara.
+	var drop := int((255-clampi((counter-572)*4-32,0,255))/4) if counter<644 else 0
 	if counter >= 836:
 		# 43c249..43c34a stores pose3 AND the original-size ball in surface1.
 		# The four clipped enlarged copies are drawn onto that retained image.
@@ -297,15 +305,20 @@ static func _exodia(owner: Node2D, event: Dictionary, frame: int) -> void:
 		owner.add_child(group)
 		for part in parts: part.reparent(group)
 
+## 43ca35..43cbe0 (aparicion, p = contador - 572): los dos brazos con opacidad 4p - 32 y la
+## cara con 4p; cada parte cae (255 - su opacidad) / 4. Despues todo queda opaco y quieto.
 static func _exodia_pose(owner: Node2D, stage: int, counter: int) -> void:
 	var face := Vector2(400+(2 if stage==2 else 1),271 if stage==2 else 178)
 	var arm_x := 101 if stage==2 else 233 if stage==3 else 167
 	var arm_y := 370 if stage==2 else 315 if stage==3 else 289
-	var alpha := clampi((counter-572)*4,0,255)
-	var drop := int((255-alpha)/4) if counter<644 else 0
-	owner._asset("exo_arm%d"%stage,Vector2(400-arm_x,arm_y+drop),1,alpha/256.0,0,"exodia")
-	owner._asset("exo_arml%d"%stage,Vector2(400+arm_x,arm_y),1,alpha/256.0,0,"exodia")
-	owner._asset("exo_face%d"%stage,face+Vector2(0,drop),1,alpha/256.0,0,"exodia")
+	var face_alpha := clampi((counter-572)*4,0,255)
+	var arm_alpha := clampi((counter-572)*4-32,0,255)
+	var fading := counter < 644
+	var face_drop := int((255-face_alpha)/4) if fading else 0
+	var arm_drop := int((255-arm_alpha)/4) if fading else 0
+	owner._asset("exo_arm%d"%stage,Vector2(400-arm_x,arm_y+arm_drop),1,arm_alpha/256.0,0,"exodia")
+	owner._asset("exo_arml%d"%stage,Vector2(400+arm_x,arm_y+arm_drop),1,arm_alpha/256.0,0,"exodia")
+	owner._asset("exo_face%d"%stage,face+Vector2(0,face_drop),1,face_alpha/256.0,0,"exodia")
 
 static func _coin(owner: Node2D, event: Dictionary, frame: int) -> void:
 	var args: Array = event.get("args", [])

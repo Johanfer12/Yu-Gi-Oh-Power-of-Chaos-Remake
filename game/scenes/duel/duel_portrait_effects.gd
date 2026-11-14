@@ -1,5 +1,6 @@
 extends RefCounted
 ## Recursos y condiciones de Yugi originales; reloj visual separado del RNG del duelo.
+const RegionBatch = preload("res://scenes/duel/duel_region_batch.gd")
 static var _voice_ms: Dictionary = {}
 static var _fade_shader: Shader
 static var _joey_flip_turns: Dictionary = {}
@@ -17,12 +18,16 @@ static func native_cos(angle: int) -> int:
 	# 5325a0: cos(angle*pi/256)*65536, __ftol trunca hacia cero.
 	return int(cos((angle & 511) * PI / 256.0) * 65536.0)
 
+## Duracion de la voz en milisegundos de juego. El audio suena a velocidad real aunque la
+## simulacion vaya a 2x (Engine.time_scale), asi que una espera "mientras suena la voz" medida
+## en ticks tiene que durar time_scale veces mas; si no, a 2x la siguiente voz pisaba a la
+## anterior (Yugi_15/16 y Yugi_17 de Swords of Revealing Light, issue 5).
 static func voice_ms(path: String) -> int:
 	if not _voice_ms.has(path):
 		var resolved: String = Assets.resolve(path)
 		var stream: AudioStream = Audio._load(resolved) if resolved != "" else null
 		_voice_ms[path] = int(stream.get_length() * 1000) if stream != null else 0
-	return _voice_ms[path]
+	return int(_voice_ms[path] * maxf(1.0, Engine.time_scale))
 
 static func animation_index(code: int, group: int, frame: int, voice_duration_ms: int, tick: int) -> int:
 	var mode := code % 1000
@@ -584,10 +589,11 @@ static func _render_gofu(owner: Node2D, event: Dictionary, frame: int) -> void:
 		# caer las 424 siguientes con el coseno de 0xa0f2c0.
 		var extent := c * 16
 		var first := maxi(0, extent - 424)
-		for y in mini(600, first): _strip(owner, texture, Rect2(0, y, 800, 1), Vector2(0, y))
+		var strips := _strips(owner, texture)
+		for y in mini(600, first): strips.add(Rect2(0, y, 800, 1), Vector2(0, y))
 		for y in range(first, mini(600, extent)):
 			var angle := ((y - extent + 424) * 128) / 424
-			_strip(owner, texture, Rect2(0, y, 800, 1), Vector2(0, y + ((65536 - native_cos(angle)) * 600 >> 16)))
+			strips.add(Rect2(0, y, 800, 1), Vector2(0, y + ((65536 - native_cos(angle)) * 600 >> 16)))
 		return
 	_sprite(owner, "yugi", layout.resource(0), Vector2.ZERO)
 	var speech := 9 + int(event["random"])
@@ -758,11 +764,12 @@ static func _render_blueeyes(owner: Node2D, event: Dictionary, frame: int) -> vo
 		var texture := Assets.texture("kaiba/bust_up/" + layout.resource(0))
 		var extent := counter * 16
 		var first := maxi(0, extent - 424)
-		for y in mini(600, first): _strip(owner, texture, Rect2(0, y, 800, 1), Vector2(0, y))
+		var strips := _strips(owner, texture)
+		for y in mini(600, first): strips.add(Rect2(0, y, 800, 1), Vector2(0, y))
 		for y in range(first, mini(600, extent)):
 			var angle := ((y - extent + 424) * 128) / 424
 			var destination := y + ((65536 - native_cos(angle)) * 600 >> 16)
-			_strip(owner, texture, Rect2(0, y, 800, 1), Vector2(0, destination))
+			strips.add(Rect2(0, y, 800, 1), Vector2(0, destination))
 	if counter >= 64:
 		for pair in [[1, 2], [3, 4]]:
 			var index: int = pair[0] if counter == 64 else pair[1]
@@ -830,11 +837,9 @@ void fragment() {
 			material.set_shader_parameter("width", size.x)
 			label.material = material
 
-static func _strip(owner: Node2D, texture: Texture2D, rect: Rect2, position: Vector2) -> void:
-	var sprite := Sprite2D.new()
-	sprite.centered = false
-	sprite.texture = texture
-	sprite.region_enabled = true
-	sprite.region_rect = rect
-	sprite.position = position
-	owner.add_child(sprite)
+## Filas de la caida de la viñeta: un solo nodo para todas (antes un Sprite2D por fila).
+static func _strips(owner: Node2D, texture: Texture2D) -> RegionBatch:
+	var batch := RegionBatch.new()
+	batch.texture = texture
+	owner.add_child(batch)
+	return batch

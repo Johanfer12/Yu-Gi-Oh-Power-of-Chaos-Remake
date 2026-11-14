@@ -3,6 +3,7 @@ extends RefCounted
 const Math = preload("res://scenes/duel/duel_visual_math.gd")
 const Geometry = preload("res://scenes/duel/duel_geometry.gd")
 const Portrait = preload("res://scenes/duel/duel_portrait_effects.gd")
+const RegionBatch = preload("res://scenes/duel/duel_region_batch.gd")
 static var _white_card: Shader
 static var _attacks: Dictionary = {}
 static var _break_noise := PackedInt32Array()
@@ -403,6 +404,9 @@ static func _break_card(owner: Node2D, event: Dictionary, counter: int) -> void:
 	var size := Vector2i(texture.get_size())
 	var progress := 256 - (Math.cos_fx(counter / 2 - 128) >> 8)
 	var spread := size.x + size.y - (((size.x + size.y) * progress) >> 8)
+	var batch := RegionBatch.new()
+	batch.texture = texture
+	owner.add_child(batch)
 	for y in range(0, size.y, 2):
 		for x in range(0, size.x, 4):
 			var dx := x - size.x / 2
@@ -413,13 +417,7 @@ static func _break_card(owner: Node2D, event: Dictionary, counter: int) -> void:
 				dy = Math.trunc_div(dy * 256, distance)
 			var row := y / 2
 			var offset := Vector2((_break_noise[(row * 26 + x) & 255] * dx * spread) >> 16, (_break_noise[(row * 38 + 1 + x) & 255] * dy * spread) >> 16)
-			var sprite := Sprite2D.new()
-			sprite.texture = texture
-			sprite.centered = false
-			sprite.region_enabled = true
-			sprite.region_rect = Rect2(x, y, mini(4, size.x - x), mini(2, size.y - y))
-			sprite.position = center - Vector2(size / 2) + Vector2(x, y) + offset
-			owner.add_child(sprite)
+			batch.add(Rect2(x, y, mini(4, size.x - x), mini(2, size.y - y)), center - Vector2(size / 2) + Vector2(x, y) + offset)
 
 static func _shuffle(owner: Node2D, event: Dictionary, counter: int) -> void:
 	var center := Vector2(525, 300)

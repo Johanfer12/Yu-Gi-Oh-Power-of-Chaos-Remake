@@ -81,10 +81,12 @@ static func validate_pack(path: String) -> Dictionary:
 		return {"ok": false, "error": "resources"}
 	return {"ok": true, "files": count, "inventory": inventory}
 
-static func install_pack(source: String, target: String) -> Dictionary:
+## `replace`: sustituye un paquete valido ya instalado (boton Importar .pck de los ajustes, p. ej.
+## para añadir Kaiba); el anterior se borra al terminar bien para no ocupar el doble.
+static func install_pack(source: String, target: String, replace := false) -> Dictionary:
 	if source.is_empty():
 		return {"ok": false, "error": "cancelled"}
-	if FileAccess.file_exists(target) and validate_pack(target).ok:
+	if not replace and FileAccess.file_exists(target) and validate_pack(target).ok:
 		return {"ok": false, "error": "installed"}
 	var input := FileAccess.open(source, FileAccess.READ)
 	if input == null:
@@ -132,4 +134,7 @@ static func install_pack(source: String, target: String) -> Dictionary:
 			DirAccess.rename_absolute(previous, target)
 		DirAccess.remove_absolute(temporary)
 		return {"ok": false, "error": "copy"}
+	if replace and not previous.is_empty():
+		DirAccess.remove_absolute(previous)
+		previous = ""
 	return {"ok": true, "files": inspected.files, "previous": previous}
