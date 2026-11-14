@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Power of Chaos Remake"
-config/version="0.1.0-alpha.36"
+config/version="0.1.0-alpha.37"
 config/icon="res://assets/icons/launcher.svg"
 config/windows_native_icon="res://assets/icons/launcher.ico"
 config/description="Reimplementación en Godot de Power of Chaos (Yugi, Kaiba y Joey). Requiere los recursos de las copias del usuario."
@@ -42,6 +42,8 @@ Lan="*res://autoload/lan.gd"
 
 client_id="576199955073-1um5de1sbn7uhra0f7llb931pumb96ip.apps.googleusercontent.com"
 client_secret=""
+desktop_client_id="576199955073-dptg6rrngjtouou8vakt75o3a21rmvdr.apps.googleusercontent.com"
+desktop_client_secret=""
 
 [debug]
 

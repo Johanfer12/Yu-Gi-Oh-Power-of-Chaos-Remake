@@ -1,7 +1,9 @@
 extends Node
 ## Sincroniza saves/system.json entre PC y Android a traves de Google Drive.
-## Como el GDriveBackupManager de SmartTube: flujo OAuth para dispositivos (codigo que se
-## introduce en google.com/device), permiso drive.file (solo ve lo que crea el juego) y la
+## Vinculacion por navegador (cliente "App de escritorio": pagina normal de Google, PKCE y
+## respuesta a un puerto local 127.0.0.1, sin codigo ni canal de YouTube). Si la version no
+## trae ese cliente, flujo OAuth para dispositivos (codigo en google.com/device) como el
+## GDriveBackupManager de SmartTube. Permiso drive.file (solo ve lo que crea el juego) y la
 ## API REST v3 sin SDK. A diferencia de SmartTube no sobrescribe a ciegas: compara los MD5
 ## local y remoto con los del ultimo acuerdo y, si cambiaron ambos, pregunta al jugador.
 
@@ -30,6 +32,13 @@ var _oauth := "https://oauth2.googleapis.com"
 var _api := "https://www.googleapis.com"
 var _client_id := ""
 var _client_secret := ""
+## Cliente "App de escritorio" (vinculacion por navegador).
+var _desktop_id := ""
+var _desktop_secret := ""
+## Cliente con el que se emitio el refresh token guardado: "tv" (dispositivo) o "desktop".
+## Cada token se renueva con su cliente, asi que quien ya estaba vinculado no repite nada.
+var _token_client := "tv"
+var browser_mode := false
 var _refresh_token := ""
 var _access_token := ""
 var _access_expiry := 0.0
@@ -47,11 +56,15 @@ var _upload_timer := Timer.new()
 func _ready() -> void:
 	_client_id = str(ProjectSettings.get_setting("cloud_sync/client_id", ""))
 	_client_secret = str(ProjectSettings.get_setting("cloud_sync/client_secret", ""))
-	# Cliente propio sin recompilar: PoC Data/cloud.cfg con [client] id y secret.
+	_desktop_id = str(ProjectSettings.get_setting("cloud_sync/desktop_client_id", ""))
+	_desktop_secret = str(ProjectSettings.get_setting("cloud_sync/desktop_client_secret", ""))
+	# Cliente propio sin recompilar: PoC Data/cloud.cfg con [client] id/secret y desktop_id/desktop_secret.
 	var config := ConfigFile.new()
 	if config.load(Paths.storage_dir.path_join("cloud.cfg")) == OK:
 		_client_id = str(config.get_value("client", "id", _client_id))
 		_client_secret = str(config.get_value("client", "secret", _client_secret))
+		_desktop_id = str(config.get_value("client", "desktop_id", _desktop_id))
+		_desktop_secret = str(config.get_value("client", "desktop_secret", _desktop_secret))
 	_upload_timer.one_shot = true
 	_upload_timer.timeout.connect(sync_now.bind(false))
 	add_child(_upload_timer)
@@ -69,16 +82,29 @@ func reload() -> void:
 		last_sync = int(config.get_value("sync", "last_sync", 0))
 	_refresh_token = ""
 	_access_token = ""
+	_token_client = "tv"
 	var file := FileAccess.open_encrypted_with_pass(_token_path(), FileAccess.READ, _token_key())
 	if file != null:
 		_refresh_token = file.get_as_text().strip_edges()
+		if _refresh_token.begins_with("desktop:"):
+			_token_client = "desktop"
+			_refresh_token = _refresh_token.trim_prefix("desktop:")
 	_set_state("idle" if linked() else "off")
 
 
-## El secreto no esta en las fuentes publicas: GitHub Actions lo anade al compilar
-## (GOOGLE_OAUTH_CLIENT_SECRET). En local se usa PoC Data/cloud.cfg.
+## Los secretos no estan en las fuentes publicas: GitHub Actions los anade al compilar
+## (GOOGLE_OAUTH_CLIENT_SECRET y GOOGLE_OAUTH_DESKTOP_CLIENT_SECRET). En local, PoC Data/cloud.cfg.
 func available() -> bool:
-	return _client_id != "" and _client_secret != "" and not Paths.storage_error
+	return (_desktop_available() or (_client_id != "" and _client_secret != "")) and not Paths.storage_error
+
+
+func _desktop_available() -> bool:
+	return _desktop_id != "" and _desktop_secret != ""
+
+
+## [id, secreto] del cliente que emitio el token guardado.
+func _token_credentials() -> Array:
+	return [_desktop_id, _desktop_secret] if _token_client == "desktop" else [_client_id, _client_secret]
 
 
 func linked() -> bool:
@@ -106,7 +132,11 @@ func link() -> void:
 	var serial := _link_serial
 	user_code = ""
 	verification_url = ""
+	browser_mode = _desktop_available()
 	_set_state("linking")
+	if browser_mode:
+		await _link_browser(serial)
+		return
 	var response := await _post_form(_oauth + "/device/code", {"client_id": _client_id, "scope": SCOPE})
 	if serial != _link_serial:
 		return
@@ -137,7 +167,7 @@ func link() -> void:
 			"":
 				if response.code == 200 and token.has("refresh_token"):
 					_accept_token(token)
-					if not _store_token(str(token.refresh_token)):
+					if not _store_token(str(token.refresh_token), "tv"):
 						_set_state("off", "No se pudo guardar la sesión. / Could not store the session.")
 						return
 					_sync = {}
@@ -149,6 +179,118 @@ func link() -> void:
 		return
 	if serial == _link_serial:
 		_set_state("off", "El código caducó. / The code expired.")
+
+
+## Navegador del sistema con la pagina de Google; la respuesta llega a 127.0.0.1:<puerto>.
+## En Android la app queda en segundo plano: la conexion espera en el puerto hasta volver.
+func _link_browser(serial: int) -> void:
+	var server := TCPServer.new()
+	if server.listen(0, "127.0.0.1") != OK:
+		_set_state("off", "No se pudo abrir el puerto local. / Could not open the local port.")
+		return
+	var redirect := "http://127.0.0.1:%d" % server.get_local_port()
+	var verifier := _random_text(64)
+	var expected_state := _random_text(24)
+	var params := {"client_id": _desktop_id, "redirect_uri": redirect, "response_type": "code", "scope": SCOPE,
+			"code_challenge": pkce_challenge(verifier), "code_challenge_method": "S256", "state": expected_state,
+			"access_type": "offline", "prompt": "consent"}
+	var query := PackedStringArray()
+	for key in params:
+		query.append("%s=%s" % [key, str(params[key]).uri_encode()])
+	verification_url = "https://accounts.google.com/o/oauth2/v2/auth?" + "&".join(query)
+	changed.emit()
+	OS.shell_open(verification_url)
+	var answer := {}
+	var deadline := Time.get_unix_time_from_system() + 600.0
+	while answer.is_empty() and Time.get_unix_time_from_system() < deadline:
+		await get_tree().create_timer(0.1).timeout
+		if serial != _link_serial:
+			server.stop()
+			return
+		if server.is_connection_available():
+			answer = await _read_redirect(server.take_connection())
+			# Peticiones sin respuesta de OAuth (p. ej. /favicon.ico): seguir esperando.
+			if not answer.has("code") and not answer.has("error"):
+				answer = {}
+	server.stop()
+	if serial != _link_serial:
+		return
+	if answer.is_empty():
+		_set_state("off", "Se agotó el tiempo. / Timed out.")
+		return
+	if str(answer.get("state", "")) != expected_state or not answer.has("code"):
+		_set_state("off", "Google no dio acceso (%s). / Google did not grant access." % answer.get("error", "?"))
+		return
+	var response := await _post_form(_oauth + "/token", {"client_id": _desktop_id, "client_secret": _desktop_secret,
+			"code": answer.code, "code_verifier": verifier, "redirect_uri": redirect, "grant_type": "authorization_code"})
+	if serial != _link_serial:
+		return
+	var token := _json(response)
+	if response.code != 200 or not token.has("refresh_token"):
+		_set_state("off", _error_text(response, token))
+		return
+	_accept_token(token)
+	if not _store_token(str(token.refresh_token), "desktop"):
+		_set_state("off", "No se pudo guardar la sesión. / Could not store the session.")
+		return
+	_sync = {}
+	verification_url = ""
+	_set_state("idle")
+	sync_now(true)
+
+
+## Lee la peticion GET del navegador, contesta con una pagina breve y devuelve su query.
+func _read_redirect(peer: StreamPeerTCP) -> Dictionary:
+	var request := PackedByteArray()
+	var until := Time.get_ticks_msec() + 5000
+	while Time.get_ticks_msec() < until and request.get_string_from_utf8().find("\r\n\r\n") < 0:
+		peer.poll()
+		var pending := peer.get_available_bytes()
+		if pending > 0:
+			var chunk: Array = peer.get_data(pending)
+			if chunk[0] == OK: request.append_array(chunk[1])
+		else:
+			await get_tree().process_frame
+	var result := parse_redirect(request.get_string_from_utf8().get_slice("\r\n", 0))
+	var ok := result.has("code")
+	var page := ("<!doctype html><meta charset=utf-8><title>Power of Chaos Remake</title>" +
+		"<body style=\"font-family:sans-serif;background:#140d12;color:#f5e6b3;text-align:center;padding-top:15vh\">" +
+		("<h2>Cuenta de Google conectada</h2><p>Ya puedes volver al juego.</p><p>Google account connected. You can return to the game.</p>" if ok
+		else "<h2>No se conectó</h2><p>Vuelve al juego e inténtalo de nuevo.</p><p>Not connected. Return to the game and try again.</p>"))
+	var body := page.to_utf8_buffer()
+	var head := "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: %d\r\nConnection: close\r\n\r\n" % body.size()
+	peer.put_data(head.to_utf8_buffer() + body)
+	peer.poll()
+	peer.disconnect_from_host()
+	return result
+
+
+## "GET /?state=..&code=.. HTTP/1.1" -> {"state": ..., "code": ...}
+static func parse_redirect(request_line: String) -> Dictionary:
+	var parts := request_line.split(" ")
+	if parts.size() < 2 or parts[0] != "GET" or parts[1].find("?") < 0:
+		return {}
+	var result := {}
+	for pair in parts[1].get_slice("?", 1).split("&", false):
+		result[pair.get_slice("=", 0).uri_decode()] = pair.get_slice("=", 1).uri_decode() if pair.find("=") >= 0 else ""
+	return result
+
+
+## RFC 7636: BASE64URL(SHA256(verificador)) sin relleno.
+static func pkce_challenge(verifier: String) -> String:
+	var digest := HashingContext.new()
+	digest.start(HashingContext.HASH_SHA256)
+	digest.update(verifier.to_ascii_buffer())
+	return Marshalls.raw_to_base64(digest.finish()).replace("+", "-").replace("/", "_").replace("=", "")
+
+
+static func _random_text(length: int) -> String:
+	const ALPHABET := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+	var bytes := Crypto.new().generate_random_bytes(length)
+	var out := ""
+	for b in bytes:
+		out += ALPHABET[b % ALPHABET.length()]
+	return out
 
 
 func cancel_link() -> void:
@@ -425,7 +567,8 @@ func _download() -> Dictionary:
 func _ensure_token() -> bool:
 	if _access_token != "" and Time.get_unix_time_from_system() < _access_expiry - 60.0:
 		return true
-	var response := await _post_form(_oauth + "/token", {"client_id": _client_id, "client_secret": _client_secret,
+	var credentials := _token_credentials()
+	var response := await _post_form(_oauth + "/token", {"client_id": credentials[0], "client_secret": credentials[1],
 			"refresh_token": _refresh_token, "grant_type": "refresh_token"})
 	var data := _json(response)
 	if response.code == 200 and data.has("access_token"):
@@ -512,13 +655,15 @@ func _token_key() -> String:
 	return "poc-remake-drive:" + OS.get_unique_id()
 
 
-func _store_token(token: String) -> bool:
+func _store_token(token: String, client := "tv") -> bool:
 	var file := FileAccess.open_encrypted_with_pass(_token_path(), FileAccess.WRITE, _token_key())
 	if file == null:
 		return false
-	file.store_string(token)
+	# Los tokens del cliente de escritorio llevan prefijo; los antiguos, sin prefijo, son "tv".
+	file.store_string(("desktop:" if client == "desktop" else "") + token)
 	file.close()
 	_refresh_token = token
+	_token_client = client
 	return true
 
 

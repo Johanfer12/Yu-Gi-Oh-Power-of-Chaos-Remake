@@ -33,7 +33,12 @@ func _refresh() -> void:
 						else "Sync cards, decks and results between PC and Android through your Google Drive. The game can only see the files it creates.")
 				_add("Conectar" if spanish else "Connect", "link")
 			"linking":
-				if CloudSync.user_code == "":
+				if CloudSync.browser_mode:
+					lines.append("Se abrió tu navegador con la página de Google: elige tu cuenta y permite el acceso. Esta ventana se actualizará sola." if spanish
+							else "Your browser opened Google's page: choose your account and allow access. This window updates by itself.")
+					if CloudSync.verification_url != "":
+						_add("Abrir de nuevo" if spanish else "Open again", "open")
+				elif CloudSync.user_code == "":
 					lines.append("Conectando con Google…" if spanish else "Contacting Google…")
 				else:
 					if _copied_code != CloudSync.user_code:

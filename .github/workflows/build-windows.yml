@@ -45,18 +45,28 @@ jobs:
           key: godot-windows-4.7.2-verified-v2
       # El secreto del cliente OAuth de Google Drive tampoco se publica: se escribe en
       # project.godot solo en el runner, antes de exportar el APK y el EXE.
+      # Dos clientes: el de dispositivo (codigo) y el de escritorio (navegador, sin codigo). Cada
+      # linea se sustituye anclada: client_secret="" tambien aparece dentro de desktop_client_secret.
       - name: Anadir el cliente de Google Drive
         env:
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_DESKTOP_CLIENT_SECRET }}
         run: |
+          $path = "game/project.godot"
+          $text = [IO.File]::ReadAllText($path)
           if ($env:GOOGLE_OAUTH_CLIENT_SECRET) {
-            $path = "game/project.godot"
-            $text = [IO.File]::ReadAllText($path)
-            if (-not $text.Contains('client_secret=""')) { throw "project.godot debe llevar client_secret vacio" }
-            [IO.File]::WriteAllText($path, $text.Replace('client_secret=""', 'client_secret="' + $env:GOOGLE_OAUTH_CLIENT_SECRET + '"'))
+            if (-not [regex]::IsMatch($text, '(?m)^client_secret=""')) { throw "project.godot debe llevar client_secret vacio" }
+            $text = [regex]::Replace($text, '(?m)^client_secret=""', { 'client_secret="' + $env:GOOGLE_OAUTH_CLIENT_SECRET + '"' })
           } elseif ($env:GITHUB_REF -like "refs/tags/*") {
             throw "Falta el secreto GOOGLE_OAUTH_CLIENT_SECRET: una version debe incluir la sincronizacion con Drive"
           }
+          if ($env:GOOGLE_OAUTH_DESKTOP_CLIENT_SECRET) {
+            if (-not [regex]::IsMatch($text, '(?m)^desktop_client_secret=""')) { throw "project.godot debe llevar desktop_client_secret vacio" }
+            $text = [regex]::Replace($text, '(?m)^desktop_client_secret=""', { 'desktop_client_secret="' + $env:GOOGLE_OAUTH_DESKTOP_CLIENT_SECRET + '"' })
+          } else {
+            Write-Warning "Sin GOOGLE_OAUTH_DESKTOP_CLIENT_SECRET: Drive se vincula con el codigo de google.com/device"
+          }
+          [IO.File]::WriteAllText($path, $text)
       # La clave de firma solo existe como secreto del repositorio. Sin ella (forks) se compila
       # con una clave desechable para comprobar el APK, pero una etiqueta exige la publicada.
       - name: Compilar y firmar APK Android

@@ -1,3 +1,11 @@
+## v0.1.0-alpha.37
+
+- Google Drive: **Connect** now opens Google's normal sign-in page in your browser. Choose your account, allow access and return to the game; no code to type and no YouTube channel selection. If Drive was already connected, nothing changes and you don't need to connect again.
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android41 uses the same package and signing certificate as Android40. On Android the browser sign-in has not been tried on a physical device yet.
+
+Google Drive: **Conectar** abre ahora la página normal de inicio de sesión de Google en tu navegador; eliges cuenta, aceptas y vuelves al juego, sin escribir un código ni elegir canal de YouTube. Si ya tenías Drive conectado, no cambia nada.
+
 ## v0.1.0-alpha.36
 
 - Android: new **Import .pck…** option in Settings → Save data. To add a game later (for example Kaiba after Yugi), create a new .pck with all your games in the PC launcher, select it there and reopen the app. Your saves and settings are kept (issue #6).
