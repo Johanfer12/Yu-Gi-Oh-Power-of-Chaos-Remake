@@ -1,3 +1,12 @@
+## v0.1.0-alpha.38
+
+- Joey: with the FORBIDDEN/LIMITED option on, the duel now starts. The starter deck has two forbidden cards (Change of Heart and Harpie's Feather Duster); the first try removes them and shows the deck error as in the original, and the next try starts the duel with the remaining 40 cards. Before, the error came back on every try (issue #8).
+- Importer: the original US edition of Yugi the Destiny (2003, 165 cards) is now recognized and reported as not supported yet, instead of suggesting the Data.dat was changed by a mod. Use the European edition (2004) of Yugi (issue #7).
+
+Android: update from the launcher; the APK downloads inside the app and Android asks you to confirm the installation. Keep the app installed to retain your imported PCK and saves. Android42 uses the same package and signing certificate as Android41. No new physical-device validation is claimed.
+
+Joey: con la opción FORBIDDEN/LIMITED activa, el duelo ya empieza. El mazo inicial trae dos cartas prohibidas (Cambio de idea y El Duster de pluma de Harpie); el primer intento las quita y muestra el aviso de mazo como el original, y el siguiente empieza el duelo con las 40 restantes. El importador reconoce además el Yugi estadounidense de 2003 y avisa de que aún no es compatible.
+
 ## v0.1.0-alpha.37
 
 - Google Drive: **Connect** now opens Google's normal sign-in page in your browser. Choose your account, allow access and return to the game; no code to type and no YouTube channel selection. If Drive was already connected, nothing changes and you don't need to connect again.

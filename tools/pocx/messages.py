@@ -71,6 +71,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "i": "{game}: il Data.dat in {folder} non corrisponde a nessuna versione compatibile di {title} (manca {missing}). Potrebbe essere stato modificato da una mod o da un pacchetto di carte: usa un'installazione o una ISO originale senza mod.",
         "j": "{game}: {folder} の Data.dat は {title} の対応バージョンと一致しません ({missing} がありません)。MOD やカードパックで変更されている可能性があります。MOD のない元のインストールまたは ISO を使ってください。",
     },
+    "yugi_us_2003": {
+        "s": "{game}: el Data.dat de {folder} es de la edición estadounidense original de Yugi the Destiny (2003, 165 cartas), que el remake aún no admite. Usa la edición europea (2004) de Yugi the Destiny.",
+        "e": "{game}: the Data.dat in {folder} is from the original US edition of Yugi the Destiny (2003, 165 cards), which the remake does not support yet. Use the European edition (2004) of Yugi the Destiny.",
+        "g": "{game}: Die Data.dat in {folder} stammt aus der ursprünglichen US-Ausgabe von Yugi the Destiny (2003, 165 Karten), die das Remake noch nicht unterstützt. Verwende die europäische Ausgabe (2004) von Yugi the Destiny.",
+        "f": "{game} : le Data.dat de {folder} provient de l’édition américaine d’origine de Yugi the Destiny (2003, 165 cartes), que le remake ne prend pas encore en charge. Utilise l’édition européenne (2004) de Yugi the Destiny.",
+        "i": "{game}: il Data.dat in {folder} è dell'edizione statunitense originale di Yugi the Destiny (2003, 165 carte), che il remake non supporta ancora. Usa l'edizione europea (2004) di Yugi the Destiny.",
+        "j": "{game}: {folder} の Data.dat は Yugi the Destiny の米国版オリジナル (2003 年、165 枚) のもので、リメイクはまだ対応していません。Yugi the Destiny の欧州版 (2004 年) を使ってください。",
+    },
     "exe_incompatible": {
         "s": "{game}: {exe} no es una versión compatible de {title}. Puede estar modificado por un mod: usa el ejecutable de una instalación o ISO original.",
         "e": "{game}: {exe} is not a compatible version of {title}. It may have been changed by a mod: use the executable from an original installation or ISO.",

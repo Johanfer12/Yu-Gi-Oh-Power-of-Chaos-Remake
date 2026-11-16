@@ -245,6 +245,20 @@ func _preserve_startup_deck(game: String, deck_data: Dictionary, reason := "nati
 	return DirAccess.rename_absolute(destination + ".tmp", destination) == OK
 
 
+## Joey 44aa00 ->5bea80 al pulsar Duelo/Match: la poda queda escrita aunque devuelva 0xb.
+## Sin guardarla, activar LIMITED con prohibidas en el mazo daba el aviso en cada intento.
+func apply_deck_prune(game: String, pruned: Dictionary) -> bool:
+	var previous: Dictionary = deck(game)
+	if pruned == previous:
+		return true
+	if not _preserve_startup_deck(game, previous, "native_startup_prune"):
+		push_error("No se pudo preservar el mazo anterior de " + game)
+		return false
+	data["decks"][game] = pruned
+	save()
+	return true
+
+
 ## Validar una vez por juego y sesion; abrir otra pantalla no vuelve a regalar cartas.
 func _ensure_startup_deck(game: String) -> bool:
 	if _startup_checked.has(game) or game not in GAMES or persistence_error != "":

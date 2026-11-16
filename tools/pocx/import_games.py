@@ -72,6 +72,9 @@ def _foreign_data_message(game: str, folder: Path, entries) -> str:
     if owners:
         return t("foreign_owner", game=game, folder=folder, title=title,
                  found=", ".join(TITLES[other] for other in owners))
+    if game == "yugi" and "y/title/title_kg2.bmp" in entries:
+        # US 2003 build (1,682 entries, no deck_y.txt): only it has this title image (D38).
+        return t("yugi_us_2003", game=game, folder=folder)
     return t("foreign_unknown", game=game, folder=folder, title=title,
              missing=f"{GAMES[game]}/file/deck_{GAMES[game]}.txt")
 

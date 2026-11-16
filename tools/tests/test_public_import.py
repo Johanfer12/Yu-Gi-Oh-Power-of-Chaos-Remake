@@ -193,7 +193,8 @@ class ImportTests(unittest.TestCase):
 
     def test_foreign_data_names_the_real_game(self):
         from test_media_import import archive
-        cases = ({"k/file/deck_k.txt": b"x"}, "Kaiba the Revenge"), ({"y/other.txt": b"x"}, "mod")
+        cases = (({"k/file/deck_k.txt": b"x"}, "Kaiba the Revenge"), ({"y/other.txt": b"x"}, "mod"),
+                 ({"y/title/title_kg2.bmp": b"x"}, "2003"))
         for entries, expected in cases:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
@@ -204,7 +205,7 @@ class ImportTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, expected):
                     locate(root, "yugi")
                 with patch("pocx.messages.LANGUAGE", "e"), \
-                     self.assertRaisesRegex(ValueError, "belongs to Kaiba" if expected != "mod" else "unmodified"):
+                     self.assertRaisesRegex(ValueError, {"mod": "unmodified", "2003": "original US edition"}.get(expected, "belongs to Kaiba")):
                     locate(root, "yugi")
 
     def test_archive_cannot_escape_destination(self):

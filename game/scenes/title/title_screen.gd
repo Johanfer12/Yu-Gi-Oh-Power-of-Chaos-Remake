@@ -680,6 +680,9 @@ func _duel_deck_ready() -> bool:
 	if resolved.removed.is_empty() and deck.main.size() >= 40 and deck.main.size() <= 80 \
 			and deck.side.size() <= 15 and deck.fusion.size() <= 15:
 		return true
+	if not resolved.removed.is_empty():
+		# 5bea80 deja el mazo podado: el siguiente intento ya empieza si quedan 40 o más.
+		SaveData.apply_deck_prune(game, resolved.deck)
 	if _modal != null:
 		return false
 	_phase = "menu"
