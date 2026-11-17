@@ -323,7 +323,7 @@ static func _kaiba(d: Dictionary, duel: Duel) -> Dictionary:
 			elif card not in [0x290, 0x3ca]:
 				# 401e40: las cartas con voz propia hablan sea cual sea su tipo (Ancient Lamp 0x4db, un
 				# monstruo, dice Ka64); solo la voz por defecto exige tipo 21 (cotejo por valores).
-				var voices := {0x150: "ka23", 0x294: "ka17", 0x3ab: "ka27", 0x3ea: "ka24", 0x403: "ka25", 0x420: "ka26", 0x4be: "ka66", 0x4db: "ka64"}
+				var voices := {0x150: "ka23", 0x294: "ka17", 0x3ab: "ka27", 0x3ea: "ka24", 0x3f0: "ka25", 0x403: "ka24", 0x420: "ka26", 0x4be: "ka66", 0x4db: "ka64"}
 				if voices.has(card): return _portrait(d, "reaction09", voices[card])
 				if type == 21: return _portrait(d, "reaction09", "ka21")
 		"reaction_card": # 402600 -> tabla 59d4ac -> 401c80. Humano no retrato.

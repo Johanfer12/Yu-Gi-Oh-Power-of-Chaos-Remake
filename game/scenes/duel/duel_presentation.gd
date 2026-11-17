@@ -675,11 +675,12 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 					d["asset"] = ["duel_win_?", "duel_lose_?", "duel_draw_?"][clampi(args[0], 0, 2)]
 					d["frames"] = 64
 				0x0a:
-					# 4030b0 -> 4156f0/4155d0: crea el objeto del eslabon y el comando termina
-					# en el acto; el objeto se anima solo (415150) y suena chain.wav al crearse.
+					# Yugi4156f0 / Kaiba415690 guardan los cuatro bits de ubicación y omiten
+					# números de eslabón que ya tienen objeto. El comando termina en el acto.
+					if _chain.has(args[1]): return
 					d["mode"] = "chain"
 					d["number"] = args[1]
-					d["center"] = zone(p, args[0]) if args[0] < 11 else Vector2(525, 300)
+					d["location"] = int(args[0]) & 0xf
 					d["counter"] = 0
 					d["released"] = false
 					_chain[args[1]] = d
@@ -701,7 +702,7 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 					# 4151f0: número!=0 selecciona el eslabón; número0 busca jugador/zona.
 					if number == 0:
 						for n in _chain:
-							if _chain[n].get("p", -1) == p and _chain[n]["args"][0] == args[0]:
+							if _chain[n]["p"] == p and _chain[n]["location"] == args[0]:
 								number = n
 								break
 					if not _chain.has(number): return
@@ -1096,9 +1097,9 @@ func advance(delta: float) -> void:
 			_start_banner_shade = false
 			_start_banner_last_draw = true
 		if active.get("mode", "") == "sacrifice_release":
-			# 464ae0 libera la espera al llegar a248; 464b00 conserva el dibujo hasta384.
+			# Yugi464ae0 y Kaiba466ce0 liberan la espera en 0xf8. El efecto sigue dibujándose hasta 0x180.
 			var mark: Dictionary = _sacrifice.get(active["key"], {})
-			if mark.is_empty() or int(mark["counter"]) >= (0xf8 if game == "yugi" else 0x181):
+			if mark.is_empty() or (game in ["yugi", "kaiba"] and int(mark["counter"]) >= 0xf8):
 				active["frames"] = frame
 		_tick_chains()
 		if active.get("mode", "") == "chain_wait" and not _chains_busy():
@@ -1833,7 +1834,12 @@ func _chains_busy() -> bool:
 
 func _draw_chain(entry: Dictionary, counter: int) -> void:
 	if counter == 0: return # 415280 no dibuja en contador0.
-	var center: Vector2 = entry["center"]
+	# 415220 -> 442740 (Kaiba): la posición de la mano o pila se consulta al dibujar.
+	var p: int = entry["p"]
+	var loc: int = entry["location"]
+	var center := zone(p, loc) if loc < 11 else packed_position((loc << 1) | p, _duel_ref)
+	if loc == 11 and _duel_ref.m.u8(DuelMem.pl(p) + 2) == 0:
+		center = Vector2(525, 600 if p == 0 else 0)
 	var tick := counter / 4 if counter <= 128 else (counter - 128) / 4
 	var index := mini(tick, 25) if counter <= 128 else maxi(1, 15 - tick)
 	var asset := "cha_ani_?%02d" % index if index <= 15 else "cha_hyou_?%d" % (index - 15) if index < 25 else "cha_ani_?15"

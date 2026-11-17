@@ -1,3 +1,12 @@
+## v0.1.0-alpha.39
+
+- Kaiba now says the correct line for **Change of Heart**, and chain markers appear on the cards that activated the chain (issue #10).
+- When Kaiba Tributes a face-down monster, the card moves to the Graveyard while the flash is still visible, so its back no longer briefly reappears after the flash fades (issue #10).
+
+Android users can update from the launcher and confirm the installation in Android's installer. Keep the app installed to retain your imported PCK and saves. Android43 uses the same package and signing certificate as Android42.
+
+Kaiba reproduce la frase correcta al activar **Cambio de idea** y los eslabones se dibujan sobre las cartas de la cadena. Al sacrificar un monstruo boca abajo, la carta pasa al cementerio mientras sigue el destello, sin volver a aparecer en el campo.
+
 ## v0.1.0-alpha.38
 
 - Joey: with the FORBIDDEN/LIMITED option on, the duel now starts. The starter deck has two forbidden cards (Change of Heart and Harpie's Feather Duster); the first try removes them and shows the deck error as in the original, and the next try starts the duel with the remaining 40 cards. Before, the error came back on every try (issue #8).
