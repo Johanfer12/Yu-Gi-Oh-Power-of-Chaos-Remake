@@ -58,7 +58,8 @@ def preflight(config: dict) -> None:
         raise user_error("android_reference_missing", path=config["previous"])
 
 
-def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | None = None) -> Path:
+def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | None = None,
+               *, yugi_update: Path | None = None) -> Path:
     from .import_games import import_games
     from .compact import optimize_tree
 
@@ -87,7 +88,7 @@ def create_apk(sources: dict, launcher: Path, extra_voices=None, base: Path | No
         with tempfile.TemporaryDirectory(prefix="resources-", dir=evidence) as temporary:
             data = Path(temporary) / "data"
             if sources or extra_voices:
-                import_games(sources, data, extra_voices, base=base, compact=True)
+                import_games(sources, data, extra_voices, base=base, compact=True, yugi_update=yugi_update)
             elif base is not None:
                 shutil.copytree(base, data)
                 optimize_tree(data)

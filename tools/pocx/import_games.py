@@ -18,6 +18,7 @@ from .archive import Archive, folder_names, pack_folder
 from .executable import validate
 from .voices import add_voice
 from .compact import optimize_tree
+from .yugi_update import extract_update
 from . import messages
 from .messages import UserError, error as user_error, t
 
@@ -61,6 +62,17 @@ class MissingInstallation(UserError):
     """No folder with the expected files: other media layouts may still contain one."""
 
 
+class YugiUpdateRequired(UserError):
+    def __init__(self, names):
+        self.names = names
+        super().__init__(t("yugi_us_2003"))
+
+
+def _is_original_yugi(game: str, entries) -> bool:
+    # The 165-card edition is the only retail build with this title and no starter text.
+    return game == "yugi" and "y/title/title_kg2.bmp" in entries and "y/file/deck_y.txt" not in entries
+
+
 TITLES = {"yugi": "Yugi the Destiny", "kaiba": "Kaiba the Revenge", "joey": "Joey the Passion"}
 
 
@@ -72,9 +84,6 @@ def _foreign_data_message(game: str, folder: Path, entries) -> str:
     if owners:
         return t("foreign_owner", game=game, folder=folder, title=title,
                  found=", ".join(TITLES[other] for other in owners))
-    if game == "yugi" and "y/title/title_kg2.bmp" in entries:
-        # US 2003 build (1,682 entries, no deck_y.txt): only it has this title image (D38).
-        return t("yugi_us_2003", game=game, folder=folder)
     return t("foreign_unknown", game=game, folder=folder, title=title,
              missing=f"{GAMES[game]}/file/deck_{GAMES[game]}.txt")
 
@@ -96,11 +105,14 @@ def locate(root: Path, game: str) -> dict[str, Path]:
     if len(matches) != 1:
         raise MissingInstallation(t("install_count", game=game, exe=exe_name, count=len(matches)))
     names = matches[0]
+    original_yugi = False
+    deck = f"{GAMES[game]}/file/deck_{GAMES[game]}.txt"
     if "data/" in names:
         entries = folder_names(names["data/"])
         if not entries:
             raise user_error("archive_empty", game=game, name="data")
-        if f"{GAMES[game]}/file/deck_{GAMES[game]}.txt" not in entries:
+        original_yugi = _is_original_yugi(game, entries)
+        if deck not in entries and not original_yugi:
             raise UserError(_foreign_data_message(game, names["data/"], entries))
     for archive_name in ("data.dat", "voice.dat"):
         if archive_name not in names:
@@ -113,8 +125,12 @@ def locate(root: Path, game: str) -> dict[str, Path]:
         with archive:
             if not archive.entries:
                 raise user_error("archive_empty", game=game, name=names[archive_name].name)
-            if archive_name == "data.dat" and f"{GAMES[game]}/file/deck_{GAMES[game]}.txt" not in archive.by_name:
-                raise UserError(_foreign_data_message(game, names["data.dat"].parent, archive.by_name))
+            if archive_name == "data.dat" and deck not in archive.by_name:
+                original_yugi = _is_original_yugi(game, archive.by_name)
+                if not original_yugi:
+                    raise UserError(_foreign_data_message(game, names["data.dat"].parent, archive.by_name))
+    if original_yugi:
+        raise YugiUpdateRequired(names)
     try:
         validate(names[exe_name].read_bytes(), game)
     except ValueError as error:
@@ -224,8 +240,21 @@ def _import_voice(path, output, game):
         add_voice(path, output, game)
 
 
+def _update_yugi(original, update_source, kaiba_root, work):
+    try:
+        root = kaiba_root if kaiba_root is not None else unpack(update_source.resolve(), work / "media-yugi-update")
+        executable, data = extract_update(root, work / "yugi-update", find_sevenzip())
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        reason = t("yugi_update_invalid")
+        details = error.diagnostics if isinstance(error, ImportFailure) and error.diagnostics else str(error)
+        raise ImportFailure("yugi_update", reason, "yugi", update_source, details) from error
+    names = {**original, "data.dat": data, "yugi_pc.exe": executable}
+    print(t("yugi_update_applied"), flush=True)
+    return names
+
+
 def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tuple[str, Path]] | None = None, base: Path | None = None,
-                 compact: bool = False, replace: bool = False) -> None:
+                 compact: bool = False, replace: bool = False, *, yugi_update: Path | None = None) -> None:
     output = output.resolve()
     if output.exists() and not replace:
         raise user_error("dest_exists_kept")
@@ -254,12 +283,21 @@ def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tupl
                 _import_voice(voice_path, converted, game)
             _publish(converted, output, compact, replace)
             return
+        media = {}
         for game in sources:
             print(t("validating", game=game), flush=True)
             with import_context("iso", game, sources[game]):
-                root = unpack(sources[game].resolve(), work / f"media-{game}")
+                media[game] = unpack(sources[game].resolve(), work / f"media-{game}")
+        for game, root in media.items():
             with import_context("installation", game, sources[game]):
-                names = installation(root, game, work / game)
+                try:
+                    names = installation(root, game, work / game)
+                except YugiUpdateRequired as original:
+                    update_source = yugi_update or sources.get("kaiba")
+                    if update_source is None:
+                        raise ImportFailure("yugi_update", str(original), game, sources[game]) from original
+                    names = _update_yugi(original.names, update_source,
+                                         media.get("kaiba") if yugi_update is None else None, work)
             with import_context("write", game, sources[game]):
                 app = work / "sources" / game / "app"
                 app.mkdir(parents=True)
@@ -354,6 +392,7 @@ def _main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     for game in GAMES:
         parser.add_argument(f"--{game}", type=Path)
+    parser.add_argument("--yugi-update", type=Path, help="ISO o CD de Kaiba EE. UU. para actualizar solo Yugi")
     parser.add_argument("--base", type=Path, help="datos existentes que se conservarán")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--replace", action="store_true", help="actualiza atómicamente una biblioteca existente")
@@ -374,10 +413,10 @@ def _main() -> None:
         sources = {game: getattr(args, game) for game in GAMES if getattr(args, game) is not None}
         if args.create_apk:
             from .android_builder import create_apk
-            create_apk(sources, args.out, extra, args.base)
+            create_apk(sources, args.out, extra, args.base, yugi_update=args.yugi_update)
         else:
             import_games(sources, args.out, extra, args.base,
-                         compact=not args.no_compact, replace=args.replace)
+                         compact=not args.no_compact, replace=args.replace, yugi_update=args.yugi_update)
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError, SystemExit) as error:
         failure = (error if isinstance(error, ImportFailure) else
                    ImportFailure("setup", str(error)) if isinstance(error, UserError) else

@@ -1,3 +1,12 @@
+## v0.1.0-alpha.40
+
+- The Windows importer now supports the original 165-card US edition of Yugi the Destiny (issue #7). Select your Yugi disc or ISO, then select your US Kaiba the Revenge disc or ISO when prompted. The importer applies the official December 2003 update automatically. You can import Yugi on its own or add both games. An already updated Yugi installation still works as a source.
+- The same import flow can create a private Android resource pack (.pck). Keep both sources accessible during the import.
+
+Android users can update from the launcher and confirm the installation in Android's installer. Keep the app installed to retain your imported PCK and saves. Android44 uses the same package and signing certificate as Android43.
+
+El importador de Windows ya admite el Yugi estadounidense original de 165 cartas (issue #7). Selecciona el disco o la ISO de Yugi y, cuando se solicite, el disco o la ISO de Kaiba de EE. UU. El importador aplica la actualización oficial de diciembre de 2003 y puede preparar Yugi para Windows o en un paquete privado para Android.
+
 ## v0.1.0-alpha.39
 
 - Kaiba now says the correct line for **Change of Heart**, and chain markers appear on the cards that activated the chain (issue #10).

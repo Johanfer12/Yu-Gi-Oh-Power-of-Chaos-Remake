@@ -19,6 +19,10 @@ KAIBA_LOCAL_MD5 = "11c64e931e29b13637a1b617fe2a19a4"
 # port never reads; names are lower-cased before hashing.
 KAIBA_LOCAL_TABLES = ((0x59D000, 65536, "2fb4cd4ac200d3ca1905078f497f5c12087b336c96a52a7fac4e8ae411f74802"),
                       (0x5AD000, 20480, "b68e6d6f14bdb6dcd67b945f02c4fae3d6d498772cd3e45475442b60c6e2dc34"))
+YUGI_US_UPDATE_TABLES = (
+    (0x59A000, 65536, "62b7921edbb8b02c1badc942fc6da3c11c194777c7ebf2b0101a75679509c421"),
+    (0x5AA000, 20480, "efeaf2935e8e1e11a2fb997ec50e34f953f01527737c57a9706aecc252248866"),
+)
 
 
 def _lower_dll_names(data: bytes) -> bytes:
@@ -29,6 +33,7 @@ JOEY_RESOURCE_HASH = "534d03a19a8f71a55a40163805396f0917b8294ff254a010b624eaf63a
 class PE:
     def __init__(self, raw: bytes):
         self.raw = raw
+        self.yugi_us_update = False
         try:
             if raw[:2] != b"MZ":
                 raise ValueError("No es un ejecutable PE")
@@ -102,6 +107,11 @@ def validate(raw: bytes, game: str) -> PE:
             hashlib.sha256(_lower_dll_names(pe.read(address, size))).hexdigest() == expected
             for address, size, expected in KAIBA_LOCAL_TABLES):
         return pe # US retail disc: local tables; only its import DLL names are upper case.
+    if game == "yugi" and all(
+            hashlib.sha256(pe.read(address, size)).hexdigest() == expected
+            for address, size, expected in YUGI_US_UPDATE_TABLES):
+        pe.yugi_us_update = True
+        return pe
     for address, size, expected in PROFILES[game]:
         if hashlib.sha256(pe.read(address, size)).hexdigest() != expected:
             raise ValueError(f"{game}: tablas del motor no compatibles en 0x{address:x}")
@@ -112,6 +122,9 @@ def validate(raw: bytes, game: str) -> PE:
 
 def duel_image(raw: bytes, game: str) -> bytes:
     pe = validate(raw, game)
+    if pe.yugi_us_update:
+        from .yugi_image import build_us_update
+        return build_us_update(pe)
     if game == "kaiba":
         from .kaiba_image import build
         return build(pe)

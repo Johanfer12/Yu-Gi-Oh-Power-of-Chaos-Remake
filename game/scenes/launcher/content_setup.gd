@@ -17,6 +17,8 @@ var _back := Button.new()
 var _thread := Thread.new()
 var _pending_game := ""
 var _pending_voice := false
+var _pending_yugi_update := false
+var _yugi_update := ""
 var _target := ""
 var _busy := false
 var _bundled_importer := false
@@ -31,6 +33,7 @@ var _voice_menu := PopupMenu.new()
 var _error_log_button: Button
 var _error_copy_button: Button
 var _error_log_path := ""
+var _update_media_buttons := HBoxContainer.new()
 
 
 const COPY := {
@@ -146,7 +149,16 @@ func _ready() -> void:
 	_error_details.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_error_details.custom_minimum_size = Vector2(590, 300)
 	_error_details.add_theme_font_size_override("font_size", 14)
-	_error_dialog.add_child(_error_details)
+	var error_content := VBoxContainer.new()
+	_error_dialog.add_child(error_content)
+	error_content.add_child(_error_details)
+	_error_details.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	error_content.add_child(_update_media_buttons)
+	for iso: bool in [true, false]:
+		var button := Button.new()
+		button.name = "ISO" if iso else "Disc"
+		button.pressed.connect(_browse_yugi_update.bind(iso))
+		_update_media_buttons.add_child(button)
 	_error_copy_button = _error_dialog.add_button("Copiar detalles", false, "copy")
 	_error_log_button = _error_dialog.add_button("Abrir registro", false, "log")
 	_error_dialog.custom_action.connect(func(action: StringName) -> void:
@@ -300,10 +312,22 @@ func _unhandled_input(event: InputEvent) -> void:
 func _browse(game: String, iso: bool) -> void:
 	_pending_game = game
 	_pending_voice = false
+	_pending_yugi_update = false
+	_browse_media(Game.TITLES[game], iso)
+
+
+func _browse_media(title: String, iso: bool) -> void:
 	_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE if iso else FileDialog.FILE_MODE_OPEN_DIR
 	_dialog.filters = PackedStringArray(["*.iso ; ISO"]) if iso else PackedStringArray()
-	_dialog.title = Game.TITLES[game]
+	_dialog.title = title
 	_dialog.popup_centered_ratio(0.8)
+
+
+func _browse_yugi_update(iso: bool) -> void:
+	_error_dialog.hide()
+	_pending_yugi_update = true
+	_pending_voice = false
+	_browse_media(_text("stage_yugi_update") + " · " + Game.TITLES["kaiba"], iso)
 
 
 ## A dub belongs to a game that is prepared or selected in this same import.
@@ -330,6 +354,7 @@ func _open_voice_menu() -> void:
 func _browse_voice(game: String) -> void:
 	_pending_game = game
 	_pending_voice = true
+	_pending_yugi_update = false
 	_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_dialog.filters = PackedStringArray(["*.dat ; Voice.dat"])
 	_dialog.title = "%s · %s" % [Game.TITLES[game], _copy(11)]
@@ -337,6 +362,11 @@ func _browse_voice(game: String) -> void:
 
 
 func _selected(path: String) -> void:
+	if _pending_yugi_update:
+		_pending_yugi_update = false
+		_yugi_update = path
+		_start(false, _building_apk)
+		return
 	if _pending_voice:
 		var packs: Array = _voice_sources.get_or_add(_pending_game, [])
 		if not packs.has(path):
@@ -346,6 +376,8 @@ func _selected(path: String) -> void:
 		_convert.visible = true
 		_apk.disabled = _tools_failed or Paths.storage_error or not _has_pending()
 		return
+	if _pending_game == "yugi":
+		_yugi_update = ""
 	_sources[_pending_game] = path
 	_labels[_pending_game].text = path.get_file()
 	_labels[_pending_game].tooltip_text = path
@@ -379,6 +411,8 @@ func _start(migrate := false, build_apk := false) -> void:
 	for game in _sources:
 		args.append("--" + game)
 		args.append(str(_sources[game]))
+	if _yugi_update != "" and _sources.has("yugi"):
+		args.append_array(PackedStringArray(["--yugi-update", _yugi_update]))
 	for game in _voice_sources:
 		# A dub needs its game: already prepared or selected in this same import.
 		if not Paths.has_game(game) and not _sources.has(game):
@@ -531,6 +565,9 @@ func _show_import_error(result: Dictionary) -> void:
 	_error_copy_button.text = _text("copy_details")
 	_error_log_button.text = _text("open_log")
 	_error_log_button.disabled = not saved
+	_update_media_buttons.visible = stage_key == "stage_yugi_update" and _sources.has("yugi")
+	_update_media_buttons.get_node("ISO").text = _text("kaiba_update_iso")
+	_update_media_buttons.get_node("Disc").text = _text("kaiba_update_disc")
 	_status.text = heading + " · " + stage
 	_status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_status.tooltip_text = detail

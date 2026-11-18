@@ -258,7 +258,13 @@ def export_starter_decks(src: Path, data: Path, games=None) -> dict:
     sizes = {}
     for game in (games if games is not None else GAMES):
         exe_name, addr = STARTER_TABLES[game]
-        deck = parse_starter_table((src / game / "app" / exe_name).read_bytes(), addr)
+        executable = (src / game / "app" / exe_name).read_bytes()
+        if game == "yugi":
+            from .executable import validate
+            from .yugi_image import US_STARTER_TABLE
+            if validate(executable, game).yugi_us_update:
+                addr = US_STARTER_TABLE
+        deck = parse_starter_table(executable, addr)
         dest = data / game / "file" / "starter_deck.json"
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(json.dumps(deck.__dict__), encoding="utf-8")

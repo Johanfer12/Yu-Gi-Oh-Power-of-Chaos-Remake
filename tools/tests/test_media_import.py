@@ -6,7 +6,7 @@ from pathlib import Path
 import struct
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from pocx.executable import PE
 from pocx.voices import export_voice
 
@@ -97,6 +97,57 @@ class MediaImportTests(unittest.TestCase):
     def test_truncated_pe_and_unmapped_reads_are_rejected(self):
         with self.assertRaises(ValueError):
             PE(b"MZ")
+
+    def test_yugi_us_update_relocates_pointers_but_preserves_fusion_ids(self):
+        from pocx.yugi_image import BASE, build_us_update
+
+        constants = bytearray(0x61C)
+        struct.pack_into("<10I", constants, 0x59E148 - 0x59DF1C, 0x59BA30, *([0x59E240] * 9))
+        dispatch = bytearray(0x2CE8)
+        struct.pack_into("<II", dispatch, 0, 0x576870, 0x59E0A8)
+        struct.pack_into("<I", dispatch, 0x5AA8AC - 0x5AA6E8, 0x55000F)
+        pe = Mock()
+        spans = {0x59DF2C: constants, 0x5AA6E8: dispatch, 0x59A594: bytes(0x30)}
+        pe.read.side_effect = lambda address, size: spans[address][:size]
+
+        image = build_us_update(pe)
+
+        self.assertEqual(len(image), 0x15000)
+        self.assertEqual(struct.unpack_from("<II", image, 0x59E148 - BASE), (0x59BA38, 0x59E230))
+        self.assertEqual(struct.unpack_from("<II", image, 0x5AA6E8 - BASE), (0x576C90, 0x59E098))
+        self.assertEqual(struct.unpack_from("<I", image, 0x5AA8AC - BASE), (0x55000F,))
+
+    def test_extract_yugi_msp_from_installshield_overlay(self):
+        from pocx.yugi_update import _extract_msp
+
+        installer = bytearray(0x100 + 0x2E + 312)
+        installer[:2] = b"MZ"
+        struct.pack_into("<I", installer, 60, 64)
+        installer[64:68] = b"PE\0\0"
+        struct.pack_into("<H", installer, 70, 1)
+        struct.pack_into("<II", installer, 104, 0x40, 0xC0)
+        installer[0x100:0x10E] = b"InstallShield\0"
+        struct.pack_into("<H", installer, 0x10E, 1)
+        entry = 0x12E
+        name = b"UpdateEngE.msp"
+        installer[entry:entry + len(name)] = name
+        payload = b"\xd0\xcf\x11\xe0" + bytes(range(256)) * 4096
+        seed = b"\x13\x35\x86\x07"
+        key = [byte ^ seed[index % 4] for index, byte in enumerate(name)]
+        masked = (255 ^ value ^ key[index % len(key)] for index, value in enumerate(payload))
+        encoded = bytes(((value << 4) | (value >> 4)) & 255 for value in masked)
+        struct.pack_into("<III", installer, entry + 260, 2, 0, len(encoded))
+
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "Update.exe"
+            target = Path(temporary) / "UpdateEngE.msp"
+            source.write_bytes(installer + encoded)
+            _extract_msp(source, target)
+            self.assertEqual(target.read_bytes(), payload)
+
+            source.write_bytes(installer + encoded[:-1])
+            with self.assertRaisesRegex(ValueError, "Truncated InstallShield file"):
+                _extract_msp(source, target)
 
     def test_import_dll_names_are_compared_case_insensitively(self):
         from pocx.executable import _lower_dll_names

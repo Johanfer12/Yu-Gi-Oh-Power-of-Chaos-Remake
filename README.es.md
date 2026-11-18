@@ -6,11 +6,11 @@
 
 [English](README.md) | **Español**
 
-[![Descargar EXE para Windows](https://img.shields.io/badge/Descargar_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.39/PowerOfChaos.exe)
+[![Descargar EXE para Windows](https://img.shields.io/badge/Descargar_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.40/PowerOfChaos.exe)
 
-[![Descargar APK Android](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.39/PowerOfChaos-Android.apk)
+[![Descargar APK Android](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.40/PowerOfChaos-Android.apk)
 
-**Descarga directa · Windows · Preliminar v0.1.0-alpha.39 · Sin ZIP**
+**Descarga directa · Windows · Preliminar v0.1.0-alpha.40 · Sin ZIP**
 
 **Tus juegos de Power of Chaos reunidos en un launcher moderno para Windows.**
 
@@ -112,7 +112,7 @@ Tú aportas una copia compatible del juego que quieras usar. El launcher lee sus
 
 ## Empezar en Windows
 
-1. [Descarga **`PowerOfChaos.exe`** directamente](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.39/PowerOfChaos.exe). También hay compilaciones de desarrollo en [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
+1. [Descarga **`PowerOfChaos.exe`** directamente](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.40/PowerOfChaos.exe). También hay compilaciones de desarrollo en [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
 2. Pon el EXE en una carpeta donde quieras guardar el launcher y tus partidas, y ábrelo.
 3. En **SUBE TUS RECURSOS**, pasa el cursor por el juego que quieras añadir y elige **ISO** o **Carpeta**.
 4. Selecciona una imagen de disco o carpeta instalada compatible, pulsa **Extraer para PC** y espera a que termine.
@@ -122,7 +122,7 @@ La descarga es un único EXE, sin asistente de instalación. La primera importac
 
 Necesitas Windows con soporte para el renderizador OpenGL de compatibilidad de Godot, una copia compatible de al menos un juego y espacio libre para los recursos y archivos temporales. Una carpeta instalada debe contener `Data.dat`, `Voice.dat`, `Region.dat` y el ejecutable original correspondiente; este se lee para obtener tablas del motor, sin ejecutarlo. También se acepta la carpeta `data` de archivos sueltos que dejan algunos instaladores de terceros en lugar de `Data.dat`.
 
-Yugi the Destiny funciona hoy con la edición europea/española posterior. La edición estadounidense original de 2003 (y su actualización de diciembre de 2003) es otra compilación del juego y aún no es compatible. Kaiba the Revenge y Joey the Passion funcionan con sus ediciones en inglés.
+Yugi the Destiny admite la edición europea/española y la estadounidense. Para el disco estadounidense original (165 cartas), selecciona la ISO o el disco de Yugi. Cuando el importador pida la actualización de diciembre de 2003, elige la ISO o el disco estadounidense de Kaiba the Revenge. El importador prepara Yugi automáticamente a partir de ambos discos. Si ya tienes Yugi actualizado, selecciona su carpeta instalada. Kaiba the Revenge y Joey the Passion admiten sus ediciones en inglés.
 
 ## Cómo funciona
 
