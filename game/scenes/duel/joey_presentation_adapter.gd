@@ -95,15 +95,16 @@ static func create_native(data_dir: String) -> JoeyPresentationAdapter:
 	var native := NativeSessionEngine.new(tables)
 	if not native.load_data(data_dir):
 		return null
-	var image := FileAccess.get_file_as_bytes(data_dir.path_join(Duel.IMAGE_FILE))
-	if image.is_empty():
-		return null
 	var view := JoeyPresentationAdapter.new(native.cards)
 	view.engine = native
 	native.recording_owner = weakref(view)
 	view.rules_game = "joey"
 	view.native_version = 1300
-	view.m.load_image(image)
+	# The shared renderer reads a projection written by Joey. Keep the legacy
+	# view image when available, but Joey's engine needs only its own data.
+	var legacy_image := data_dir.path_join(Duel.IMAGE_FILE)
+	if FileAccess.file_exists(legacy_image):
+		view.m.load_image(FileAccess.get_file_as_bytes(legacy_image))
 	view.joey_zone_counters.resize(24)
 	view.joey_zone_status.resize(24)
 	return view

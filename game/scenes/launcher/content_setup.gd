@@ -5,6 +5,9 @@ var _sources := {}
 var _voice_sources := {}
 var _labels := {}
 var _buttons: Array[Button] = []
+var _reimport_buttons: Array[Button] = []
+var _reimport_menu := PopupMenu.new()
+var _reimport_game := ""
 var _dialog := FileDialog.new()
 var _status := Label.new()
 var _python := LineEdit.new()
@@ -106,6 +109,18 @@ func _ready() -> void:
 		path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		add_child(path_label)
 		_labels[game] = path_label
+		var reimport := Button.new()
+		reimport.text = "↻"
+		_style_control(reimport)
+		reimport.add_theme_font_size_override("font_size", 19)
+		for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+			reimport.get_theme_stylebox(state).set_content_margin_all(2)
+		reimport.focus_mode = Control.FOCUS_NONE
+		reimport.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		reimport.hide()
+		reimport.pressed.connect(_open_reimport_menu.bind(game, reimport))
+		add_child(reimport)
+		_reimport_buttons.append(reimport)
 	_python.text = "python"
 	_python.placeholder_text = "Python 3.12+ · pocx"
 	_style_control(_python)
@@ -184,12 +199,14 @@ func _ready() -> void:
 	var menu_hover := StyleBoxFlat.new()
 	menu_hover.bg_color = Color(GOLD_LIGHT, 0.12)
 	menu_hover.set_corner_radius_all(4)
-	_voice_menu.add_theme_stylebox_override("panel", menu_panel)
-	_voice_menu.add_theme_stylebox_override("hover", menu_hover)
-	_voice_menu.add_theme_color_override("font_color", GOLD_LIGHT)
-	_voice_menu.add_theme_color_override("font_hover_color", Color.WHITE)
-	_voice_menu.add_theme_font_size_override("font_size", 15)
-	add_child(_voice_menu)
+	for menu: PopupMenu in [_voice_menu, _reimport_menu]:
+		menu.add_theme_stylebox_override("panel", menu_panel)
+		menu.add_theme_stylebox_override("hover", menu_hover)
+		menu.add_theme_color_override("font_color", GOLD_LIGHT)
+		menu.add_theme_color_override("font_hover_color", Color.WHITE)
+		menu.add_theme_font_size_override("font_size", 15)
+		add_child(menu)
+	_reimport_menu.id_pressed.connect(func(id: int) -> void: _browse(_reimport_game, id == 0))
 
 	get_tree().root.close_requested.connect(_close)
 	get_tree().root.mouse_exited.connect(_pointer_left_window)
@@ -224,7 +241,8 @@ func _language_updated() -> void:
 		buttons.get_node("ISO").visible = not installed
 		buttons.get_node("folder").visible = not installed
 		_labels[game].text = _sources[game].get_file() if _sources.has(game) else "+ " + _copy(2)
-		_labels[game].visible = not installed
+		_labels[game].visible = not installed or _sources.has(game)
+		_reimport_buttons[i].tooltip_text = _text("reimport") + " · " + Game.TITLES[game]
 	if _tools_failed:
 		_status.text = _copy(9)
 	if Paths.storage_error:
@@ -244,6 +262,8 @@ func _layout() -> void:
 		var label: Label = _labels[Game.GAMES[i]]
 		label.position = _logos[i].position + Vector2(-SLOT.x / 2.0, 88)
 		label.size = Vector2(SLOT.x, 22)
+		_reimport_buttons[i].position = _logos[i].position + Vector2(SLOT.x / 2.0 - 30.0, -SLOT.y / 2.0 + 4.0)
+		_reimport_buttons[i].size = Vector2(26, 26)
 	# Bloque de acciones pegado a los logos y separado del pie, centrado en la pantalla real.
 	# Sin el campo de Python (version publicada) los botones suben a ocupar su hueco.
 	var actions_y := 446.0 if _python.visible else 414.0
@@ -310,10 +330,21 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _browse(game: String, iso: bool) -> void:
+	if _busy or _leaving or _tools_failed or Paths.storage_error:
+		return
 	_pending_game = game
 	_pending_voice = false
 	_pending_yugi_update = false
 	_browse_media(Game.TITLES[game], iso)
+
+
+func _open_reimport_menu(game: String, button: Button) -> void:
+	_reimport_game = game
+	_reimport_menu.clear()
+	_reimport_menu.add_item("ISO", 0)
+	_reimport_menu.add_item(_folder_label(), 1)
+	var position := button.get_screen_position() + Vector2(0, button.size.y + 4)
+	_reimport_menu.popup(Rect2i(Vector2i(position), Vector2i.ZERO))
 
 
 func _browse_media(title: String, iso: bool) -> void:
@@ -381,6 +412,7 @@ func _selected(path: String) -> void:
 	_sources[_pending_game] = path
 	_labels[_pending_game].text = path.get_file()
 	_labels[_pending_game].tooltip_text = path
+	_labels[_pending_game].show()
 	_convert.disabled = _tools_failed or not _has_pending()
 	_convert.visible = true
 	_apk.disabled = _tools_failed or Paths.storage_error or not _has_pending()
@@ -409,6 +441,8 @@ func _start(migrate := false, build_apk := false) -> void:
 	if Paths.has_data():
 		args.append_array(PackedStringArray(["--base", Paths.data_dir]))
 	for game in _sources:
+		if Paths.has_game(game):
+			args.append_array(PackedStringArray(["--reimport", game]))
 		args.append("--" + game)
 		args.append(str(_sources[game]))
 	if _yugi_update != "" and _sources.has("yugi"):
@@ -457,10 +491,17 @@ func _process(_delta: float) -> void:
 	# Poll the viewport as other controls may consume mouse motion before _input.
 	var pointer := _pointer if DisplayServer.get_name() == "headless" else get_viewport().get_mouse_position()
 	var hit := _hit(pointer) if _pointer_inside and not _controls.panel_open else -1
+	var local_pointer := get_global_transform_with_canvas().affine_inverse() * pointer
+	var can_reimport: bool = _pointer_inside and not (_busy or _leaving or _tools_failed or Paths.storage_error or _controls.panel_open)
 	if hit >= 0 and not _keyboard_reveal:
 		_selected_index = hit
 	for i in _rows.size():
-		var available: bool = not Paths.has_game(Game.GAMES[i]) and not _controls.panel_open
+		var installed := Paths.has_game(Game.GAMES[i])
+		var slot := Rect2(_logos[i].position - SLOT / 2.0, SLOT)
+		_reimport_buttons[i].visible = can_reimport and installed and slot.has_point(local_pointer)
+		if _reimport_buttons[i].visible and not _keyboard_reveal:
+			_selected_index = i
+		var available: bool = not installed and not _controls.panel_open
 		var reveal: bool = available and (hit == i or (_keyboard_reveal and i == _selected_index))
 		var row := _rows[i].get_child(0)
 		for button: Button in row.get_children():

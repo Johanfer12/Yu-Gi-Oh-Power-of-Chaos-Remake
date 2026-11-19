@@ -3,6 +3,9 @@ extends RefCounted
 ## Python importer messages live in tools/pocx/messages.py; the launcher passes --lang.
 
 const TEXT := {
+	"reimport": {
+		"s": "Volver a importar", "e": "Reimport", "g": "Erneut importieren",
+		"f": "Réimporter", "i": "Reimporta", "j": "再インポート"},
 	"apk_tooltip": {
 		"s": "Crea tus recursos privados (.pck) para importarlos una vez en el APK público.",
 		"e": "Creates your private content (.pck) to import once into the public APK.",

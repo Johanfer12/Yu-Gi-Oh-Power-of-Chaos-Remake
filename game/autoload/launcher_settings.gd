@@ -7,6 +7,8 @@ var frame_rate := 0
 var simulation_speed := 1.0
 var fast_play := false
 var improved_card_texts := false
+var fullscreen_mode := Window.MODE_WINDOWED
+var windowed_mode := Window.MODE_MAXIMIZED
 var _refresh_clock := 0.0
 
 func _ready() -> void:
@@ -24,6 +26,10 @@ func reload_preferences() -> void:
 	if simulation_speed not in [1.0, 2.0]: simulation_speed = 1.0
 	fast_play = bool(config.get_value("launcher", "fast_play", false))
 	improved_card_texts = bool(config.get_value("launcher", "improved_card_texts", false))
+	fullscreen_mode = int(config.get_value("launcher", "fullscreen_mode", Window.MODE_WINDOWED)) as Window.Mode
+	if fullscreen_mode not in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]:
+		fullscreen_mode = Window.MODE_WINDOWED
+	windowed_mode = Window.MODE_WINDOWED if config.get_value("launcher", "windowed_mode", Window.MODE_MAXIMIZED) == Window.MODE_WINDOWED else Window.MODE_MAXIMIZED
 
 func save_preferences() -> void:
 	var config := ConfigFile.new()
@@ -36,6 +42,27 @@ func save_preferences() -> void:
 	var error := config.save(Paths.settings_path())
 	if error != OK: push_error("No se pudieron guardar los ajustes: " + error_string(error))
 	apply_timing()
+
+func toggle_fullscreen(window: Window) -> void:
+	if window.mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]:
+		set_display_mode(window, windowed_mode)
+	else:
+		set_display_mode(window, Window.MODE_FULLSCREEN)
+
+func set_display_mode(window: Window, mode: Window.Mode) -> void:
+	var fullscreen := mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]
+	if fullscreen and window.mode in [Window.MODE_WINDOWED, Window.MODE_MAXIMIZED]:
+		windowed_mode = window.mode
+	window.mode = mode
+	if OS.has_feature("mobile") or DisplayServer.get_name() == "headless":
+		return
+	fullscreen_mode = mode if fullscreen else Window.MODE_WINDOWED
+	var config := ConfigFile.new()
+	config.load(Paths.settings_path())
+	config.set_value("launcher", "fullscreen_mode", fullscreen_mode)
+	config.set_value("launcher", "windowed_mode", windowed_mode)
+	var error := config.save(Paths.settings_path())
+	if error != OK: push_error("No se pudo guardar el modo de pantalla: " + error_string(error))
 
 func gameplay_aspect() -> int:
 	return Window.CONTENT_SCALE_ASPECT_IGNORE if aspect == "stretch" else Window.CONTENT_SCALE_ASPECT_KEEP

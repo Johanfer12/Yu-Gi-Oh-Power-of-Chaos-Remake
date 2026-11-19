@@ -182,9 +182,9 @@ func _set_volume(v: int) -> void:
 func _set_display(b: int) -> void:
 	bits = b
 	if b == 0:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MAXIMIZED)
+		LauncherSettings.set_display_mode(get_tree().root, Window.MODE_MAXIMIZED)
 	else:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
+		LauncherSettings.set_display_mode(get_tree().root, Window.MODE_EXCLUSIVE_FULLSCREEN)
 
 
 func _store() -> void:

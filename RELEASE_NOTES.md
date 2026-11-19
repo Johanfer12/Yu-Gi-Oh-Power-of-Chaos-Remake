@@ -1,3 +1,15 @@
+## v0.1.0-alpha.41
+
+- Joey can start a duel with its own imported resources even if Yugi is absent (issue #11).
+- On Windows, hover over an installed game and click the small **↻** button in its upper-right corner. Choose **ISO** or **Folder**, then select **Extract for PC** to rebuild that game's resources while keeping your saves and other games (issue #11).
+- The launcher remembers whether its music is muted. Windows also restores fullscreen when you reopen the app after enabling it with **F11**, **Alt+Enter**, or the game's display options.
+
+Android users can update from the launcher and confirm the installation in Android's installer. Keep the app installed to retain your imported PCK and saves. Android45 uses the same package and signing certificate as Android44.
+
+- Joey ya puede iniciar duelos con sus propios recursos aunque Yugi no esté instalado (issue #11).
+- En Windows, pasa el mouse sobre un juego instalado y pulsa **↻** en la esquina superior derecha. Elige **ISO** o **Carpeta** y pulsa **Extraer para PC**. La reimportación reconstruye los recursos de ese juego y conserva tus partidas y los demás juegos.
+- El launcher recuerda si silenciaste su música. Windows también restaura la pantalla completa si la activaste con **F11**, **Alt+Enter** o las opciones del juego.
+
 ## v0.1.0-alpha.40
 
 - The Windows importer now supports the original 165-card US edition of Yugi the Destiny (issue #7). Select your Yugi disc or ISO, then select your US Kaiba the Revenge disc or ISO when prompted. The importer applies the official December 2003 update automatically. You can import Yugi on its own or add both games. An already updated Yugi installation still works as a source.

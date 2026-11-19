@@ -3,7 +3,10 @@ extends Node
 ## Desde el editor, la "carpeta del juego" es la raiz del repositorio (la que contiene game/).
 ## En Android no se puede escribir junto al APK, asi que se usa el almacenamiento de la app.
 
-var data_dir: String
+var data_dir: String:
+	set(value):
+		data_dir = value
+		_inventory_root = ""
 var save_dir: String
 var storage_dir: String
 var storage_error := false
@@ -208,7 +211,6 @@ func mount_user_content_pack() -> bool:
 	if not ProjectSettings.load_resource_pack(source, false):
 		return false
 	data_dir = "res://data"
-	_inventory_root = ""
 	_installed.clear()
 	content_pack_persistent = FileAccess.file_exists("res://data/inventory.json")
 	return content_pack_persistent

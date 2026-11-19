@@ -38,7 +38,7 @@ func _ready() -> void:
 
 
 ## El modo maximizado se configura al crear la ventana en project.godot.
-## Solo --window=ANCHOxALTO fuerza un tamano distinto para herramientas/pruebas.
+## --window=ANCHOxALTO tiene prioridad sobre la preferencia del launcher.
 func _apply_window_override() -> void:
 	if DisplayServer.get_name() == "headless" or OS.has_feature("mobile"):
 		return
@@ -51,3 +51,5 @@ func _apply_window_override() -> void:
 		DisplayServer.window_set_position(DisplayServer.screen_get_position(screen)
 				+ (DisplayServer.screen_get_size(screen) - size) / 2)
 		return
+	if LauncherSettings.fullscreen_mode != Window.MODE_WINDOWED:
+		get_window().mode = LauncherSettings.fullscreen_mode

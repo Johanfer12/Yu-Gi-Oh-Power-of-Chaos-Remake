@@ -8,7 +8,6 @@ const TITLES := {"yugi": "Yugi the Destiny", "kaiba": "Kaiba the Revenge", "joey
 # El ultimo nodo recibe los atajos antes que las escenas y sus SubViewports.
 class WindowShortcuts:
 	extends Node
-	var _windowed_mode := Window.MODE_WINDOWED
 	func _input(event: InputEvent) -> void:
 		if not event is InputEventKey: return
 		var key: int = event.keycode if event.keycode != 0 else event.physical_keycode
@@ -16,12 +15,7 @@ class WindowShortcuts:
 		# Consumir tambien la repeticion: Alt+Enter no confirma una carta o un dialogo.
 		get_tree().root.set_input_as_handled()
 		if event.pressed and not event.echo:
-			var window := get_tree().root
-			if window.mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]:
-				window.mode = _windowed_mode
-			else:
-				_windowed_mode = window.mode
-				window.mode = Window.MODE_FULLSCREEN
+			LauncherSettings.toggle_fullscreen(get_tree().root)
 
 var _window_shortcuts := WindowShortcuts.new()
 var _mobile_pointer: CanvasLayer

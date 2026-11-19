@@ -12,7 +12,7 @@ import sys
 import tempfile
 import uuid
 
-from .__main__ import (GAMES, STARTER_TABLES, _read_va, extract,
+from .__main__ import (GAMES, SHARED_DIRS, STARTER_TABLES, _read_va, extract,
                        export_duel_image)
 from .archive import Archive, folder_names, pack_folder
 from .executable import validate
@@ -254,7 +254,8 @@ def _update_yugi(original, update_source, kaiba_root, work):
 
 
 def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tuple[str, Path]] | None = None, base: Path | None = None,
-                 compact: bool = False, replace: bool = False, *, yugi_update: Path | None = None) -> None:
+                 compact: bool = False, replace: bool = False, *, yugi_update: Path | None = None,
+                 reimport: frozenset[str] = frozenset()) -> None:
     output = output.resolve()
     if output.exists() and not replace:
         raise user_error("dest_exists_kept")
@@ -263,12 +264,14 @@ def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tupl
     if (not sources and not (base is not None and (extra_voices or compact))) or not set(sources) <= GAMES.keys():
         raise user_error("select_one_game")
     previous = None
+    replacing = set()
     if base is not None:
         base = base.resolve()
         if output.is_relative_to(base) and not (replace and output == base):
             raise user_error("dest_inside_base")
         previous = json.loads((base / "inventory.json").read_text(encoding="utf-8"))
-        if set(sources) & previous["games"].keys():
+        replacing = set(sources) & previous["games"].keys()
+        if replacing - reimport:
             raise user_error("game_already")
     output.parent.mkdir(parents=True, exist_ok=True)
     # Same volume: rename publishes only a fully converted installation.
@@ -325,12 +328,23 @@ def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tupl
             old_master = previous.get("master", next(g for g in reversed(GAMES) if g in previous["games"]))
             new_master = current["master"]
             promote = list(GAMES).index(new_master) > list(GAMES).index(old_master)
+            use_new_shared = promote or old_master in replacing
+            # Remove superseded files in staging, including stale compact variants.
+            for game in replacing:
+                if (merged / game).is_dir():
+                    shutil.rmtree(merged / game)
+                (merged / "common/duel" / f"{game}_image.bin").unlink(missing_ok=True)
+            shared_dirs = tuple("common/" + name.replace("bin#/", "bin/") for name in SHARED_DIRS) + ("common/db/",)
+            if old_master in replacing:
+                for directory in shared_dirs:
+                    if (merged / directory).is_dir():
+                        shutil.rmtree(merged / directory)
             # The most recent installed game owns the shared card tables and artwork.
             for path in converted.rglob("*"):
                 if not path.is_file():
                     continue
                 relative = path.relative_to(converted)
-                if relative.parts[0] == "common" and relative.parts[1] != "duel" and not promote:
+                if relative.parts[0] == "common" and relative.parts[1] != "duel" and not use_new_shared:
                     continue
                 destination = merged / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
@@ -338,19 +352,27 @@ def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tupl
             for name, field in (("inventory.json", "games"), ("voice_manifest.json", "games")):
                 old = json.loads((base / name).read_text(encoding="utf-8"))
                 new = json.loads((converted / name).read_text(encoding="utf-8"))
+                if name == "voice_manifest.json":
+                    for game in replacing:
+                        _keep_other_voice_languages(base, merged, game, old[field].get(game, {}), new[field][game])
                 old[field].update(new[field])
                 if name == "inventory.json":
-                    if promote:
+                    if use_new_shared:
                         for key in ("card_pools", "cards_total", "cards_with_art"):
                             old[key] = new[key]
-                    old["master"] = new_master if promote else old_master
+                    old["master"] = new_master if use_new_shared else old_master
                     old.setdefault("duel_images", {}).update(new.get("duel_images", {}))
                 (merged / name).write_text(json.dumps(old, indent=2), encoding="utf-8")
             keys = json.loads((base / "color_keys.json").read_text(encoding="utf-8"))
+            removed_prefixes = tuple(game + "/" for game in replacing)
+            if old_master in replacing:
+                removed_prefixes += shared_dirs
+            keys = {k: v for k, v in keys.items() if not k.startswith(removed_prefixes)}
             incoming_keys = json.loads((converted / "color_keys.json").read_text(encoding="utf-8"))
-            keys.update({k: v for k, v in incoming_keys.items() if promote or not k.startswith("common/")})
+            keys.update({k: v for k, v in incoming_keys.items() if use_new_shared or not k.startswith("common/")})
             (merged / "color_keys.json").write_text(json.dumps(keys, indent=1), encoding="utf-8")
             audio = json.loads((base / "common/audio_native.json").read_text(encoding="utf-8"))
+            audio = {k: v for k, v in audio.items() if not k.startswith(tuple(game + "/" for game in replacing))}
             audio.update(json.loads((converted / "common/audio_native.json").read_text(encoding="utf-8")))
             (merged / "common/audio_native.json").write_text(json.dumps(audio, indent=2), encoding="utf-8")
             for game, voice_path in extra_voices or []:
@@ -358,6 +380,21 @@ def import_games(sources: dict[str, Path], output: Path, extra_voices: list[tupl
                     _import_voice(voice_path, merged, game)
             _publish(merged, output, compact, replace)
     print(t("import_done"), flush=True)
+
+
+def _keep_other_voice_languages(base: Path, merged: Path, game: str, old: dict, new: dict) -> None:
+    """Keep installed voice languages absent from the newly selected source and packs."""
+    kept = []
+    for language in set(old.get("languages", [])) - set(new["languages"]):
+        relative = Path(game, "voice", language)
+        if (base / relative).is_dir():
+            shutil.copytree(base / relative, merged / relative)
+            kept.append(language)
+            prefix = relative.as_posix() + "/"
+            new.setdefault("raw_files", {}).update({
+                path: digest for path, digest in old.get("raw_files", {}).items() if path.startswith(prefix)
+            })
+    new["languages"] = sorted(set(new["languages"]) | set(kept))
 
 
 def _publish(staging: Path, output: Path, compact: bool, replace: bool) -> None:
@@ -396,6 +433,8 @@ def _main() -> None:
     parser.add_argument("--base", type=Path, help="datos existentes que se conservarán")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--replace", action="store_true", help="actualiza atómicamente una biblioteca existente")
+    parser.add_argument("--reimport", action="append", choices=GAMES, default=[],
+                        help="permite volver a importar el juego instalado indicado")
     parser.add_argument("--create-apk", action="store_true", help="compila con la copia Android; --out es la carpeta del launcher")
     parser.add_argument("--no-compact", action="store_true", help="conserva PNG/WAV para herramientas de desarrollo")
     parser.add_argument("--voice", action="append", default=[], metavar="GAME=VOICE.DAT",
@@ -413,10 +452,12 @@ def _main() -> None:
         sources = {game: getattr(args, game) for game in GAMES if getattr(args, game) is not None}
         if args.create_apk:
             from .android_builder import create_apk
-            create_apk(sources, args.out, extra, args.base, yugi_update=args.yugi_update)
+            create_apk(sources, args.out, extra, args.base, yugi_update=args.yugi_update,
+                       reimport=frozenset(args.reimport))
         else:
             import_games(sources, args.out, extra, args.base,
-                         compact=not args.no_compact, replace=args.replace, yugi_update=args.yugi_update)
+                         compact=not args.no_compact, replace=args.replace, yugi_update=args.yugi_update,
+                         reimport=frozenset(args.reimport))
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError, SystemExit) as error:
         failure = (error if isinstance(error, ImportFailure) else
                    ImportFailure("setup", str(error)) if isinstance(error, UserError) else

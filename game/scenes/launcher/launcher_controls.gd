@@ -66,8 +66,10 @@ func _ready() -> void:
 	# Los iconos se rasterizan grandes y se dibujan reducidos: con mipmaps no se ven dentados.
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	var saved: Dictionary = SaveData.data.get("launcher", {})
-	volume = clampf(float(saved.get("music_volume", DEFAULT_VOLUME)), 0.0, 1.0)
-	muted = bool(saved.get("music_muted", false))
+	var config := ConfigFile.new()
+	config.load(Paths.settings_path())
+	volume = clampf(float(config.get_value("launcher", "music_volume", saved.get("music_volume", DEFAULT_VOLUME))), 0.0, 1.0)
+	muted = bool(config.get_value("launcher", "music_muted", saved.get("music_muted", false)))
 	pointer_mode = str(saved.get("pointer_mode", "menu"))
 	for pair in [["sound", SVG_SOUND], ["muted", SVG_MUTED], ["gear", SVG_GEAR],
 			["close", SVG_CLOSE], ["exit", SVG_EXIT], ["update", SVG_UPDATE], ["cloud", SVG_CLOUD]]:
@@ -250,7 +252,7 @@ func _input(event: InputEvent) -> void:
 			"hold", "menu":
 				pointer_mode = _hit(local_pos)
 				_focused_row = 6
-				_save()
+				_save_pointer_mode()
 			"close", "outside":
 				_open_panel(false)
 			"slider":
@@ -354,7 +356,7 @@ func _cycle_option(row: int, step: int) -> void:
 			LauncherSettings.improved_card_texts = not LauncherSettings.improved_card_texts
 		5:
 			pointer_mode = "hold" if pointer_mode == "menu" else "menu"
-			_save()
+			_save_pointer_mode()
 	LauncherSettings.save_preferences()
 	if row == 4 and LauncherSettings.improved_card_texts:
 		CardTranslations.ensure_spanish_pack()
@@ -386,9 +388,18 @@ func _set_volume(v: float) -> void:
 
 
 func _save() -> void:
-	var saved: Dictionary = SaveData.data.get("launcher", {})
-	saved.merge({"music_volume": volume, "music_muted": muted, "pointer_mode": pointer_mode}, true)
-	SaveData.data["launcher"] = saved
+	var config := ConfigFile.new()
+	config.load(Paths.settings_path())
+	config.set_value("launcher", "music_volume", volume)
+	config.set_value("launcher", "music_muted", muted)
+	var error := config.save(Paths.settings_path())
+	if error != OK:
+		push_error("No se pudo guardar el sonido del launcher: " + error_string(error))
+	changed.emit()
+
+
+func _save_pointer_mode() -> void:
+	SaveData.data.get_or_add("launcher", {})["pointer_mode"] = pointer_mode
 	if Paths.has_data():
 		SaveData.save()
 	changed.emit()

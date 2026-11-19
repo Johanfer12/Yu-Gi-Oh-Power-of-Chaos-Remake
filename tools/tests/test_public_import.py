@@ -83,7 +83,7 @@ class ImportTests(unittest.TestCase):
         payload = json.loads(marker.removeprefix("POC_IMPORT_ERROR "))
         self.assertEqual(payload, failure.payload())
 
-    def _synthetic_import(self, root, game, output, base=None):
+    def _synthetic_import(self, root, game, output, base=None, *, reimport=frozenset(), replace=False):
         from pocx.__main__ import GAMES, STARTER_TABLES
         installation = root / (game + "-source")
         installation.mkdir(exist_ok=True)
@@ -99,6 +99,7 @@ class ImportTests(unittest.TestCase):
                 "voice_manifest.json": {"games": {game: {"languages": ["e"], "default": "e", "sources": []}}},
                 "color_keys.json": {},
                 "common/db/cards.json": [game],
+                f"common/duel/{game}_image.bin": game,
                 f"{game}/file/starter_deck.json": {"main": [1]},
             }.items():
                 path = destination / name
@@ -112,7 +113,7 @@ class ImportTests(unittest.TestCase):
              patch("pocx.import_games.installation", return_value=names), \
              patch("pocx.import_games.extract", side_effect=converted), \
              patch("pocx.import_games.export_audio", side_effect=audio):
-            import_games({game: installation}, output, base=base)
+            import_games({game: installation}, output, base=base, replace=replace, reimport=reimport)
 
     def test_each_game_can_be_imported_alone(self):
         for game in ("yugi", "kaiba", "joey"):
@@ -160,6 +161,47 @@ class ImportTests(unittest.TestCase):
             pack = json.loads((root / "new/voice_manifest.json").read_text())["games"]["joey"]
             self.assertEqual(pack["languages"], ["e", "s"])
             self.assertEqual((root / "base/voice_manifest.json").read_bytes(), before)
+
+    def test_reimport_repairs_joey_and_keeps_other_games_and_dubs(self):
+        from test_media_import import archive
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            base, library = root / "base", root / "library"
+            self._synthetic_import(root, "kaiba", base)
+            self._synthetic_import(root, "joey", library, base=base)
+            engine = library / "common/duel/joey_image.bin"
+            engine.unlink()
+            stale = library / "joey/obsolete.webp"
+            stale.write_bytes(b"obsolete")
+            shared = library / "common/db/cards.json"
+            shared.write_text("stale")
+            voice = root / "Spanish.dat"
+            archive(voice, {"joey/spanish/internal/attack.wav": b"synthetic sample"})
+            import_games({}, library, [("joey", voice)], base=library, replace=True)
+
+            self._synthetic_import(root, "joey", library, base=library, reimport={"joey"}, replace=True)
+            self.assertEqual(engine.read_text(), '"joey"')
+            self.assertFalse(stale.exists())
+            self.assertEqual(json.loads(shared.read_text()), ["joey"])
+            self.assertEqual((library / "common/duel/kaiba_image.bin").read_bytes(),
+                             (base / "common/duel/kaiba_image.bin").read_bytes())
+            self.assertEqual((library / "kaiba/file/starter_deck.json").read_bytes(),
+                             (base / "kaiba/file/starter_deck.json").read_bytes())
+            manifest = json.loads((library / "voice_manifest.json").read_text())
+            self.assertEqual(manifest["games"]["joey"]["languages"], ["e", "s"])
+            self.assertEqual((library / "joey/voice/s/internal/attack.wav").read_bytes(), b"synthetic sample")
+
+            self._synthetic_import(root, "kaiba", library, base=library, reimport={"kaiba"}, replace=True)
+            self.assertEqual(json.loads(shared.read_text()), ["joey"])
+            before = {p.relative_to(library): p.read_bytes() for p in library.rglob("*") if p.is_file()}
+            with patch("pocx.import_games.unpack", side_effect=ValueError("broken ISO")):
+                with self.assertRaises(ImportFailure) as caught:
+                    import_games({"joey": root / "bad.iso"}, library, base=library,
+                                 reimport={"joey"}, replace=True)
+            self.assertEqual(caught.exception.stage, "iso")
+            self.assertEqual(caught.exception.diagnostics, "broken ISO")
+            self.assertEqual(before, {p.relative_to(library): p.read_bytes()
+                                      for p in library.rglob("*") if p.is_file()})
 
     def test_wrong_or_missing_game_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
