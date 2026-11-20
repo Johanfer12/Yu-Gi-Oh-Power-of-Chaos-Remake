@@ -190,7 +190,10 @@ static func normalize(event: Dictionary, duel: Duel) -> Dictionary:
 		d["result_flags"] = [int(args[2]) & 255, (int(args[2]) >> 8) & 255]
 		d["damage"] = [int(args[0]), int(args[1])]
 		var defender: int = d["defender"]
-		d["reflection"] = bool(d.get("native_reflection", d["target_zone"] >= 0 and (d["result_flags"][defender] & 2) == 0))
+		# 40cca0/40ced0 leen los flags del lado opuesto al atacante, incluso si
+		# 0x33 dirige el ataque a una carta de su mismo lado.
+		var opposing_side := 1 - int(d["p"])
+		d["reflection"] = bool(d.get("native_reflection", d["target_zone"] >= 0 and (d["result_flags"][opposing_side] & 2) == 0))
 		var shakes: Array = []
 		for side in 2:
 			var z: int = d["source_zone"] if side == d["p"] else d["target_zone"]
@@ -198,9 +201,10 @@ static func normalize(event: Dictionary, duel: Duel) -> Dictionary:
 			# Jo414110: state2 afecta el bit2 o el resultado4 exacto de bits2..4.
 			var hit := (result & 2) != 0 or (result & 0x1c) == 4 if d.get("native_impact", false) else (result & 6) != 0
 			if z < 0 or not hit: continue
-			var at := DuelMem.zone(side, z)
+			var card_side: int = defender if side == opposing_side else side
+			var at := DuelMem.zone(card_side, z)
 			var flags := duel.m.u8(at + 6)
-			shakes.append({"card": duel.cards.id_of(duel.m.u16(at) & 0xfff), "pos": Geometry.zone(side, z), "angle": ((flags & 1) + side * 2) * 128, "face": bool(flags & 2)})
+			shakes.append({"card": duel.cards.id_of(duel.m.u16(at) & 0xfff), "pos": Geometry.zone(card_side, z), "angle": ((flags & 1) + card_side * 2) * 128, "face": bool(flags & 2)})
 		d["shake_cards"] = shakes
 		d["reflection_size"] = Geometry.FIELD_SIZE
 		if d["target_zone"] >= 0 and (duel.m.u8(DuelMem.zone(defender, d["target_zone"]) + 6) & 1): d["reflection_size"] = Vector2(Geometry.FIELD_SIZE.y, Geometry.FIELD_SIZE.x)

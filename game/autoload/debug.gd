@@ -68,6 +68,8 @@ var _shots_dir := ""
 var _shots_saved := 0
 ## --ui-values: archivo de valores de las pantallas anteriores al duelo.
 var _values: FileAccess
+var _values_full := false
+var _replay_last_tick := -1
 ## Con --ui-values el barrido entre escenas tambien cuenta sus ticks sin ventana (Game.goto).
 var headless_wipe := false
 const VALUES_LIMIT := 6000 # Fotogramas sin llegar al duelo: la entrada grabada no lo abre.
@@ -86,6 +88,7 @@ func _ready() -> void:
 	if _keys.size() > 0:
 		_shot_frame += _keys.size() * KEY_INTERVAL
 	var replay := Paths.cmdline_value("ui-replay")
+	_values_full = OS.get_cmdline_user_args().has("--ui-values-full")
 	if replay != "":
 		_load_replay(replay, Paths.cmdline_value("ui-anchor").to_int() if Paths.cmdline_value("ui-anchor") != "" else 2)
 		NativeClock.interpolate = false
@@ -217,6 +220,10 @@ func _load_replay(path: String, anchor_scene: int) -> void:
 	var legacy := false
 	while not f.eof_reached():
 		var line := f.get_line()
+		if _values_full and anchor >= 0 and (line.contains("\"ui_value\"") or line.contains("\"editor_state\"") or line.contains("\"d01_duel_end\"") or line.contains("\"ui_trace_end\"")):
+			var observed: Variant = JSON.parse_string(line)
+			if observed is Dictionary and observed.has("tick"):
+				_replay_last_tick = maxi(_replay_last_tick, int(observed.tick) - anchor)
 		if line.contains("\"ui_seed\""):
 			var s: Dictionary = JSON.parse_string(line)
 			# 0x40c66a siembra el objeto 0x5aed28 una vez; la autosiembra 0x1105 de 531140 no
@@ -243,6 +250,7 @@ func _load_replay(path: String, anchor_scene: int) -> void:
 			anchor = clock
 		elif e["ev"] == "ui_scene" and anchor >= 0:
 			_scene_ticks.append(clock - anchor)
+			_replay_last_tick = maxi(_replay_last_tick, clock - anchor)
 		elif e["ev"] == "ui_frame" and anchor >= 0:
 			var down: Array = []
 			for k in e["down"]: down.append(int(k))
@@ -250,6 +258,7 @@ func _load_replay(path: String, anchor_scene: int) -> void:
 			# en el mismo tick en que cambia la escena (ui_frame antes de ui_scene) es de la
 			# escena que se va.
 			events.append([clock - anchor, int(e["x"]), int(e["y"]), down, _scene_ticks.size()])
+			_replay_last_tick = maxi(_replay_last_tick, clock - anchor)
 			legacy = legacy or not e.has("src")
 	# Trazas antiguas: el raton se leia con GetAsyncKeyState al presentar y un clic rapido cuyo
 	# WM_LBUTTONUP el juego ya habia procesado (cambiando de escena) aparece despues del cambio.
@@ -280,12 +289,16 @@ func _step_replay() -> void:
 		_replay_anchor = _frame
 		_last_screen = screen
 		print("ui-anchor: ", _frame)
-	if Game._screen != _last_screen and Game._screen != null:
-		_last_screen = Game._screen
-		_port_scene_frames.append(_frame)
-		print("ui-port-scene: %d %d %s" % [_port_scene_frames.size(), _frame,
+	var scene := replay_scene()
+	if scene != _last_screen and scene != null:
+		_last_screen = scene
+		# Game.goto prepara el primer dibujo en el tick que pide la transición.
+		# Detectar la pantalla en el siguiente _process sólo registra el cambio.
+		var entered := Game._screen_replay_frame if scene == Game._screen else _frame
+		_port_scene_frames.append(entered)
+		print("ui-port-scene: %d %d %s" % [_port_scene_frames.size(), entered,
 				_last_screen.get_script().resource_path.get_file()])
-		_value("scene", _last_screen.get_script().resource_path.get_file())
+		_value("scene", replay_scene_label(_last_screen), entered)
 	_step_values()
 	while _replay_at < _replay.size():
 		var at := _port_frame_for(int(_replay[_replay_at][0]), int(_replay[_replay_at][4]))
@@ -295,25 +308,53 @@ func _step_replay() -> void:
 		_replay_at += 1
 
 
-func _value(key: String, value: String) -> void:
+func replay_scene() -> Node:
+	var screen: Node = Game._screen
+	if not _values_full or not is_instance_valid(screen): return screen
+	if screen.get_script().resource_path.get_file() in ["normal_duel.gd", "joey_native_normal.gd"]:
+		var result: Node = screen._result
+		if is_instance_valid(result): return result
+	return screen
+
+
+func replay_scene_label(screen: Node) -> String:
+	var script: String = screen.get_script().resource_path.get_file()
+	if script == "deck_editor.gd" and screen._swap: return "deck_editor.gd:swap"
+	return script
+
+
+func _value(key: String, value: String, at := -1) -> void:
 	if _values != null:
-		_values.store_line(JSON.stringify({"frame": _frame - _replay_anchor, "key": key, "value": value}))
+		var frame := at if at >= 0 else _frame
+		_values.store_line(JSON.stringify({"frame": frame - _replay_anchor, "key": key, "value": value}))
 
 
-## --ui-values: sonidos pedidos en este fotograma; al abrirse el duelo (o al agotar el limite)
-## cierra el archivo y el juego.
+## --ui-values termina al abrirse el duelo. --ui-values-full continúa hasta la última
+## escena y tick observados en la grabación, contando el tiempo desde esa escena.
 func _step_values() -> void:
 	if _values == null: return
 	for sound: String in Audio.played_log: _value("sound", sound)
 	Audio.played_log.clear()
 	var script: String = _last_screen.get_script().resource_path.get_file() if is_instance_valid(_last_screen) else ""
 	var in_duel := script in ["normal_duel.gd", "joey_native_normal.gd"]
-	if not in_duel and _frame - _replay_anchor < VALUES_LIMIT: return
-	_value("end", "duel" if in_duel else "limit")
+	var end := "duel" if in_duel and not _values_full else ""
+	var limit := VALUES_LIMIT
+	if _values_full:
+		var final_frame := _port_frame_for(_replay_last_tick, _scene_ticks.size())
+		if final_frame >= 0 and _frame > final_frame: end = "trace"
+		limit += maxi(_replay_last_tick, 0)
+	if end == "" and _frame - _replay_anchor < limit: return
+	_value("end", end if end != "" else "limit")
 	_values.close()
 	_values = null
 	Audio.stop_all()
-	get_tree().quit(0 if in_duel else 3)
+	if _values_full:
+		# Con reloj fijo se pueden pedir varios sonidos antes de que corra el mezclador.
+		# Dejar que el hilo de audio libere los playbacks antes de salir de la sonda.
+		set_process(false)
+		var deadline := Time.get_ticks_msec() + 500
+		while Time.get_ticks_msec() < deadline: await get_tree().process_frame
+	get_tree().quit(0 if end != "" else 3)
 
 
 ## Fotograma del port para el tick T del original, que ocurre tras `n` cambios de escena, o -1

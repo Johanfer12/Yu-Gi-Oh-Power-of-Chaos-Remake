@@ -28,6 +28,11 @@ static var _original_mouse_mode := Input.MOUSE_MODE_VISIBLE
 var _owns_mouse := false
 var hide_system_mouse := true
 var show_pointer := not OS.has_feature("mobile")
+var _waves_only := false
+
+func _init(waves_only := false) -> void:
+	_waves_only = waves_only
+	if _waves_only: hide_system_mouse = false
 
 func _ready() -> void:
 	z_index = 4000
@@ -35,6 +40,10 @@ func _ready() -> void:
 	_sprite.centered = false
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_child(_sprite)
+	if _waves_only:
+		_sprite.hide()
+		return
+	add_to_group("duel_cursors")
 	if hide_system_mouse:
 		if _mouse_owners == 0: _original_mouse_mode = Input.mouse_mode
 		_mouse_owners += 1
@@ -116,6 +125,25 @@ func click(pos: Vector2 = pointer_position, from_input := false) -> void:
 	_waves.append({"sprite": sprite, "counter": 0, "origin": pos, "skip_first_tick": from_input})
 	_refresh_wave(_waves.back())
 
+## Las ondas ya creadas siguen en el reloj de interfaz al cambiar de pantalla.
+func take_transition_waves() -> Node2D:
+	if _waves.is_empty(): return null
+	var layer: Node2D = get_script().new(true)
+	layer._fraction = _fraction
+	layer._blend = _blend
+	layer._waves = _waves
+	for wave in _waves:
+		var sprite: Node2D = wave["sprite"]
+		remove_child(sprite)
+		layer.add_child(sprite)
+	_waves = []
+	_blend = NativeBlend.new()
+	return layer
+
+
+func has_active_waves() -> bool:
+	return not _waves.is_empty()
+
 func advance(delta: float) -> void:
 	_blend.restore()
 	_fraction += NativeClock.ticks(delta)
@@ -170,6 +198,7 @@ func event(e: Dictionary, duel: Duel) -> bool:
 	return true
 
 func _refresh() -> void:
+	if _waves_only: return
 	var index := resource_index(action, pressed)
 	var path: String = "common/cursor/" + resource(index)
 	_sprite.texture = Assets.texture(path) if Assets.exists(path) else null

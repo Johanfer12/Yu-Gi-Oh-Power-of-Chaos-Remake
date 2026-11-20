@@ -11,6 +11,7 @@ extends Node2D
 ## ignorar el raton (mouse_filter IGNORE): si no, se lo quedan antes que _unhandled_input.
 
 signal closed(button_id: String)
+signal closing(button_id: String)
 
 var background: Texture2D
 var buttons: Array[Dictionary] = []   # {id, pos (relativa), on: Texture2D, push: Texture2D}
@@ -56,6 +57,7 @@ func _begin_native_close(id: String, cancel := false) -> void:
 	native_counter = 0
 	native_phase = 5 if cancel else 3
 	_pressed = -1
+	closing.emit(id)
 	queue_redraw()
 
 func native_accepts_input() -> bool:

@@ -495,6 +495,7 @@ func _draw() -> void:
 	var tt := t if t <= 0 else -t
 	var grow := DuelVisualMath.cos_fx(((tt + 0x100) / 2 - 0x80) & 0x1ff) >> 8
 	var from := Vector2i(DuelGeometry.location(p & 1, loc, 0, duel.m.u8(DuelMem.pl(p & 1) + 2)))
+	if game == "joey" and loc == DuelMem.LOC_BANISH: from = Vector2i(DuelGeometry.JOEY_EXCLUDED[p & 1])
 	var c := Vector2i((center.x - from.x) * grow >> 8, (center.y - from.y) * grow >> 8) + from
 	var s := Vector2i((size.x * grow) >> 8, (size.y * grow) >> 8)
 	var shown: Rect2 = _blend.at("window", Rect2(c - s / 2, s))

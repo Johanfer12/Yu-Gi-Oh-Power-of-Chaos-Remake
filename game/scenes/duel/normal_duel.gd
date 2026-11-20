@@ -8,24 +8,14 @@ var _event_pos := 0
 var _ui_reported := false
 ## Clics desde el ultimo fotograma del motor (0x200 izquierdo, 0x100 derecho; ver 0x5407f0).
 var _press_bits := 0
-## Ventana del cuadro de dialogo que esta mostrando el motor (dialog_open).
-var _dialog_box: Node2D = null
 ## Ventana de la lista de seleccion (duel_list_window.gd) mientras existe.
 var _list_window: Node2D = null
 ## Panel de fases (objeto DAT_005af874, 0x4614b0): phase.txt da las posiciones x*1000+y
 ## (207,49+82n) de las hojas pha_s_* (2x2 celdas de 40x90) y las tiras de volteo pha_b_*/pha_r_*
 ## (9 celdas de 40x90) usadas al cambiar de jugador.
-const PHASE_NAMES := ["dr", "st", "m1", "ba", "m2", "en"]
 const PHASE_ORIGIN := Vector2(207, 49)
 const PHASE_STEP := 82
 const PHASE_CELL := Vector2(40, 90)
-## Estado del objeto: +0x15c jugador, +0x160 fase mostrada, +0x164 fundido de la fase actual,
-## +0x168 volteo de entrada, +0x16c ficha iluminada (0x4614b0: 0x15c = DAT_005af770,
-## 0x160 = -1, 0x164 = 0x100, 0x168 = 0x200, 0x16c = -1).
-var _ph_p := 0
-var _ph_phase := -1
-var _ph_fade := 0x100
-var _ph_intro := 0x200
 var _ph_clock := 0.0
 var _ph_blend := NativeBlend.new()   # fundido y pulso de la ficha de la fase entre ticks
 ## Ticks nativos pendientes para el motor (un paso de 53dbf0 por tick).
@@ -33,14 +23,7 @@ var _engine_clock := 0.0
 ## El motor compartido completa op14 al emitirlo; Kaiba aun debe consumir
 ## la vuelta de acuse405450 despues de retirarse el objeto.
 var _start_banner_ack := false
-var _ph_drawn := []
-var _phase_layer := Node2D.new()
 var _phase_mask: Image
-## Kaiba (Kaiba_Pc.exe, objeto 0x463600 con vtable 0x59f9a8, mismo estado +0x15c..+0x16c):
-## phase.txt trae ph_b_* (jugador 0) y ph_r_* (jugador 1), tiras de 8 celdas de 29 x 65, en
-## x=220, y=69+80k, y ph_mask (indice 12). Posiciones [x, y] leidas del .txt por indice.
-var _ph_pos: Array[PackedInt32Array] = []
-
 ## `start_options`: opciones de 0x5418a0 (bit 0 = quien empieza) que deja el piedra-papel-tijera
 ## en DAT_005af770; -1 = sin janken (empieza la CPU, como hasta ahora).
 var _start_options := -1
@@ -55,6 +38,7 @@ var _wait_label: DuelWaitLabel = null
 
 func _init(game_id: String, start_options := -1) -> void:
 	super(game_id, "demo")
+	_phase_layer = Node2D.new()
 	_start_options = start_options
 
 
@@ -78,7 +62,7 @@ func _ready() -> void:
 	_setup_field()
 	#481040: fases0xf0 (Kaiba/Yugi0xff), pilas0x100: las cartas tapan
 	#el fondo opaco de las fichas que alcanza los primeros pixeles de las pilas.
-	add_child(_phase_layer)
+	_setup_phase_panel()
 	add_child(_board)
 	_setup_cursor()
 	_info = _label(Vector2(238, 66), Vector2(552, 22), 12)
@@ -163,9 +147,6 @@ func _ready() -> void:
 		for warning in scenario.apply(_duel):
 			printerr("Escenario: ", warning)
 	_ph_p = _duel.options & 1
-	if game in ["kaiba", "joey"]:
-		for item in Assets.layout("%s/duel/phase/phase.txt" % game).items:
-			_ph_pos.append(Layout.groups(item["value"]))
 	# Hoja con la que se comprueba el raton: pha_s_dr en Yugi, ph_b_dr (indice 0) en Kaiba.
 	var mask_tex := Assets.texture("kaiba/duel/phase/ph_b_dr.png" if game == "kaiba" else "%s/duel/phase/pha_s_dr.png" % game)
 	_phase_mask = mask_tex.get_image() if mask_tex != null else null
@@ -188,8 +169,6 @@ func _process(_delta: float) -> void:
 		_tick_card_stats(_delta)
 	if _visual != null:
 		_visual.pointer = _pointer_pos
-		# Esperando al jugador, la mesa puede adoptar todo lo que el motor cambio sin evento.
-		_visual.at_rest = _waiting_for_player() and _duel.dialog_open.is_empty()
 	if mask_one_active:
 		_ph_clock += NativeClock.ticks(_delta)
 		while _ph_clock >= 1.0:
@@ -259,14 +238,16 @@ func _process(_delta: float) -> void:
 			break
 		# 0x5407f0: los clics valen para un solo fotograma del motor.
 		_duel.set_frame_input(_press_bits, 0, hover, phase_hover)
-		var clicked := (_press_bits & 0x200) != 0
+		var confirm_mask := 0x201 if game == "joey" else 0x200
+		var clicked := (_press_bits & confirm_mask) != 0
 		_press_bits = 0
 		if not _duel.frame():
 			_finished = true
 		# FUN_004437b0: ayuda emergente con el indice que ha pedido el motor en este fotograma.
 		if _help != null:
 			var help_hover := {}
-			if not hover.is_empty():
+			var acknowledged := _duel is JoeyPresentationAdapter and (_duel as JoeyPresentationAdapter).cursor_acknowledged()
+			if not acknowledged and not hover.is_empty():
 				help_hover = hover.duplicate()
 				help_hover["pos"] = _help_pos(hover)
 			_help.step(_duel, help_hover, clicked)
@@ -425,31 +406,6 @@ func _phase_busy() -> bool:
 	return _ph_intro < 0x200 or _ph_fade < 0x80
 
 
-## 0x460b00 (desde el comando de fase 0x402840): mismo jugador -> fundido de la nueva fase;
-## otro jugador -> volteo de todas las fichas.
-func _phase_panel_set(p: int, phase: int) -> void:
-	if phase == -1:
-		_ph_phase = -1
-		_ph_p = p
-		return
-	if _ph_p != p:
-		_ph_intro = 0
-	_ph_p = p
-	_ph_phase = phase
-	_ph_fade = 0
-
-
-## 0x460bb0, una vez por tick nativo.
-func _phase_panel_tick() -> void:
-	if _ph_intro < 0x200:
-		_ph_intro += 8
-	elif _ph_fade < 0x100:
-		_ph_fade += 4 if _ph_phase == 3 and _ph_fade >= 0x40 and _ph_fade < 0x80 else 8
-	elif game == "joey":
-		_ph_fade += 8
-		if _ph_fade > 0x3ff: _ph_fade = 0x100
-
-
 func _collect_visual_events() -> bool:
 	for n in range(_visual_event_pos, _duel.events.size()):
 		var e: Dictionary = _duel.events[n]
@@ -529,6 +485,8 @@ func _collect_events() -> void:
 		if data.get("kind", "") == "cursor" and _duel.ui_key_cursor:
 			# FUN_0053f7e0 -> FUN_00540bd0/00540af0: el teclado desliza el puntero.
 			var at := DuelGeometry.location(int(data["p"]) & 1, int(data["loc"]), int(data["i"]), _duel.m.u8(DuelMem.pl(int(data["p"]) & 1) + 2))
+			if game == "joey" and int(data["loc"]) == DuelMem.LOC_BANISH:
+				at = DuelGeometry.JOEY_EXCLUDED[int(data["p"]) & 1]
 			if int(data["loc"]) == 11: at += DuelGeometry.hand_cursor_offset(int(data["p"]) & 1)
 			PointerGlide.request(_pointer_pos, at, game)
 			_hover_card = _hit_card(PointerGlide.hover(_pointer_pos))
@@ -583,7 +541,7 @@ func _phase_glow() -> int:
 ## mas abajo.
 func _draw_phase_panel() -> void:
 	if game == "kaiba":
-		_draw_phase_panel_kaiba()
+		_draw_phase_panel_kaiba(_phase_glow())
 		return
 	var glow := _phase_glow()
 	var fade_alpha: float = _ph_blend.at(["fade", _ph_p, _ph_phase], (_ph_fade << 1) & 0xff) if _ph_fade < 0x80 else 0.0
@@ -622,68 +580,6 @@ func _draw_phase_panel() -> void:
 		_phase_cell(sheet, at, Vector2(0, row), 1.0)
 		if k == glow:
 			_phase_cell(sheet, at, Vector2(0, row), 64.0 / 255.0, true)
-
-
-## Kaiba 0x4631e0. Tras el volteo cada ficha k es una celda de ph_b_k (jugador 0) o ph_r_k
-## (jugador 1): la fase actual recorre las celdas 1-7 con (DAT_005b1d38 >> 2) & 15 < 7 y si no
-## se queda en la 1; la ficha iluminada (+0x16c) es la celda 1; el resto, la 0. No hay
-## fundido (+0x164 solo retrasa el fin de la animacion). Durante el volteo (+0x168 < 0x200) la
-## ficha k, con t = +0x168 - 24k - 64, muestra la tira del jugador anterior hasta t = 0x80 y
-## despues la del nuevo; con 0 < t < 0x100 la celda 0 se dibuja recortada por la izquierda
-## (0x80 - max(|t - 0x80|, 0x40)) * 17 / 64 px sin moverla y encima va ph_mask una linea
-## mas arriba.
-func _draw_phase_panel_kaiba() -> void:
-	if _ph_pos.size() < 12:
-		return
-	var tick: int = _visual.visual_tick if _visual != null else 0
-	var glow := _phase_glow()
-	var state := [_ph_p, _ph_phase, _ph_intro, glow, (tick >> 2) & 0xf if _ph_intro >= 0x200 else 0]
-	if state == _ph_drawn:
-		return
-	_ph_drawn = state
-	for c in _phase_layer.get_children():
-		c.free()
-	for k in 6:
-		if _ph_intro < 0x200:
-			var t := _ph_intro - k * 24 - 0x40
-			var index := k + 6 * (int(t < 0x80) ^ _ph_p)
-			var at := Vector2(_ph_pos[index][0], _ph_pos[index][1])
-			if t > 0 and t < 0x100:
-				var left := ((0x80 - maxi(absi(t - 0x80), 0x40)) * 0x11) / 64
-				_phase_strip(index, at, 0, left)
-				var mask := Assets.texture("kaiba/duel/phase/ph_mask.png")
-				if mask != null:
-					var s := Sprite2D.new()
-					s.texture = mask
-					s.centered = false
-					s.position = at - Vector2(0, 1)
-					_phase_layer.add_child(s)
-			else:
-				_phase_strip(index, at, 0)
-			continue
-		var index := k + 6 * _ph_p
-		var cell := 0
-		if k == _ph_phase:
-			var c := (tick >> 2) & 0xf
-			cell = c + 1 if c < 7 else 1
-		elif k == glow:
-			cell = 1
-		_phase_strip(index, Vector2(_ph_pos[index][0], _ph_pos[index][1]), cell)
-
-
-## Celda `cell` (de 8) de la tira ph_* de indice `index`, sin sus `left` primeros px.
-func _phase_strip(index: int, at: Vector2, cell: int, left := 0) -> void:
-	var tex := Assets.texture("kaiba/duel/phase/ph_%s_%s.png" % ["b" if index < 6 else "r", PHASE_NAMES[index % 6]])
-	if tex == null:
-		return
-	var w := tex.get_width() / 8
-	var s := Sprite2D.new()
-	s.texture = tex
-	s.centered = false
-	s.region_enabled = true
-	s.region_rect = Rect2(cell * w + left, 0, w - left, tex.get_height())
-	s.position = at
-	_phase_layer.add_child(s)
 
 
 func _phase_cell(path: String, at: Vector2, cell: Vector2, alpha: float, add := false) -> void:

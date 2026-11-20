@@ -8,6 +8,7 @@ const HEADERS := ["Accept: application/vnd.github+json", "User-Agent: PowerOfCha
 const HELPER = preload("res://core/update_helper.gd")
 var current := "v" + str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
 var available := ""
+var release_notes := ""
 var state := "idle"
 var detail := ""
 var _http := HTTPRequest.new()
@@ -46,6 +47,7 @@ func check() -> void:
 	if state in ["checking", "downloading", "installing"]:
 		return
 	available = ""
+	release_notes = ""
 	_state("checking")
 	_request(API, "releases")
 
@@ -89,6 +91,7 @@ static func trusted_asset(url: String) -> bool:
 
 func select_release(releases: Array) -> void:
 	available = ""
+	release_notes = ""
 	_asset_url = ""
 	_checksum_url = ""
 	for release: Variant in releases:
@@ -117,6 +120,8 @@ func select_release(releases: Array) -> void:
 				checksum = url
 		if exe != "" and checksum != "":
 			available = tag
+			var body: Variant = release.get("body")
+			release_notes = body.strip_edges() if body is String else ""
 			_asset_url = exe
 			_checksum_url = checksum
 	_state("available" if available != "" else "current")

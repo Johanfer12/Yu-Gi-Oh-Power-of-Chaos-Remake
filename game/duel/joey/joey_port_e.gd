@@ -84,10 +84,14 @@ func f56dd30(p: int, z: int, out: int) -> int:
 		v[_JE_DEF] += f569cd0(p, 0x4e4, 1) * 500
 	attr = m.u16(out + 2) & 0xff00
 	if attr != 0 and attr < 0x700 and v[_JE_SPECIAL] == 0:
+		var column := attr >> 8
 		for k in 6:
-			var n := f5699c0(m.s16(_JE_ATTR_TABLE + k * 16) & _JE_M32)
-			v[_JE_ATK] += m.s16(_JE_ATTR_TABLE + ((m.u16(out + 2) >> 8) + k * 8) * 2) * n
-		if (m.u16(out + 2) & 0xff00) == 0x300:
+			var row := _JE_ATTR_TABLE + k * 16
+			var bonus := m.s16(row + column * 2)
+			# El recuento solo consulta la mesa. Una fila sin bono no aporta nada.
+			if bonus != 0:
+				v[_JE_ATK] += bonus * f5699c0(m.s16(row) & _JE_M32)
+		if attr == 0x300:
 			v[_JE_ATK] += f5699c0(0x58e) * -500
 	var turn := m.u8(JoeyMem.TURN)
 	if (p & _JE_M32) == (turn & 1) and (turn & 0xe) == 6:

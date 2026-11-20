@@ -11,6 +11,7 @@ var current := "v" + str(ProjectSettings.get_setting("application/config/version
 var version_code := 0
 var certificate := ""
 var available := ""
+var release_notes := ""
 var state := "idle"
 var detail := ""
 var _http := HTTPRequest.new()
@@ -57,6 +58,7 @@ func check_once() -> void:
 func check() -> void:
 	if state in ["checking", "validating"]: return
 	available = ""
+	release_notes = ""
 	_state("checking")
 	_request(API, "releases")
 
@@ -90,6 +92,7 @@ static func trusted_asset(url: String) -> bool:
 
 func select_release(releases: Array, request_metadata := true) -> void:
 	available = ""
+	release_notes = ""
 	_asset_url = ""
 	_metadata_url = ""
 	for release: Variant in releases:
@@ -109,6 +112,8 @@ func select_release(releases: Array, request_metadata := true) -> void:
 			elif asset.get("name") == "ANDROID_RELEASE.json": metadata = url
 		if apk != "" and metadata != "":
 			available = tag
+			var body: Variant = release.get("body")
+			release_notes = body.strip_edges() if body is String else ""
 			_asset_url = apk
 			_metadata_url = metadata
 	if available.is_empty():

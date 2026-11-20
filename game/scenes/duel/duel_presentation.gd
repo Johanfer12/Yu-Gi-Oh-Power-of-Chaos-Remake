@@ -5,6 +5,7 @@ const BasicEffects = preload("res://scenes/duel/duel_basic_effects.gd")
 const SpecialEffects = preload("res://scenes/duel/duel_special_effects.gd")
 const PortraitEffects = preload("res://scenes/duel/duel_portrait_effects.gd")
 const StartShade = preload("res://scenes/duel/duel_start_shade.gd")
+const ClassicPile = preload("res://scenes/duel/classic_pile.gd")
 ## Presentación determinista: consume eventos, sin escribir memoria ni usar el RNG del duelo.
 ## El dueño avanza este reloj y detiene el motor mientras haya una secuencia activa.
 const SIZE := DuelGeometry.FIELD_SIZE
@@ -33,6 +34,11 @@ var _visual_clock := 0.0
 var _snap_prev: Array = []
 var _snap_cur: Array = []
 var _snap_tick := -1
+var _snap_dirty := true
+var _snap_pairs: Array = []
+var _blend_ghosts: Array[Sprite2D] = []
+var _draw_pointer := Vector2.ZERO
+var _draw_game_tick := -1
 var _restore_music := ""
 var _attack_player := -1
 ## Efectos de sacrificio vivos (FUN_004650d0), por "jugador:zona": contador +0x14, giro +0x18,
@@ -45,11 +51,7 @@ var _duel_ref: Duel
 ## paso 4), sigue en su zona cuando 0x78 la vacia, y la pila solo cambia de imagen al llegar.
 var table := DuelCardTable.new()
 ## Zonas cuyo indice logico retiro el nucleo (0x78 / Joey 405020) mientras el objeto sigue.
-var _field_detached: Dictionary = {}
-## Punto de descanso para `table.follow_memory`: lo pone el dueño mientras espera al jugador; un
-## cambio de fase tambien lo es.
-var at_rest := false
-var _phase_rest := false
+var _field_detached: Dictionary = table.detached
 ## Ultimo valor del comando 0x11 (0x4359a0 compara con +0x1c).
 var _field_value := -1
 ## Objeto de batalla (DAT_005af6f0, 0x40d4c0): estado +0x10, contador +0x14, jugador +0x18 y
@@ -67,10 +69,12 @@ func _init(game_id: String, conceal_hand: bool = false) -> void:
 func reset(duel: Duel) -> void:
 	if _duel_ref != null and _duel_ref != duel and _duel_ref.card_visual_query == Callable(self, "card_object_index"):
 		_duel_ref.card_visual_query = Callable()
+		_duel_ref.card_objects_busy_query = Callable()
 	_duel_ref = duel
 	duel.card_visual_query = Callable(self, "card_object_index")
+	if game in ["yugi", "kaiba"]:
+		duel.card_objects_busy_query = card_objects_busy
 	table.sync(duel)
-	_field_detached.clear()
 	_field_value = -1
 	_battle = {"state": 0, "counter": 0, "p": 0, "zone": -1}
 	_phase_was_battle = false
@@ -95,6 +99,10 @@ func reset(duel: Duel) -> void:
 	_clock = 0
 	visual_tick = 0
 	_visual_clock = 0
+	_snap_prev.clear()
+	_snap_cur.clear()
+	_snap_pairs.clear()
+	_snap_tick = -1
 	PortraitEffects.reset_duel_state(duel)
 	for p in 2:
 		# Ka45fa40 inicializa +24 del objeto visual en8000 antes del comando10.
@@ -108,6 +116,16 @@ func reset(duel: Duel) -> void:
 func card_object_index(p: int, loc: int) -> int:
 	if _duel_ref == null: return -1
 	return table.object_index(_duel_ref, p, loc)
+
+func card_objects_busy(include_piles := false) -> bool:
+	if table.objects_busy() or active.get("from_mailbox", false): return true
+	for event: Dictionary in pending:
+		if event.get("from_mailbox", false): return true
+	if include_piles:
+		for piles: Dictionary in table.piles:
+			for pile: Dictionary in piles.values():
+				if pile.has("animation_state"): return true
+	return false
 
 func joey_objects_busy() -> bool:
 	if busy(): return true
@@ -145,9 +163,11 @@ func busy() -> bool:
 	if game in ["yugi", "kaiba"] and _duel_ref != null and (_duel_ref.cmd_op() & 0xfff) == 0x7a and _duel_ref.step() == 5:
 		for overlay in overlays:
 			if overlay["event"].get("kind", "") == "cmd7a" and int(overlay["frame"]) < int(overlay["event"]["native_lifetime"]) - 1: return true
-	# 405d10 cuenta ocho ticks (paso 2) y mueve el objeto (paso 3) mientras
-	# 438c60 sigue vivo; solo el paso 4 consulta 403c70 para esperar su final.
-	if game == "yugi" and active.get("kind", "") == "special_summon" and _duel_ref != null and _duel_ref.step() in [2, 3]:
+	# Y405d10/Ka405fd0 cuentan ocho ticks y mueven el objeto mientras sigue vivo el efecto.
+	# Solo el paso 4 consulta Y403c70/Ka403fa0 para esperar su final.
+	if game in ["yugi", "kaiba"] and active.get("kind", "") == "special_summon" and _duel_ref != null and _duel_ref.step() in [2, 3]:
+		return false
+	if active.get("kind", "") == "token" and active.get("defer_object", false) and _duel_ref.step() in [1, 2]:
 		return false
 	if game == "yugi" and active.get("kind", "") == "destroy_effect" and _duel_ref != null and _duel_ref.step() in [2, 3]:
 		return false
@@ -178,11 +198,13 @@ func hand(p: int, i: int, count: int) -> Vector2:
 func packed_position(value: int, duel: Duel) -> Vector2:
 	if ((value >> 1) & 15) == 11: return hand(value & 1, (value >> 5) & 511, duel.m.u8(DuelMem.pl(value & 1) + 2))
 	var loc := (value >> 1) & 15
-	if loc in [12, 13, 14]:
+	if loc in DuelCardTable.PILES:
 		return pile_object_position(value & 1, loc, (value >> 5) & 511)
 	return DuelGeometry.packed(value, duel)
 
 func pile_object_position(p: int, loc: int, index: int) -> Vector2:
+	if loc == DuelMem.LOC_BANISH:
+		return DuelGeometry.JOEY_EXCLUDED[p] if game == "joey" else DuelGeometry.location(p, loc)
 	var count := int(table.piles[p][loc]["count"])
 	if game == "joey": return preload("res://scenes/duel/joey_pile.gd").object_position(p, loc, index, count)
 	return preload("res://scenes/duel/classic_pile.gd").object_position(p, loc, index, count)
@@ -190,12 +212,36 @@ func pile_object_position(p: int, loc: int, index: int) -> Vector2:
 func enqueue(e: Dictionary, duel: Duel) -> void:
 	var kind: String = e.get("kind", "")
 	var p: int = int(e.get("p", 0)) & 1
+	if kind == "lp_change":
+		# Y45d840/Ka45f510: con una cantidad de combate retenida solo se libera el contador.
+		if _lp_number.is_empty():
+			var sound := "damage" if int(e.amount) < 0 else "life_up"
+			Audio.play_sfx("%s/voice/internal/%s.wav" % [game, sound])
+		return
 	if kind == "lp_popup":
 		if not _lp_number.has(p):
 			_lp_number[p] = {"zone": -1, "amount": int(e.amount), "start": visual_tick}
 		return
 	if kind == "lp_popup_clear":
 		_lp_number.erase(p)
+		return
+	if kind == "grave_top":
+		if int(table.piles[p][DuelMem.LOC_GRAVE]["count"]) <= 0: return
+		e = e.merged({"kind": "pile_top", "loc": DuelMem.LOC_GRAVE}, true)
+		kind = "pile_top"
+	if kind == "deck_top":
+		var pile: Dictionary = table.piles[p][DuelMem.LOC_DECK]
+		pile["top"] = DuelCardTable.memory_pile(duel, p, DuelMem.LOC_DECK)["top"]
+		table.revision += 1
+		return
+	if kind == "pile_highlight":
+		if game in ["yugi", "kaiba"]: ClassicPile.start(table.piles[p][e["loc"]], 8)
+		return
+	if kind == "pile_flip":
+		if game in ["yugi", "kaiba"]:
+			pending.append(e.merged({"mode": "pile_flip", "frames": 8,
+				"center": pile_object_position(p, e["loc"], 1)}))
+			if active.is_empty(): _begin()
 		return
 	if kind == "pile_top":
 		var loc := int(e["loc"])
@@ -252,13 +298,16 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 		Audio.play_sfx("%s/voice/internal/reborn.wav" % game)
 		_render_frame()
 		return
-	if kind == "grave_top":
-		# 0xdf / 0x72 suben la carta al tope (0x544890) y la pila pasa a mostrarla (estado 6 de
-		# 0x42efb0: la carta nueva se desliza y la imagen cambia al final; PENDIENTE D03).
-		var pile: Dictionary = table.piles[p][DuelMem.LOC_GRAVE]
-		if int(pile["count"]) > 0:
-			pile["top"] = int(e.get("card", pile["top"]))
-			table.revision += 1
+	if kind == "tutorial_place":
+		var z := int(e["zone"])
+		table.place(p, z, 0, {"card": int(e["card"]), "face": bool(e["face"]),
+			"defense": bool(e["defense"]), "owner": p})
+		return
+	if kind == "token_place":
+		var word := int(e["destination_word"])
+		var destination := _word_loc(word)
+		table.place(destination[0], destination[1], destination[2], {"card": int(e["card"]),
+			"face": (word & 0x8000) != 0, "defense": (word & 0x4000) != 0, "owner": destination[0]})
 		return
 	if kind == "joey_object_place":
 		# Joey 40d840 -> 41d160 (buzón tipo 5): el objeto aparece en su zona, sin vuelo.
@@ -272,10 +321,28 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 		_place_special(e)
 		if active.get("kind", "") == "special_summon": active["object_placed"] = true
 		return
+	if e.get("from_mailbox", false) and e.get("instant", false):
+		# 407cb0/414810 cambia la referencia aunque siga dibujándose otro efecto.
+		var source := _word_loc(int(e["source_word"]))
+		var word := int(e["destination_word"])
+		var destination := _word_loc(word)
+		var obj := table.take(duel, source[0], source[1], source[2])
+		if obj.is_empty(): return
+		var loc: int = destination[1]
+		if loc in DuelCardTable.PILES and int(obj["card"]) >= 0x780 and int(obj["card"]) < 2000: return
+		obj["face"] = (word & 0x8000) != 0
+		obj["defense"] = loc < 5 and (word & 0x4000) != 0
+		table.place(destination[0], loc, destination[2], obj)
+		if loc in DuelCardTable.PILES:
+			table.land(destination[0], loc, loc != DuelMem.LOC_DECK or destination[2] == 0)
+		return
 	if kind == "field_detach":
 		# 0x78 / Joey 405020 retiran el indice logico; el objeto visual sigue en la zona hasta
 		# que un comando lo mueva (0x7a, 0xb5...). La tabla no cambia.
 		_field_detached["%d:%d" % [p, e["zone"]]] = int(e.get("card", -1))
+		return
+	if kind == "field_remove":
+		table.take(duel, p, int(e["zone"]), 0)
 		return
 	var d: Dictionary = e.duplicate(true)
 	d["mode"] = kind
@@ -285,7 +352,6 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 		_attack_player = p
 		return
 	if kind == "phase" and int(e.get("phase", -1)) == 3: _attack_player = p
-	if kind == "phase": _phase_rest = true
 	# FUN_00402840: la fase 3 activa el objeto de batalla (0x40ce80) y salir de ella lo apaga
 	# (0x40cbd0); el evento sigue luego a la rama de retratos.
 	if kind == "phase": _battle_event(kind, e, p)
@@ -328,11 +394,9 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			# Joey 4812b0 (desde 404920) libera igual con +0x14c > 0x7f, que 481370 sube de 8 en 8
 			# (de 4 en 4 en batalla); el cotejo del duelo completo (25-10-2026) lo confirma.
 			d["native_lifetime"] = d["frames"]
+			# El primer avance del rótulo ocurre en el tick que lo crea. Al llegar a 0x80
+			# se libera la orden, pero el rótulo sigue dibujándose hasta 0x100.
 			d["frames"] = 24 if int(d.get("phase", 0)) == 3 else 16
-			# En Joey 481370 sube el contador antes de que el motor consulte 4812b0 en el mismo
-			# tick: el comando siguiente llega un tick antes que con la espera de Yugi (todas las
-			# fases iban +1 en el cotejo del duelo completo).
-			# Kaiba igual que Joey: cada fase iba +1 en el cotejo de su duelo completo (29-10-2026).
 			if game in ["joey", "kaiba"]: d["frames"] = int(d["frames"]) - 1
 		pending.append(d)
 		if active.is_empty(): _begin()
@@ -345,6 +409,9 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			# El resto no activa sonido en el constructor; la musica vuelve via bgm.
 			if game == "kaiba" and int(d.get("card", 0)) == 0x17b:
 				d["music_once"] = "kaiba/voice/stream/m_ulti.wav"
+			if _is_kaiba_demo():
+				# 43a460: voces del objeto de fusión en los contadores 0x80 y 0x180.
+				d["sounds"] = [[32, "kaiba/voice/internal/ka50.wav"]] if p == 0 else [[96, "kaiba/voice/internal/ka13.wav"]]
 			if game == "yugi":
 				# 0x439d20 (contador = fotograma * 4): fusion1 en 4 (sonido de modo), fusion2 en
 				# 0x180; +0x10 es el jugador (0x43eb90, param_1 de 0x406450): el humano oye
@@ -422,7 +489,7 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			d["dst"] = [p, int(e.get("zone", 0)), 0]
 			d["dst_face"] = (e["b"] & 0x100) != 0
 			d["dst_defense"] = kind == "hand_to_monster" and (e["b"] & 0x200) != 0
-			if (e["b"] & 0x100) == 0:
+			if (e["b"] & 0x100) == 0 and not e.get("from_mailbox", false):
 				pending.append(d.duplicate(true))
 				d["mode"] = "set"
 				d["frames"] = 22 # 438c20: +12 hasta contador >0x100.
@@ -432,6 +499,10 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 				d["flags"] = defense | (((e["b"] >> 8) & 1) << 1)
 				d["monster"] = kind == "hand_to_monster"
 				d.erase("hide")
+		"hand_set":
+			# 405750/405950 paso 2: el destello se crea tras la confirmación del vuelo.
+			d["mode"] = "set"
+			d["frames"] = 22
 		"zone_to_grave", "field_to_hand", "field_to_deck", "field_to_banish", "card_to_banish", "zone_to", "zone_lift":
 			d["mode"] = "move"
 			d["from_pos"] = d["center"]
@@ -502,7 +573,7 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			d["flags"] = duel.m.u8(at + 6)
 			d["hide"] = [d["center"]]
 			d["frames"] = 8
-			if game == "yugi":
+			if game == "yugi" and not d.has("native_target_flags"):
 				var requested: int = int(e.get("flags", d["flags"])) & 3
 				d["native_target_flags"] = (requested ^ 2) if kind == "flip" else ((requested ^ 1) | (2 if int(e.get("b", 0)) != 0 else 0))
 		"shuffle":
@@ -514,7 +585,7 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			d["center"] = hand(p, 0, 1)
 		"set", "summon", "special":
 			# Constructores P nativos; BasicEffects conserva sus formulas y duraciones.
-			if e.get("native_object_pending", false): table.awaiting[p][int(e.get("zone", 0))] = int(e.get("card", 0))
+			pass
 		"monster_appear", "special_summon", "token":
 			d["mode"] = "summon" if kind != "special_summon" else "special"
 			d["frames"] = 33 # 438c40: +8, vivo mientras contador <0x101.
@@ -602,8 +673,8 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			# pista del duelo vuelve al terminar el retrato (Joey: 33 ticks despues de m_sum en el
 			# cotejo por valores de la tanda variada, 30-10-2026).
 			var once_waiting: bool = active.get("music_once", "") != "" or pending.any(func(x): return x.get("music_once", "") != "")
-			if kind == "music_by_lp" and (game == "yugi" or e.has("native_music_mode")) and not once_waiting:
-				# 4376e0 cambia la pista dentro del paso 4; no crea otro objeto que esperar.
+			if kind == "music_by_lp" and (game in ["yugi", "kaiba"] or e.has("native_music_mode")) and not once_waiting:
+				# Yugi 4376e0 / Kaiba 437c90 cambian la pista dentro del paso 4.
 				if _restore_music == "": Audio.play_music(d["music"])
 				played["music"] = played.get("music", 0) + 1
 				return
@@ -745,6 +816,15 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 		_:
 			return
 	if d["mode"] == "move":
+		if d.has("source_word"):
+			d["src"] = _word_loc(int(d["source_word"]))
+			var word := int(d["destination_word"])
+			var destination := _word_loc(word)
+			if destination[1] != d["dst"][1] or destination[0] != d["dst"][0]:
+				d["to_pos"] = packed_position(word, duel)
+			d["dst"] = destination
+			d["dst_face"] = (word & 0x8000) != 0
+			d["dst_defense"] = int(destination[1]) < 5 and (word & 0x4000) != 0
 		# Algunos comandos de combate repiten la salida después de vaciar la zona: sin objeto en
 		# el origen (se comprueba al empezar) el índice vacío 0xffff no es una carta que vuele.
 		if int(d.get("card", 0)) == 0xffff and not d.has("src"): return
@@ -797,7 +877,7 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 		# 439930 sigue dibujandola hasta 0xd0.
 		d["native_lifetime"] = d["frames"]
 		d["frames"] = 1
-	if game in ["yugi", "kaiba"] and kind == "draw":
+	if game in ["yugi", "kaiba"] and kind == "draw" and not d.get("from_mailbox", false):
 		# 548e80 escribe407830; el siguiente tick407f00 despacha407a60.
 		# El vuelo410030 mantiene sus ocho ticks; el buzon añade uno antes de crearlo.
 		pending.append({"mode": "wait", "frames": 1, "center": Vector2.ZERO})
@@ -1085,6 +1165,7 @@ func advance(delta: float) -> void:
 		_clock -= 1
 		if field_tick < visual_tick:
 			field_tick += 1
+			table.tick_piles()
 			if native_field_tick.is_valid(): native_field_tick.call(field_tick)
 		_tick_sacrifice()
 		_tick_battle()
@@ -1111,7 +1192,16 @@ func advance(delta: float) -> void:
 			if overlays[i]["frame"] >= overlays[i]["event"]["native_lifetime"]: overlays.remove_at(i)
 		if active.is_empty(): continue
 		if start_shade_moving: continue
+		if frame == 0 and game in ["yugi", "kaiba"] and active.get("mode", "") == "banner" and int(active.get("op", 0)) == 0x14:
+			# 438d20/439480 piden start en el primer avance del rótulo, tras abrir el sombreado.
+			Audio.play_sfx("%s/voice/internal/start.wav" % game)
 		frame += 1
+		if active.has("counter_object"):
+			var counter_object: Dictionary = active["counter_object"]
+			var counter: Vector2i = counter_object["counter_animation"]
+			counter.y -= 0x10
+			if counter.y == 0: counter_object.erase("counter_animation")
+			else: counter_object["counter_animation"] = counter
 		# Simular el dibujo nativo de cada tick aunque delta agrupe varios ticks.
 		if active.get("mode", "") == "exodia": SpecialEffects.exodia_particles(active, frame)
 		if active.get("mode", "") == "joey_summon": PortraitEffects.tick_joey_summon(active)
@@ -1150,25 +1240,14 @@ func advance(delta: float) -> void:
 	# El terreno sigue animandose cuando la presentacion no tiene un objeto activo.
 	while field_tick < visual_tick:
 		field_tick += 1
+		table.tick_piles()
 		if native_field_tick.is_valid(): native_field_tick.call(field_tick)
-	follow_memory()
-	_render_frame()
+	if elapsed > 0: _render_frame()
+	else: _draw_between_ticks()
 
 
-## Sin animacion en curso, la tabla adopta lo que el motor cambio sin evento (ver
-## DuelCardTable.follow_memory).
-func follow_memory() -> void:
-	if _duel_ref == null or not active.is_empty() or not pending.is_empty(): return
-	var rest := at_rest or _phase_rest
-	# Una zona retenida deja de estarlo cuando otra carta la ocupa en memoria.
-	for key in _field_detached.keys():
-		var parts: PackedStringArray = String(key).split(":")
-		var index := _duel_ref.m.u16(DuelMem.zone(int(parts[0]), mini(int(parts[1]), 10))) & 0xfff
-		# 405020 mueve el objeto antes de limpiar STATE en el siguiente paso.
-		# La misma carta aun presente no equivale a un nuevo ocupante.
-		if index != 0 and _duel_ref.cards.id_of(index) != int(_field_detached[key]): _field_detached.erase(key)
-	table.follow_memory(_duel_ref, rest, _field_detached)
-	if rest: _phase_rest = false
+func _is_kaiba_demo() -> bool:
+	return game == "kaiba" and _duel_ref != null and _duel_ref.game_mode == 5
 
 
 ## 401c60 y 40e920 consultan el audio real; el contador no sustituye esa consulta.
@@ -1176,10 +1255,14 @@ func _active_finished() -> bool:
 	# 451980/43a1b0: el objeto desaparece en T320; el sombreado conserva su espera.
 	if game in ["yugi", "kaiba", "joey"] and active.get("mode", "") == "banner" and int(active.get("op", 0)) == 0x14: return frame >= 40
 	if active.get("mode", "") == "joey_summon": return int(active["counter"]) > 0x1005f
+	if active.has("counter_object"): return not active["counter_object"].has("counter_animation")
 	if active.has("native_turn"):
 		DuelCardTable.field_turn_at(active.native_turn, frame)
 		return not DuelCardTable.field_turn_busy(active.native_turn)
 	if active.get("wait_voice", false):
+		# La demo espera la duración de la voz aunque el dispositivo termine el búfer antes.
+		if _is_kaiba_demo() and Audio.level > 0 and frame < int(active.get("frames", 0)):
+			return false
 		var path: String = active.get("sound", "%s/voice/internal/%s.wav" % [game, active.get("sound_file", "")])
 		if active.get("mode", "") == "portrait_native":
 			if frame < 33: return false
@@ -1210,22 +1293,35 @@ static func _word_loc(word: int) -> Array:
 func _begin_objects() -> void:
 	if _duel_ref == null: return
 	var mode: String = active.get("mode", "")
+	if game in ["yugi", "kaiba"]:
+		match mode:
+			"shuffle": ClassicPile.start(table.piles[active["p"]][DuelMem.LOC_DECK], 5)
+			"pile_top": ClassicPile.start(table.piles[active["p"]][active["loc"]], 6, int(active["card"]))
+			"pile_flip":
+				var loc: int = active["loc"]
+				var pile: Dictionary = table.piles[active["p"]][loc]
+				if not pile.has("face"): pile["face"] = loc == DuelMem.LOC_GRAVE
+				ClassicPile.start(pile, 7)
 	if mode in ["move", "exclusion"] and active.has("src"):
 		var src: Array = active["src"]
 		var dst: Array = active["dst"]
 		# Las referencias del buzon consultan45c140 antes de sacar el objeto.
 		# Resolver al comenzar, no al encolar: otros vuelos pueden cambiar la pila.
-		if src[1] in [12, 13, 14]: active["from_pos"] = pile_object_position(src[0], src[1], src[2])
-		if dst[1] in [12, 13, 14]: active["to_pos"] = pile_object_position(dst[0], dst[1], dst[2])
+		if src[1] in [12, 13, 14] or (game == "joey" and src[1] == DuelMem.LOC_BANISH):
+			active["from_pos"] = pile_object_position(src[0], src[1], src[2])
+		if dst[1] in [12, 13, 14] or (game == "joey" and dst[1] == DuelMem.LOC_BANISH):
+			active["to_pos"] = pile_object_position(dst[0], dst[1], dst[2])
 		if active.get("instant", false): active["from_pos"] = active["to_pos"]
-		_field_detached.erase("%d:%d" % [src[0], src[1] + (src[2] if src[1] in [0, 5] else 0)])
 		var obj := table.take(_duel_ref, src[0], src[1], src[2])
 		if obj.is_empty() or int(obj.get("card", -1)) < 0:
-			if int(active.get("card", -1)) in [-1, 0xffff]:
+			if int(active.get("card", -1)) in [-1, 0xffff] or (active.get("from_mailbox", false) and src[1] < 12):
 				# Sin objeto ni carta (salida repetida tras vaciar la zona): nada que mover.
 				active["frames"] = 0
 				return
 			obj = {"card": int(active["card"]), "face": not active.get("hidden", false), "defense": false, "owner": src[0]}
+		elif mode == "move" and int(src[1]) < 5:
+			# La referencia del movimiento puede omitir la postura de la carta en la zona.
+			active["from_angle"] = (PI if src[0] == 1 else 0.0) + (PI / 2 if obj["defense"] else 0.0)
 		# El mazo se dibuja boca abajo: su imagen no se conoce; la carta es la del evento.
 		if src[1] in [DuelMem.LOC_DECK, DuelMem.LOC_FUSION] and not int(active.get("card", -1)) in [-1, 0xffff]:
 			obj["card"] = int(active["card"])
@@ -1243,12 +1339,34 @@ func _begin_objects() -> void:
 		elif dst_loc in [DuelMem.LOC_DECK, DuelMem.LOC_FUSION]: face_to = false
 		else: face_to = bool(obj.get("face", true))
 		var defense: bool = active.get("dst_defense", dst_loc < 5 and bool(obj.get("defense", false)))
-		var placed := {"card": int(obj["card"]), "face": face_to, "defense": defense, "owner": obj.get("owner", src[0]), "moving": true}
 		active["face_from"] = _shown_face(src[0], src[1], obj)
-		active["face_to"] = _shown_face(dst[0], dst_loc, placed)
+		obj["face"] = face_to
+		obj["defense"] = defense
+		obj["moving"] = true
+		active["face_to"] = _shown_face(dst[0], dst_loc, obj)
 		if active.get("instant", false): active["face_from"] = active["face_to"]
-		active["placed"] = placed
-		table.place(dst[0], dst_loc, dst[2], placed)
+		active["placed"] = obj
+		table.place(dst[0], dst_loc, dst[2], obj)
+	elif mode == "zone_counter":
+		var obj: Dictionary = table.field[active["p"]][active["zone"]]
+		if not obj.is_empty():
+			obj["counter_animation"] = Vector2i(int(active["counter_type"]), 0x200)
+			active["counter_object"] = obj
+	elif mode == "zone_swap" and active.get("from_mailbox", false):
+		var source := int(active["source_word"])
+		var destination := int(active["destination_word"])
+		var left := _word_loc(source)
+		var right := _word_loc(destination)
+		var first: Dictionary = table.field[left[0]][left[1] + left[2]]
+		var second: Dictionary = table.field[right[0]][right[1] + right[2]]
+		if first.is_empty() or second.is_empty():
+			active["frames"] = 0
+		else:
+			first["moving"] = true
+			second["moving"] = true
+			table.place(left[0], left[1], left[2], second)
+			table.place(right[0], right[1], right[2], first)
+			active["swap_objects"] = [first, second]
 	elif mode in ["flip", "change_position"]:
 		var obj: Dictionary = table.field[active["p"]][clampi(int(active.get("zone", 0)), 0, 10)]
 		if not obj.is_empty():
@@ -1278,6 +1396,8 @@ func _finish_objects() -> void:
 		var dst: Array = active["dst"]
 		if dst[1] in DuelCardTable.PILES:
 			table.land(dst[0], dst[1], dst[1] != DuelMem.LOC_DECK or int(dst[2]) == 0)
+			if game == "joey" and dst[1] == DuelMem.LOC_BANISH and not placed.is_empty():
+				table.piles[dst[0]][dst[1]]["flash_tick"] = visual_tick
 	elif active.has("native_turn") and not placed.is_empty():
 		var flags: int = int(active.native_turn.target)
 		placed["face"] = (flags & 2) != 0
@@ -1289,17 +1409,20 @@ func _finish_objects() -> void:
 		placed["defense"] = not bool(placed["defense"])
 		if active.get("b", 0) != 0: placed["face"] = true
 	elif mode == "zone_swap":
-		var a: int = active["a"]
-		var b: int = active["b"]
-		var za := mini((a >> 8) & 255, 10)
-		var zb := mini((b >> 8) & 255, 10)
-		var tmp: Dictionary = table.field[a & 1][za]
-		table.field[a & 1][za] = table.field[b & 1][zb]
-		table.field[b & 1][zb] = tmp
+		if active.get("from_mailbox", false):
+			for obj: Dictionary in active.get("swap_objects", []): obj.erase("moving")
+		else:
+			var a: int = active["a"]
+			var b: int = active["b"]
+			var za := mini((a >> 8) & 255, 10)
+			var zb := mini((b >> 8) & 255, 10)
+			var tmp: Dictionary = table.field[a & 1][za]
+			table.field[a & 1][za] = table.field[b & 1][zb]
+			table.field[b & 1][zb] = tmp
 	elif mode == "special" and active.get("kind", "") == "special_summon" and not active.get("object_placed", false):
 		_place_special(active)
 
-	elif mode == "summon" and active.get("kind", "") in ["token", "monster_appear"]:
+	elif mode == "summon" and active.get("kind", "") in ["token", "monster_appear"] and not active.get("defer_object", false):
 		# 0xa5 / 0x77: el objeto se crea en la zona al terminar el efecto (tipo 5).
 		var z := clampi(int(active.get("zone", 0)), 0, 10)
 		var face := true
@@ -1310,17 +1433,25 @@ func _finish_objects() -> void:
 		else:
 			face = (int(active.get("a", 0)) & 0x100) != 0
 			defense = (int(active.get("a", 0)) & 0x200) != 0
-		table.field[active["p"]][z] = {"card": int(active.get("card", 0)), "face": face, "defense": defense, "owner": active["p"]}
+		table.place(active["p"], z, 0, {"card": int(active.get("card", 0)), "face": face, "defense": defense, "owner": active["p"]})
 
 
 func _place_special(event: Dictionary) -> void:
 	# 0x405d10 paso 3: el objeto pasa al instante de su origen a la zona (tipo 4).
 	var a: int = event.get("a", 0)
-	var obj := table.take(_duel_ref, event["p"], a & 0xf, (a & 0xff) >> 4)
-	# Conserva su propietario (bit 12): una carta del rival revivida sigue siendo suya.
-	obj = {"card": int(event.get("card", obj.get("card", 0))), "face": (a & 0x100) != 0,
-			"defense": (a & 0x200) != 0, "owner": int(obj.get("owner", event["p"]))}
-	table.place(event["p"], (a >> 12) & 15, 0, obj)
+	var p: int = event["p"]
+	var source := a & 15
+	var index := (a >> 4) & 15
+	# 405d10/405fd0: desde el cementerio, el bit bajo de ese índice selecciona la pila.
+	var origin := _word_loc(int(event["source_word"])) if event.has("source_word") else [
+		index & 1 if source == DuelMem.LOC_GRAVE else p, source, 1 if source == DuelMem.LOC_GRAVE else index]
+	var obj := table.take(_duel_ref, origin[0], origin[1], origin[2])
+	obj["card"] = int(event.get("card", obj.get("card", -1)))
+	obj["face"] = (a & 0x100) != 0
+	obj["defense"] = (a & 0x200) != 0
+	# Conserva el dueño de la entrada aunque la carta salga del cementerio del rival.
+	obj["owner"] = int(event.get("owner", obj.get("owner", p)))
+	table.place(p, (a >> 12) & 15, 0, obj)
 
 
 func _begin() -> void:
@@ -1331,6 +1462,14 @@ func _begin() -> void:
 	if active["mode"] == "sacrifice_release":
 		if _sacrifice.has(active["key"]): _sacrifice[active["key"]]["release"] = true
 	var mode: String = active["mode"]
+	var kind: String = active.get("kind", "")
+	# Y40d6c0 / Ka40d8f0 avanzan el retrato en su tick de creación.
+	# Y443640 lo hace también tras el paso 2 del volteo 4040f0.
+	if kind == "hand_set" or (game == "yugi" and mode == "phase_native") \
+			or (mode == "portrait_native" and (
+				(game in ["yugi", "kaiba"] and kind == "reaction_lp")
+				or (game == "yugi" and kind == "reaction_flip"))):
+		frame = 1
 	# 5bc700 consume el buzon antes de44dd00->45d040. La carta creada por
 	# 40cdb0 recibe418b60 (+32) en esa misma vuelta, antes del primer dibujo.
 	# Los eventos del adaptador ya llegan despues de avanzar el reloj visual.
@@ -1350,7 +1489,9 @@ func _begin() -> void:
 			if int(active["damage"][side]) == 0: continue
 			var z: int = active["source_zone"] if side == active["p"] else active["target_zone"]
 			if active.get("native_impact", false) and (int(active["result_flags"][side]) & 0x18) != 0: z = -1
-			_lp_number[side] = {"zone": -1 if int(active["target_zone"]) == -1 else z,
+			# 40ccf0/40cf20: el segundo daño se coloca en el lado real del objetivo (+20).
+			var recipient: int = active["defender"] if game != "joey" and side != active["p"] else side
+			_lp_number[recipient] = {"zone": -1 if int(active["target_zone"]) == -1 else z,
 				"amount": -int(active["damage"][side]), "start": visual_tick + (32 if active.get("reflection", false) else 0)}
 	var settled := false
 	if mode == "lp_total":
@@ -1398,10 +1539,13 @@ func _begin() -> void:
 		# espera a que se abra desde el centro (cotejo del duelo normal, 26-10-2026).
 		# Yugi 43d740 enciende el sombreado 5af884 igual que Kaiba 43ded0 (cotejo del duelo de Yugi,
 		# 28-10-2026: sin el, el rotulo de inicio terminaba 16 ticks antes).
-		if (game in ["yugi", "kaiba", "joey"] and int(active.get("op", 0)) == 0x14) or (game == "joey" and int(active.get("op", 0)) == 0x04):
+		var op := int(active.get("op", 0))
+		# Kaiba 43e010 prepara el mismo fundido antes del cartel final de la demo.
+		if (op == 0x14 and game in ["yugi", "kaiba", "joey"]) or (op == 0x04 and (game == "joey" or _is_kaiba_demo())):
 			_start_banner_shade = true
 			# 44dd00 llama486290 despues de crear el objeto: captura y primer paso16.
 			_tick_shade()
+		if game in ["yugi", "kaiba"] and int(active.get("op", 0)) == 0x14: sound = ""
 		if int(active.get("op", 0)) == 0x04:
 			# 0x43d810: con el sombreado suena 0x20000008 (j_win, resultado 0) o 0x20000009 (j_lose).
 			sound = ""
@@ -1442,6 +1586,8 @@ func _finish_music() -> void:
 
 func _clear() -> void:
 	for node in get_children(): node.free()
+	_blend_ghosts.clear()
+	_snap_dirty = true
 
 func _asset(name: String, center: Vector2, scale_factor: float = 1.0, alpha: float = 1.0, rotation_value: float = 0.0, folder: String = "effect") -> Sprite2D:
 	var path := "%s/duel/%s/%s.png" % [game, folder, name]
@@ -1453,7 +1599,8 @@ func _asset(name: String, center: Vector2, scale_factor: float = 1.0, alpha: flo
 	# en hojas de fotogramas (moneda, dado) y cifras de dano el fundido dejaba dobles.
 	if folder == "phase_name" or name.begins_with("expl"): sprite.set_meta("crossfade", true)
 	# Las espadas nativas impares evitan suavizar texeles vecinos al centrarse.
-	if name in ["atk_icon", "atk_icon2"]:
+	# El ataque de Exodia conserva los texeles de la bola al ampliarla (43c423).
+	if name in ["atk_icon", "atk_icon2"] or (folder == "exodia" and name == "exo_ball"):
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sprite.position = center
 	sprite.scale = Vector2.ONE * maxf(0.001, scale_factor)
@@ -1485,6 +1632,15 @@ static func _rotation_between(source: float, target: float, counter: int) -> flo
 
 func _render_frame() -> void:
 	_render()
+	_draw_pointer = pointer
+	if not NativeClock.interpolate: return
+	_draw_game_tick = Game.native_tick
+	if visual_tick != _snap_tick:
+		_snap_prev = _snap_cur
+		_snap_tick = visual_tick
+	_snap_cur = _snapshot()
+	_snap_pairs = _pairs(_snap_prev, _snap_cur)
+	_snap_dirty = false
 	_interpolate()
 
 
@@ -1492,7 +1648,22 @@ func _render_frame() -> void:
 ## dibuja entre ticks con su propio reloj: `fraction` es lo que le queda hasta el siguiente.
 func show_between(fraction: float) -> void:
 	_visual_clock = clampf(fraction, 0.0, 0.999999)
-	_render_frame()
+	_draw_between_ticks()
+
+
+func _draw_between_ticks() -> void:
+	if not NativeClock.interpolate: return
+	# La opacidad del sombreado y el shader del rótulo se calculan en el dibujo.
+	if _snap_dirty or _snap_tick != visual_tick or _shade_shown[0] != _shade_shown[1] \
+			or (_battle["state"] == 3 and pointer != _draw_pointer):
+		_render_frame()
+	elif game != "joey" and _draw_game_tick != Game.native_tick \
+			and (active.get("mode", "") == "portrait_native" \
+				or overlays.any(func(overlay): return overlay["event"].get("mode", "") == "portrait_native")):
+		# El reloj global puede avanzar entre dos ticks del duelo.
+		_render_frame()
+	else:
+		_interpolate()
 
 
 ## Lo que le queda hasta el siguiente tick (visual_tick).
@@ -1541,15 +1712,13 @@ func _snapshot_children(parent: Node, out: Array) -> void:
 ## cambiaban de golpe a 30 Hz y, al juntarse las dos copias del nombre de la fase, una
 ## desaparecia y la otra quedaba a medio fundido durante un fotograma.
 func _interpolate() -> void:
-	var cur := _snapshot()
-	if visual_tick != _snap_tick:
-		_snap_prev = _snap_cur
-		_snap_tick = visual_tick
-	_snap_cur = cur
+	for ghost in _blend_ghosts: ghost.free()
+	_blend_ghosts.clear()
 	var t := clampf(_visual_clock, 0.0, 1.0)
-	if not NativeClock.interpolate or _snap_prev.is_empty() or t >= 1.0:
+	if _snap_prev.is_empty():
 		return
-	var pairs := _pairs(_snap_prev, cur)
+	var cur := _snap_cur
+	var pairs := _snap_pairs
 	var paired_prev := {}
 	var paired_cur := {}
 	for pair in pairs:
@@ -1567,7 +1736,7 @@ func _interpolate() -> void:
 				sprite.position = (twin[2] as Vector2).lerp(cur[i][2], t)
 				sprite.scale = (twin[3] as Vector2).lerp(cur[i][3], t)
 				sprite.rotation = lerp_angle(twin[4], cur[i][4], t)
-			sprite.modulate.a *= t
+			sprite.modulate.a = float(cur[i][5]) * t
 	for i in _snap_prev.size():
 		if not paired_prev.has(i) and _snap_prev[i].size() > 6:
 			_fade_out(_snap_prev[i], 1.0 - t, _nearest_twin(_snap_prev[i], cur), t)
@@ -1603,6 +1772,7 @@ func _fade_out(entry: Array, weight: float, twin: Array = [], t := 0.0) -> void:
 	ghost.rotation = entry[4] if twin.is_empty() else lerp_angle(entry[4], twin[4], t)
 	ghost.modulate.a = float(entry[5]) * weight
 	add_child(ghost)
+	_blend_ghosts.append(ghost)
 	move_child(ghost, mini(int(props["index"]), get_child_count() - 1))
 
 

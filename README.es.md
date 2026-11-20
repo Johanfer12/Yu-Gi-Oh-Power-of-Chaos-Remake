@@ -6,15 +6,15 @@
 
 [English](README.md) | **Español**
 
-[![Descargar EXE para Windows](https://img.shields.io/badge/Descargar_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.41/PowerOfChaos.exe)
+[![Descargar EXE para Windows](https://img.shields.io/badge/Descargar_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.42/PowerOfChaos.exe)
 
-[![Descargar APK Android](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.41/PowerOfChaos-Android.apk)
+[![Descargar APK Android](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.42/PowerOfChaos-Android.apk)
 
-**Descarga directa · Windows · Preliminar v0.1.0-alpha.41 · Sin ZIP**
+**Descarga directa · Windows · Preliminar v0.1.0-alpha.42 · Sin ZIP**
 
 **Tus juegos de Power of Chaos reunidos en un launcher moderno para Windows.**
 
-**Novedades de alpha.41.** Pasa el mouse sobre un juego instalado y usa **↻** para volver a importarlo desde una ISO o carpeta. Joey puede iniciar duelos aunque Yugi no esté instalado. El launcher recuerda el silencio de la música y la pantalla completa de Windows. [Notas de la versión](RELEASE_NOTES.md)
+**Novedades de alpha.42.** Recupera el progreso original e importa mazos, repeticiones y voces desde el launcher de Windows. Consulta los cambios antes de actualizar. [Notas de la versión](RELEASE_NOTES.md)
 
 ## Contenido
 
@@ -72,9 +72,9 @@ Actívalo con conexión para preparar el paquete local. La primera descarga es d
 
 Selecciona los ISO o las carpetas instaladas de tus juegos y elige:
 
-- **Extraer para PC** para preparar los juegos en Windows.
-- **Crear .pck** para preparar un **paquete privado de recursos `.pck`** generado desde tus juegos, que queda con su informe de validación en **`PoC Data/android/pck/`**. También puedes reutilizar los juegos ya preparados.
-- **Descargar APK** para bajar de GitHub el APK público Android de esta versión.
+- **Compilar** aparece al seleccionar una ISO o carpeta y prepara los juegos para Windows.
+- **Android → Crear .pck** prepara un **paquete privado de recursos `.pck`** generado desde tus juegos, que queda con su informe de validación en **`PoC Data/android/pck/`**. También puedes reutilizar los juegos ya preparados.
+- **Android → Descargar APK** baja de GitHub el APK público Android de esta versión.
 
 **Android se prepara desde el launcher.** El APK público lo compila y firma GitHub Actions; el launcher genera el paquete de recursos en tu equipo. El flujo normal no requiere cuentas, SDK Android, JDK, configurar una firma ni acceder a la clave del autor. Instala el APK, ábrelo y selecciona tu `.pck` una vez. Las actualizaciones compatibles posteriores conservan esos recursos y tus partidas. [Preparar tus archivos Android](#crear-tu-apk-android).
 
@@ -86,9 +86,9 @@ Tus ISO y recursos convertidos permanecen en tu equipo; la descarga no incluye d
 
 ![Launcher en inglés con Yugi, Kaiba y Joey listos para jugar](docs/images/launcher-library-en.png)
 
-**Importa tus recursos y elige extraer para PC o crear un APK Android**
+**Selecciona las ISO o carpetas de tus juegos**
 
-![Pantalla de importación en inglés con selección de ISO y carpeta y botones Extract for PC, Create .pck resources y Download APK](docs/images/launcher-import-en.png)
+![Pantalla de importación en inglés con selección de ISO y carpeta](docs/images/launcher-import-en.png)
 
 Las capturas muestran el launcher Windows. Los logos aparecen después de importar tus propias copias compatibles.
 
@@ -114,10 +114,10 @@ Tú aportas una copia compatible del juego que quieras usar. El launcher lee sus
 
 ## Empezar en Windows
 
-1. [Descarga **`PowerOfChaos.exe`** directamente](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.41/PowerOfChaos.exe). También hay compilaciones de desarrollo en [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
+1. [Descarga **`PowerOfChaos.exe`** directamente](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.42/PowerOfChaos.exe). También hay compilaciones de desarrollo en [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
 2. Pon el EXE en una carpeta donde quieras guardar el launcher y tus partidas, y ábrelo.
 3. En **SUBE TUS RECURSOS**, pasa el cursor por el juego que quieras añadir y elige **ISO** o **Carpeta**.
-4. Selecciona una imagen de disco o carpeta instalada compatible, pulsa **Extraer para PC** y espera a que termine.
+4. Selecciona una imagen de disco o carpeta instalada compatible, pulsa **Compilar** y espera a que termine.
 5. Haz clic en el logo del juego preparado para jugar. Puedes añadir los otros después.
 
 La descarga es un único EXE, sin asistente de instalación. La primera importación prepara las herramientas incluidas en `PoC Data/tools/`; abrir el menú no espera esa extracción. Los archivos de Actions pueden venir en ZIP; los de Releases permiten descargar directamente el EXE.
@@ -183,13 +183,15 @@ El selector controla el launcher y los textos disponibles del juego. La disponib
 
 Los doblajes se detectan desde `Voice.dat`. Al cambiar de idioma se usa el doblaje correspondiente si está importado; de lo contrario, se conserva el principal. El selector no descarga voces.
 
-Para añadir el doblaje de otra copia compatible del mismo juego, pulsa **Voces +** en la pantalla de importación, elige el juego y selecciona el `Voice.dat` de esa copia; después pulsa **Extraer para PC**. Las herramientas de código fuente hacen lo mismo:
+Abre **Importar más recursos**, elige el juego y selecciona su `Voice.dat` con **Importar voces**. Si ya seleccionaste una ISO o carpeta, pulsa **Compilar** para importarlas juntas. Si el juego ya está preparado, las voces se importan al elegir el archivo. Las herramientas de código fuente hacen lo mismo:
 
 ```powershell
 python -m pocx.import_games --base "datos-existentes" --voice "joey=C:\Mi copia de Joey\Voice.dat" --out "datos-nuevos"
 ```
 
 Usa una carpeta de salida nueva para importaciones manuales. El launcher gestiona sus propias actualizaciones. Dos doblajes distintos del mismo juego e idioma se rechazan como conflicto.
+
+El mismo menú importa mazos `.ydc` a la biblioteca compartida y repeticiones `.ydr` al juego detectado o elegido. También restaura `Common/system.dat` del original o `system.json` del remake, con las cartas desbloqueadas y el progreso. El launcher pide confirmación antes de reemplazar un archivo y guarda una copia de la partida activa antes de sustituirla.
 
 ## Ejecutar desde el código fuente
 
@@ -234,7 +236,7 @@ Cada componente de terceros conserva su licencia. Consulta [THIRD_PARTY_NOTICES.
 ## Crear tu APK Android
 
 1. Selecciona tus ISO/carpetas o reutiliza la biblioteca preparada para PC.
-2. Pulsa **Crear .pck**. Cuando hace falta, el launcher descarga el empaquetador Godot, verifica su SHA-256 y prepara tus recursos privados en tu equipo. Después abre **`PoC Data/android/pck/`**, donde quedan el **`.pck`** y el informe JSON.
+2. Abre **Android → Crear .pck**. Cuando hace falta, el launcher descarga el empaquetador Godot, verifica su SHA-256 y prepara tus recursos privados en tu equipo. Después abre **`PoC Data/android/pck/`**, donde quedan el **`.pck`** y el informe JSON.
 3. Pulsa **Descargar APK** para bajar de GitHub el APK público de esta versión. Copia el APK y el PCK a tu Android.
 4. Instala el APK. Al abrirlo por primera vez, pulsa **Seleccionar paquete .pck** y elige ese archivo. Basta con importarlo una vez; la aplicación guarda su propia copia junto a tus partidas.
 5. **Para añadir otro juego más tarde** (por ejemplo Kaiba después de Yugi): añádelo en el launcher de PC y pulsa otra vez **Crear .pck**; el paquete nuevo incluye todos los juegos preparados. Cópialo al dispositivo y, en el launcher de Android, abre **Configuración → Partida → Importar .pck…**, elígelo y vuelve a abrir la aplicación. Tus partidas y ajustes se conservan.

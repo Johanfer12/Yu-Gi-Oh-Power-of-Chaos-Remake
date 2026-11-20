@@ -18,8 +18,8 @@ extends Node2D
 ##
 ## Arrastre y ciclo compartido: 42fe40/42ff70/42fda0. La respuesta inicia el
 ## cierre; la ranura se libera ocho ticks despues. Yugi usa 465c50 sin fundido;
-## Kaiba usa 467a40 con escalas distintas al abrir y cerrar. La composicion Joey
-## sigue pendiente de cotejo especifico (D13). Los tipos8/9 consultan los selectores.
+## Kaiba usa 467a40 con escalas distintas al abrir y cerrar. Joey usa 4884c0
+## para el recorrido vertical. Los tipos8/9 consultan los selectores.
 
 const IconSelector = preload("res://core/joey_icon_selector.gd")
 const DialogText = preload("res://scenes/duel/duel_dialog_text.gd")
@@ -32,6 +32,8 @@ const FONT_SIZE := 12
 const LINE := 13
 const TOP_PAD := 16
 const OPTION_STEP := 0x17
+const JOEY_OPTION_FONT_SIZE := 15
+const JOEY_OPTION_LINE_GAP := 8
 const BTN := Vector2i(111, 33)
 
 var scene: Node
@@ -45,7 +47,7 @@ var _height := 0
 var _text_height := 0
 ## +0x14: 0x100 al crearse y baja 0x20 por fotograma hasta 0 (la ventana atiende al raton).
 var _t := 0x100
-## Tick en que termino de abrirse: el deslizamiento al boton (6 ticks) no admite clics (Yu/Ka).
+## Tick en que termino de abrirse: Kaiba espera el deslizamiento al botón.
 var _opened_tick := 1 << 30
 var _clock := 0.0
 ## Retener el flanco del clic hasta el siguiente tick nativo, aunque Godot dibuje mas rapido.
@@ -61,6 +63,11 @@ var _native_tick := 0
 var _text_width := TEXT_WIDTH
 var _feedback := 0
 var _feedback_item := -1
+var _joey_option_hover := -1
+var _joey_option_ticks := 0
+var _joey_option_font: Font
+var _joey_option_lines: Array[Dictionary] = []
+var _joey_option_size := Vector2i.ZERO
 var _interior_width := 358
 var _dragging := false
 var _drag_offset := Vector2i.ZERO
@@ -81,6 +88,20 @@ func begin_close() -> void:
 	queue_redraw()
 	if _icon_layer != null: _icon_layer.queue_redraw()
 	_add_layer.queue_redraw()
+
+
+## 42fe40 / 4658d0: el cuadro abierto solo retiene el puntero dentro de su marco o al arrastrar.
+func captures_board_hover(point: Vector2) -> bool:
+	if _t != 0 or type in [8, 9]: return false
+	return _dragging or _over_window(point - position)
+
+
+## Yugi 4308f0 publica la miniatura de posición al mismo panel que las cartas del tablero.
+func position_preview(point: Vector2) -> int:
+	if game != "yugi" or type != 6 or _feedback > 0: return -2
+	var item := _pick(point - position)
+	if item < 0: return -2
+	return -1 if item == 1 and data.get("defense_face_down", false) else int(data.get("card", 0))
 
 
 func _request_answer(value: int) -> void:
@@ -150,6 +171,9 @@ func setup(scene_node: Node, the_duel: Duel, game_id: String, text: String) -> v
 			_icons.setup(type, int(data.get("icon_arg", 0)))
 		_interior_width = 380
 		_height = _text_height + 12 + extra
+		if type in [2, 3]:
+			_prepare_joey_option_text(lines)
+			_height = _joey_option_size.y + 12
 		_height += _height & 1
 	elif game == "kaiba":
 		_interior_width = 330 #467ad0: ancho de win_top menos dos márgenes15 y ocho.
@@ -222,6 +246,7 @@ func _build_items() -> void:
 			for i in n:
 				var cy := bottom + (i - n) * OPTION_STEP + 11
 				if game == "kaiba": cy = _top() + _text_height + 14 + i * OPTION_STEP
+				if game == "joey": cy = _top() + _joey_option_size.y + (i - n) * OPTION_STEP + 14
 				var dimensions := s1.get_size() if s1 else Vector2(340, 21)
 				_items.append({"rect": Rect2(Vector2(CENTER.x, cy) - dimensions / 2, dimensions), "answer": i, "kind": "option",
 						"tex": [s1, s1 if game in ["kaiba", "joey"] else _tex("sentaku_2"), s1 if game in ["kaiba", "joey"] else _tex("sentaku_3")], "mask": img, "label": _lines[i]})
@@ -329,7 +354,8 @@ func _activate_item(index: int) -> void:
 			_glide = {}
 			PointerGlide.cancel()
 		return
-	if game in ["kaiba", "joey"] and _items[index].kind in ["button", "option"]:
+	var kind: String = _items[index].kind
+	if kind == "button" or (game in ["kaiba", "joey"] and kind == "option") or (game == "yugi" and type == 6):
 		_feedback_item = index
 		_feedback = 256
 	else:
@@ -349,7 +375,10 @@ func _process(delta: float) -> void:
 			return
 		if _feedback > 0:
 			var option: bool = _items[_feedback_item].kind == "option"
-			_feedback -= (64 if option else 32) if game == "joey" else (32 if option else 64)
+			# En Yugi, 4302e0 resta 0x40 por tick a OK/Sí/No. Para la carta de
+			# posición, 410030 resta 0x10 antes de que 4309a0 cierre.
+			if game == "yugi": _feedback -= 16 if type == 6 else 64
+			else: _feedback -= (64 if option else 32) if game == "joey" else (32 if option else 64)
 			if _feedback <= 0:
 				_request_answer(int(_items[_feedback_item].answer))
 				return
@@ -358,7 +387,7 @@ func _process(delta: float) -> void:
 			# 0x42ff70: al terminar de aparecer llama a la ranura +0x24 (0x430600 en OK y Si/No,
 			# 0x430dc0 en N botones: primera opcion), que lleva el puntero al boton (0x45fff0).
 			if _t == 0: _opened_tick = _native_tick
-			if _t == 0 and type <= 5 and not _items.is_empty():
+			if _t == 0 and (type <= 5 or (game == "yugi" and type == 6)) and not _items.is_empty():
 				_glide_start()
 			if _t < -255:
 				if scene.has_method("_dialog_gone"):
@@ -367,6 +396,10 @@ func _process(delta: float) -> void:
 				return
 		_glide_step()
 		_keyboard_tick()
+		if game == "joey" and type in [2, 3]:
+			_joey_option_ticks = _joey_option_ticks + 1 if _hover == _joey_option_hover else 1
+			_joey_option_ticks = mini(_joey_option_ticks, 16)
+			_joey_option_hover = _hover
 		if _t == 0 and type in [8, 9]:
 			# Y430bc0/430bf0: estas ventanas leen seleccion del tablero y se cierran
 			# cuando 578be0/56b290 termina; no tienen boton ni cierre por clic vacio.
@@ -386,8 +419,8 @@ func _process(delta: float) -> void:
 
 
 ## Elemento bajo el puntero (vtable +0x18 de cada boton: pixel del mask no transparente).
-func _pick(pos: Vector2) -> int:
-	if _t != 0:
+func _pick(pos: Vector2, opening_button := false) -> int:
+	if _t != 0 and not opening_button:
 		return -1
 	for i in _items.size():
 		var it := _items[i]
@@ -435,12 +468,17 @@ func _over_window(at: Vector2) -> bool:
 
 
 func _input(event: InputEvent) -> void:
+	# Yugi 4304f0/4306e0 avanza 42ff70 antes de leer OK/Sí/No. Godot entrega
+	# el flanco antes de _process, cuando aún queda el último paso de 0x20.
+	if game == "yugi" and type in [0, 1] and _t == 0x20 and event is InputEventMouseButton \
+			and event.button_index == MOUSE_BUTTON_LEFT:
+		_pressed = _pick(event.position - position, true) if event.pressed else -1
+		get_viewport().set_input_as_handled()
+		return
 	if _feedback > 0 or _t != 0 or (_icons != null and _icons.complete): return
-	# Yu/Ka: durante los 6 ticks del deslizamiento al boton (45fff0) el clic no cuenta. En la tanda variada
-	# el original ignoro un clic 11 ticks despues de abrirse el cuadro y acepto el de los 23; el port
-	# cerraba con el primero y el segundo elegia un objetivo propio (Hane-Hane, 30-10-2026).
-	# Solo los clics sobre un boton: arrastrar el cuadro por el marco sigue valiendo.
-	if game in ["yugi", "kaiba"] and _native_tick - _opened_tick < 6 and event is InputEventMouseButton 			and _pick(event.position - position) >= 0: return
+	# Kaiba espera seis ticks de deslizamiento para el botón. El marco admite arrastre.
+	if game == "kaiba" and _native_tick - _opened_tick < 6 and event is InputEventMouseButton \
+			and _pick(event.position - position) >= 0: return
 	if event is InputEventKey and event.pressed and not event.echo and type not in [8, 9]:
 		# La ventana consume el evento antes de que llegue al autoload: anotar su actividad.
 		Game._input(event)
@@ -461,7 +499,7 @@ func _input(event: InputEvent) -> void:
 		var outside := cancellable and preload("res://core/touch_input.gd").outside(event, _over_window(_pointer) or _hover >= 0)
 		if event.button_index == MOUSE_BUTTON_LEFT and not outside:
 			if event.pressed:
-				if _icons != null and _hover >= 0:
+				if (_icons != null or (game == "yugi" and type == 6)) and _hover >= 0:
 					_activate_item(_hover)
 					get_viewport().set_input_as_handled()
 					return
@@ -572,8 +610,10 @@ func _draw_joey() -> void:
 	if bottom: draw_texture(bottom, Vector2(CENTER.x - bottom.get_width() / 2, top + _height - 22))
 	if _t != 0 or offset != _joey_vertical_offset(): return
 	var font := ThemeDB.fallback_font
-	if _text != "": _draw_text(font, _text, Vector2(CENTER.x - _text_width / 2.0, top + 6), _text_width)
+	if _joey_option_font == null and _text != "":
+		_draw_text(font, _text, Vector2(CENTER.x - _text_width / 2.0, top + 6), _text_width)
 	for i in _items.size(): _draw_item(i, font)
+	if _joey_option_font != null: _draw_joey_option_text(top + 6)
 	if _icons != null and _hover >= 0:
 		var label: String = str(Assets.dialog_texts()[501 + _hover if type == 4 else 531 + _hover])
 		_draw_text(font,label,Vector2(CENTER.x - _text_width / 2.0,CENTER.y + (40 if type == 4 else 24)),_text_width)
@@ -665,11 +705,8 @@ func _draw_item(i: int, font: Font) -> void:
 		"option":
 			var tex: Texture2D = it["tex"][state]
 			if game == "joey":
-				var frame := _tex("3taku_waku2" if state == 2 else "3taku_waku")
-				if frame: draw_texture(frame, r.get_center() - frame.get_size() / 2)
-				if state != 0:
-					var glow := _tex("3taku_on2" if state == 2 else "3taku_on")
-					if glow: draw_texture(glow, r.get_center() - glow.get_size() / 2)
+				_draw_joey_option(r.get_center(), i, state)
+				return
 			elif game == "kaiba" and state != 0:
 				_draw_kaiba_option(r, i)
 			elif tex != null:
@@ -689,6 +726,65 @@ func _draw_item(i: int, font: Font) -> void:
 				# FUN_004312f0: opaca la senalada, el resto con alfa 0x80.
 				var a := 1.0 if _hover == i else 128.0 / 255.0
 				draw_texture_rect_region(tex, r, Rect2(int(it["cell"]) * r.size.x, 0, r.size.x, r.size.y), Color(1, 1, 1, a))
+
+## 43e9c0: el separador superior solamente se repite en la opción activa.
+func _draw_joey_option(center: Vector2, index: int, state: int) -> void:
+	if state == 2:
+		_joey_option_sprite("3taku_on2", center + Vector2(0, 3))
+	elif state == 1 and _joey_option_hover == index:
+		_joey_option_sprite("3taku_on", center + Vector2(0, 3), float(_joey_option_ticks) / 16.0)
+	var frame := "3taku_waku" if state == 0 else "3taku_waku2"
+	if index == 0 or state != 0:
+		_joey_option_sprite(frame, center + Vector2(0, -9))
+	_joey_option_sprite(frame, center + Vector2(0, 14))
+
+
+func _joey_option_sprite(name: String, center: Vector2, alpha := 1.0) -> void:
+	var texture := _tex(name)
+	if texture: draw_texture(texture, center - (texture.get_size() / 2).floor(), Color(1, 1, 1, alpha))
+
+
+## 487e70/488080: el texto, con sangría y colores, se centra como bloque.
+## Una línea vacía añade únicamente el interlineado de ocho píxeles.
+func _prepare_joey_option_text(lines: PackedStringArray) -> void:
+	var font := SystemFont.new()
+	font.font_names = PackedStringArray(["Arial", "Liberation Sans", "Roboto", "sans-serif"])
+	font.font_weight = 700
+	_joey_option_font = font
+	for line in lines:
+		var plain := DialogText.strip_marks(line)
+		if plain.strip_edges().is_empty():
+			_joey_option_size.y += JOEY_OPTION_LINE_GAP
+			continue
+		var paragraph := TextParagraph.new()
+		paragraph.add_string(plain, font, JOEY_OPTION_FONT_SIZE)
+		paragraph.width = _text_width
+		var colors: Array[Color] = []
+		for run: Array in DialogText.runs(line, game):
+			for c in String(run[0]).length(): colors.append(run[1])
+		for i in paragraph.get_line_count():
+			var span := paragraph.get_line_range(i)
+			_joey_option_size.x = maxi(_joey_option_size.x, ceili(paragraph.get_line_size(i).x))
+			_joey_option_lines.append({"text": plain, "span": span, "colors": colors, "y": _joey_option_size.y})
+			_joey_option_size.y += OPTION_STEP
+
+
+func _draw_joey_option_text(top: float) -> void:
+	var left := CENTER.x - _joey_option_size.x / 2
+	var baseline := top + _joey_option_font.get_ascent(JOEY_OPTION_FONT_SIZE)
+	for line in _joey_option_lines:
+		var span: Vector2i = line.span
+		var colors: Array[Color] = line.colors
+		var at := Vector2(left, baseline + int(line.y))
+		var from := span.x
+		while from < span.y:
+			var to := from + 1
+			while to < span.y and colors[to] == colors[from]: to += 1
+			var piece: String = line.text.substr(from, to - from)
+			draw_string(_joey_option_font, at, piece, HORIZONTAL_ALIGNMENT_LEFT, -1, JOEY_OPTION_FONT_SIZE, colors[from])
+			at.x += _joey_option_font.get_string_size(piece, HORIZONTAL_ALIGNMENT_LEFT, -1, JOEY_OPTION_FONT_SIZE).x
+			from = to
+
 
 ## 4305d0: seis franjas verticales con recorrido de ida y vuelta; 12 planetas horizontales.
 func _draw_kaiba_option(rect: Rect2, index: int) -> void:
@@ -729,11 +825,15 @@ func _draw_card(canvas: CanvasItem, tex: Texture2D, r: Rect2, sideways: bool, co
 
 ## La carta senalada se repite en aditivo con alfa 0x40 (como la lista de seleccion).
 func _draw_add() -> void:
-	if _t != 0: return
-	if type == 6 and _hover >= 0:
-		var tex := _card_tex(_hover)
-		if tex != null:
-			_draw_card(_add_layer, tex, _items[_hover]["rect"], _hover == 1, Color(1, 1, 1, 64.0 / 255.0))
+	if _t != 0 or type != 6: return
+	var item := _hover
+	if game == "yugi" and _feedback > 0:
+		# 410ca0: suma 0x40 durante la mitad de cada par de fases de 0x20.
+		item = _feedback_item if (_feedback >> 5) & 1 else -1
+	if item < 0: return
+	var tex := _card_tex(item)
+	if tex != null:
+		_draw_card(_add_layer, tex, _items[item]["rect"], item == 1, Color(1, 1, 1, 64.0 / 255.0))
 
 
 ## 0x431470: icono de carta de 25x36 por cada carta pedida (0xa16101), desde x = centro - 167

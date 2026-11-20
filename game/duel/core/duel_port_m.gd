@@ -991,6 +991,7 @@ func f571330(p: int, loc: int) -> int:
 	m.set_u16(0xa1340a, 0)
 	if f579890() != 0:
 		# FUN_00413140 (resalta el objeto, presentacion) y la lista en modo 0 (solo ver).
+		present("pile_highlight", {"p": p, "loc": loc})
 		f407580(p, loc, 0, 0)
 	return 0
 

@@ -16,8 +16,6 @@ signal finished
 
 const CARD_W := 200
 const CARD_H := 290
-const CARD_Y := 400
-const TITLE_Y := 175
 const RewardInput = preload("res://core/duel_input.gd")
 
 var game := "yugi"
@@ -38,6 +36,7 @@ var _match := false
 var _outcome := 0
 var _owns_banner := true
 var _board: Node2D = null
+var _replay_question: PocDialog
 static var _mask_shaders := {}
 var _joey_reward_ready := false
 var _joey_retry := false
@@ -183,12 +182,22 @@ func _ask_replay() -> void:
 	if bg == null:
 		_after_replay()
 		return
-	var d := PocDialog.new(bg, (Vector2(400, 428) - bg.get_size() / 2).floor())
+	var center := Vector2(400, 460 if game == "joey" else 428)
+	var half := bg.get_size() / 2.0
+	var d := PocDialog.new(bg, center - (half.floor() if game in ["kaiba", "joey"] else half.ceil()))
 	for pair in [["yes", "dlg_replayq_yes"], ["no", "dlg_replayq_no"]]:
 		var l := Assets.layout(dir + pair[1] + ".txt")
 		d.add_button(pair[0], Vector2(l.position(0)), Assets.texture(dir + l.resource(0)), Assets.texture(dir + l.resource(1)))
 	d.cancel_id = "no"
+	if game in ["kaiba", "joey"]:
+		# Ka44f660/44f800 y Jo4739a0/461ab0 esperan el cierre tras confirmar.
+		d.enable_native_editor()
+		d.closing.connect(func(_id: String) -> void:
+			var sound := "return" if game == "joey" and d.native_phase == 5 else "decide"
+			Audio.play_sfx("%s/voice/internal/%s.wav" % [game, sound]))
+		_replay_question = d
 	d.closed.connect(func(id: String) -> void:
+		_replay_question = null
 		d.queue_free()
 		if id == "yes":
 			_save_replay()
@@ -224,7 +233,7 @@ func _save_replay() -> void:
 		else:
 			Audio.play_sfx("%s/voice/internal/return.wav" % game)
 			_after_replay())
-	Audio.play_sfx("%s/voice/internal/decide.wav" % game)
+	if game != "kaiba": Audio.play_sfx("%s/voice/internal/decide.wav" % game)
 	add_child(d)
 
 
@@ -282,12 +291,19 @@ func _offers_cards() -> bool:
 	return _outcome == 1 and not (game == "joey" and (Game.duel_mode == 3 or _surrendered))
 
 
+func replay_result_phase() -> String:
+	if _state == 6 and _t > 0: return "premio"
+	return {2: "repetición", 21: "repetición", 5: "tablero"}.get(_state, "")
+
+
 func _step() -> void:
 	if game == "joey": _joey_sample_input()
 	match _state:
 		2:
 			_state = 21
 			_ask_replay()
+		21:
+			if _replay_question != null: _replay_question.native_tick()
 		5:
 			if _banner < 0x100:
 				_banner += 0x10
@@ -296,7 +312,12 @@ func _step() -> void:
 				if not _board.active and _banner >= 0x100:
 					_board.queue_free()
 					_board = null
-					_state = 6 if _offers_cards() else 7
+					if game == "kaiba" and _outcome == 0:
+						# 4359d0: si el match sigue, abre el Side al terminar el tablero.
+						_state = 8
+						finished.emit()
+					else:
+						_state = 6 if _offers_cards() else 7
 		6:
 			if _banner < 0x100:
 				# 0x463210: +0x10 por paso; el cartel se dibuja a escala 0x100 - contador.
@@ -322,8 +343,11 @@ func _step() -> void:
 		7:
 			for label in _names:
 				label.visible = false
-			_fade += 0x10
-			if _fade >= 0x100:
+			# 4359d0/447000: Game.goto usa el último fotograma para el barrido 2a.
+			var uses_scene_wipe := game in ["kaiba", "joey"]
+			if not uses_scene_wipe:
+				_fade += 0x10
+			if uses_scene_wipe or _fade >= 0x100:
 				_state = 8
 				finished.emit()
 	_clicked = false
@@ -428,17 +452,43 @@ func _card_x(k: int) -> int:
 	return 400 if _cards.size() == 1 else [160, 400, 640][k]
 
 
+## Centros de la carta y del rótulo en duel/get/youget.txt.
+func _card_y() -> int:
+	return 380 if game == "joey" else 400
+
+
+func _title_y() -> int:
+	return 125 if game == "joey" else 175
+
+
+func _title_rect(size: Vector2) -> Rect2:
+	var half := size / 2.0
+	if game in ["kaiba", "joey"]:
+		half = half.floor()
+	return Rect2(Vector2(400, _title_y()) - half, size)
+
+
 func _build_names() -> void:
+	# 434270 y 4453d0 fijan los nombres amarillos sobre el borde de la carta.
+	var classic := game in ["kaiba", "joey"]
+	# 4337f0/445a10 omiten el nombre para la instalación inglesa (selector 1).
+	if classic and Assets.lang == "e":
+		return
+	var name_center := _card_y() - CARD_H / 2 - int({"joey": 17, "kaiba": 11}.get(game, 16))
 	for k in _cards.size():
 		var label := Label.new()
 		label.text = CardDB.name_of(_cards[k]["id"])
-		label.add_theme_font_size_override("font_size", 13)
-		label.add_theme_color_override("font_color", Color.WHITE)
+		label.add_theme_font_size_override("font_size", 14 if game == "joey" else 13)
+		label.add_theme_color_override("font_color", Color.YELLOW if classic else Color.WHITE)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		if classic:
+			label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		label.size = Vector2(0x10a, 18)
-		label.position = Vector2(_card_x(k) - 0x10a / 2, CARD_Y - CARD_H / 2 - 0x10 - 9)
+		label.position = Vector2(_card_x(k) - 0x10a / 2, name_center - 9)
 		label.visible = false
 		add_child(label)
+		if classic:
+			label.position.y = name_center - label.size.y / 2.0
 		_names.append(label)
 
 
@@ -451,7 +501,7 @@ func _spawn_sparks() -> void:
 		if tc >= 0x280 and tc < 0x300 and (tc - 0x280) % 16 == 0:
 			# 0x433b63 (x) y 0x433b8e (y), en ese orden.
 			var x := _card_x(k) + UiRandom.draw_mod(CARD_W) - CARD_W / 2
-			_sparks.append({"pos": Vector2(x, CARD_Y + UiRandom.draw_mod(CARD_H) - CARD_H / 2), "f": 0})
+			_sparks.append({"pos": Vector2(x, _card_y() + UiRandom.draw_mod(CARD_H) - CARD_H / 2), "f": 0})
 
 
 func _tex(name: String) -> Texture2D:
@@ -552,7 +602,7 @@ func _build_sprites() -> void:
 	if normal != null and mask != null and ref != null and _t >= 0x100 and _t < 0x200:
 		var size := normal.get_size()
 		var shift: float = _blend.at("shine", ((ref.get_width() + size.x) * (_t - 0x100) / 256) - ref.get_width())
-		_sprite(normal, Rect2(Vector2(400, TITLE_Y) - size / 2, size), 1.0, _masked(ref, mask, size, shift, false, true))
+		_sprite(normal, _title_rect(size), 1.0, _masked(ref, mask, size, shift, false, true))
 	# 0x4337a8: reflejo ref2 sobre la carta, aditivo (+0xa0) y recortado a la carta.
 	var ref2 := _tex("you_get_ref2")
 	for k in _cards.size():
@@ -570,7 +620,7 @@ func _build_sprites() -> void:
 		s.centered = false
 		s.region_enabled = true
 		s.region_rect = Rect2(src_x, 0, w, mini(CARD_H, ref2.get_height()))
-		s.position = Vector2(_card_x(k) - CARD_W / 2 + left, CARD_Y - CARD_H / 2)
+		s.position = Vector2(_card_x(k) - CARD_W / 2 + left, _card_y() - CARD_H / 2)
 		var add := CanvasItemMaterial.new()
 		add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 		s.material = add
@@ -609,8 +659,7 @@ func _draw_title() -> void:
 	var normal := _tex(stem + "2")
 	if white == null or normal == null:
 		return
-	var size := normal.get_size()
-	var rect := Rect2(Vector2(400, TITLE_Y) - size / 2, size)
+	var rect := _title_rect(normal.get_size())
 	if _t <= 0x80:
 		_draw_scattered(white, rect.position, _blend.at("scatter", _t * 2))
 	elif _t < 0x100:
@@ -678,7 +727,7 @@ func _draw_card(k: int) -> void:
 	var cx := _card_x(k)
 	var back := Assets.texture("common/card/card_ura.png")
 	var face := CardDB.card_texture(_cards[k]["id"])
-	var rect := Rect2(cx - CARD_W / 2, CARD_Y - CARD_H / 2, CARD_W, CARD_H)
+	var rect := Rect2(cx - CARD_W / 2, _card_y() - CARD_H / 2, CARD_W, CARD_H)
 	if ta <= 0x80:
 		return
 	if ta < 0x100:
@@ -713,7 +762,7 @@ func _new_rect(k: int, tc: int, label: Texture2D) -> Rect2:
 	if tc > 0x480:
 		# (u - 0x40) / 0x40: de 1x (u = 0x80) a casi 3x, sin salto.
 		size *= float((tc & 0xff) - 0x40) / 0x40
-	return Rect2(Vector2(_card_x(k), CARD_Y) - size / 2, size)
+	return Rect2(Vector2(_card_x(k), _card_y()) - size / 2, size)
 
 
 func _draw_new(k: int, tc: int) -> void:

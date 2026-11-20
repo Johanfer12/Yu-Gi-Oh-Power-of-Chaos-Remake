@@ -3,6 +3,37 @@ extends RefCounted
 static func base_position(p: int, loc: int) -> Vector2:
 	return DuelGeometry.location(p, loc)
 
+## 42efb0: estados de barajado, cambio de cima, vuelta y resaltado.
+static func start(pile: Dictionary, state: int, value := -1) -> void:
+	pile["animation_state"] = state
+	pile["animation_counter"] = 0x140 if state == 5 else 8 if state == 8 else 0
+	pile["animation_value"] = value
+
+
+static func tick(pile: Dictionary) -> bool:
+	var state := int(pile.get("animation_state", 0))
+	if state == 0: return false
+	var counter := int(pile["animation_counter"])
+	counter += -8 if state == 5 else -1 if state == 8 else 0x20
+	if counter <= 0 or counter >= 0x100 and state in [6, 7]:
+		if state == 6: pile["top"] = int(pile["animation_value"])
+		if state == 7: pile["face"] = not bool(pile.get("face", false))
+		pile.erase("animation_state")
+		pile.erase("animation_counter")
+		pile.erase("animation_value")
+	else:
+		pile["animation_counter"] = counter
+	return true
+
+
+static func visible_count(pile: Dictionary) -> int:
+	var count := int(pile["count"])
+	if int(pile.get("animation_state", 0)) != 5: return count
+	var counter := int(pile["animation_counter"])
+	if counter < 0x40: return (count * (0x40 - counter)) >> 6
+	if counter < 0x100: return 0
+	return (count * (counter - 0x100)) >> 6
+
 ## Yugi442130 / Kaiba442740: base o superficie segun indice de referencia.
 static func object_position(p: int, loc: int, index: int, count: int) -> Vector2:
 	var base := base_position(p, loc)

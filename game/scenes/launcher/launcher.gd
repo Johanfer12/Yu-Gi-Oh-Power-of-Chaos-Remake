@@ -46,6 +46,7 @@ var import_mode := false
 var logo_y := LOGO_Y
 var heading_y := TITLE_Y
 var _language := OptionButton.new()
+const Tips = preload("res://scenes/launcher/tooltip_texts.gd")
 var _setup_button := Button.new()
 var _release_footer := preload("res://scenes/launcher/release_footer.gd").new()
 
@@ -168,7 +169,8 @@ func _select_language(index: int) -> void:
 
 func _language_updated() -> void:
 	_language.select(Assets.LANGUAGES.keys().find(Assets.lang))
-	_language.tooltip_text = Assets.port_label(4)
+	_language.tooltip_text = Tips.text("language", Assets.lang)
+	_setup_button.tooltip_text = Tips.text("import", Assets.lang)
 	_setup_button.text = "ISO / " + _folder_label()
 	if _release_footer.is_node_ready():
 		_release_footer.refresh()

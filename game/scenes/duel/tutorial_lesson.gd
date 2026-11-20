@@ -2,7 +2,6 @@ extends "res://scenes/duel/replay_viewer.gd"
 ## Scene3 modo6 + objeto scene9 (4375c0/468e30): comandos a ritmo nativo, entrada real.
 var _lesson_clock := 0.0
 var _press_bits := 0
-var _dialog_box: Node2D
 var _list_window: Node2D
 var _background := Sprite2D.new()
 var _back_layout: Layout

@@ -11,6 +11,21 @@ func _ready() -> void:
 	super._ready()
 	if _duel == null or _visual == null:
 		return
+	# Evita cargar WAV durante los cambios de LP, el retrato y el cartel de resultado.
+	for track in ["m_furi", "m_yuri", "m_sum", "m_win", "m_lose"]:
+		Audio.preload_music("joey/voice/stream/%s.wav" % track)
+	if DisplayServer.get_name() != "headless":
+		# La primera invocación también carga voz, ojos y boca en el tick del retrato.
+		var portraits := preload("res://scenes/duel/duel_portrait_effects.gd")
+		for voice in ["joey_04", "joey_05", "joey_06"]:
+			portraits.voice_ms("joey/voice/internal/%s.wav" % voice)
+		for name in ["reaction08", "reaction13"]:
+			var layout_path := "joey/bust_up/%s.txt" % name
+			if not Assets.exists(layout_path.trim_suffix(".txt") + ".layout.json"): continue
+			var layout := Assets.layout(layout_path)
+			for index in layout.items.size():
+				var resource := "joey/bust_up/" + layout.resource(index)
+				if not resource.ends_with("/null.bmp") and Assets.exists(resource): Assets.texture(resource)
 	if Game.joey_demo:
 		var label := DuelDemoLabel.new()
 		label.setup("joey")

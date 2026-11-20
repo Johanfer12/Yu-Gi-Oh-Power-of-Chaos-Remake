@@ -1,5 +1,5 @@
 extends RefCounted
-## D03: formato Yugi4077f0..407920 y despacho407f00, aun sin consumidor visual.
+## Formato y despacho del buzón clásico en la memoria normalizada del duelo.
 const FLAGS := 0xa161ca
 const PHASE := FLAGS + 1
 const PAYLOAD := 0xa161cc

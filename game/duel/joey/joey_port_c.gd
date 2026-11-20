@@ -74,6 +74,8 @@ func f56b440(index: int, ident: int) -> int:
 	for q in 2:
 		for z in range(5, 11):
 			var at := JoeyMem.zone(q, z)
+			if (m.u8(at + JoeyMem.Z_FLAGS) & 2) == 0:
+				continue
 			if (f4022e0(m.u16(at) & 0xfff) & 0xffff) != 0x48a or not _jc_face_up_live(at):
 				continue
 			var k := 0
@@ -144,10 +146,15 @@ func f56b730(p: int, z: int, check: int) -> int:
 ## `check` tambien comprueba el ataque directo (LP, mazo, 0x226/0x2d6...). Si no, ayuda 0x13
 ## (0x10 por 0x48a) cuando p es el jugador local.
 func f56b7d0(p: int, z: int, check: int) -> int:
+	return _jc_can_attack(p, z, check, 0)
+
+
+## `stats` recibe las estadísticas efectivas si el llamador también las necesita.
+func _jc_can_attack(p: int, z: int, check: int, stats: int) -> int:
 	var off := _jc_zo(p, z)
 	var index := m.u32(_JC_ZONES + off) & 0xfff
 	var shield := f56c460(p, z)
-	var r := _jc_attack_eval(p, z, check, off, index, shield)
+	var r := _jc_attack_eval(p, z, check, off, index, shield, stats)
 	if r < 0 and p == (m.u32(JoeyMem.MODE) & 1):
 		f45e240(0x13)
 	return int(r == 1)
@@ -155,14 +162,14 @@ func f56b7d0(p: int, z: int, check: int) -> int:
 
 ## Cuerpo de 56b7d0: 1 permite, 0 rechaza sin ayuda (56a290, o 0x48a ya avisado), -1 rechaza
 ## con la ayuda 0x13.
-func _jc_attack_eval(p: int, z: int, check: int, off: int, index: int, shield: int) -> int:
+func _jc_attack_eval(p: int, z: int, check: int, off: int, index: int, shield: int, stats: int) -> int:
 	if (m.u32(0xa55e00 + off) & 0x40000) != 0:
 		return -1
 	if f56b440(index, JoeyMem.ident(m.u32(_JC_ZONES + off))) != 0:
 		if p == (m.u32(JoeyMem.MODE) & 1):
 			f45e240(0x10)
 		return 0
-	var info := m.local(12)
+	var info := m.local(12) if stats == 0 else stats
 	f56dd30(p, z, info)
 	var kind := m.u8(info + 2)
 	var value := m.u32(info + 4)

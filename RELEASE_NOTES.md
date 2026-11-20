@@ -4,6 +4,15 @@
 
 For installation and updates, see the [Android update guide](docs/ANDROID_UPDATES.md#in-app-update).
 
+## v0.1.0-alpha.42
+
+- On Windows, **Import more resources** restores the unlocked collection and progress from the original `Common/system.dat` or the remake's `system.json` (issue #12). The same dialog imports `.ydc` decks, `.ydr` replays, and additional voice packs. The launcher asks before replacing files and backs up the active save before replacing it.
+- The Windows launcher shows **Build** after an ISO or folder is selected. **Create .pck** and **Download APK** are now under **Android**. The launcher and settings have localized tooltips, and the game reimport button is smaller and easier to read.
+- The update dialog shows scrollable release notes before updating. **Changelog** opens the full release list on GitHub.
+- Touch controls use a single tap for direct actions and keep confirmation for choices that need it. Joey's Graveyard remains tappable. Transitions retain their opening frames at high refresh rates.
+- Fixed duplicate cards briefly appearing during Joey's summon animation and when fusing cards already on the field. Refined Joey's card detail panel and Kaiba's demo presentation to match the originals more closely.
+- Improved duel animation timing and radial transitions across the trilogy, along with Kaiba and Joey's post-duel results and rewards, Joey's duel windows, and Exodia's visual effects.
+
 ## v0.1.0-alpha.41
 
 - Joey can start a duel with its own imported resources even if Yugi is absent (issue #11).

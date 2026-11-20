@@ -69,6 +69,12 @@ func _setup_players() -> void:
 	_sfx.append(_speech)
 
 
+func preload_music(rel_path: String) -> void:
+	var path := Assets.resolve(rel_path)
+	if not path.is_empty():
+		_load(path)
+
+
 func play_music(rel_path: String, loop := true) -> void:
 	if log_played: played_log.append(rel_path.get_file().to_lower())
 	var path := Assets.resolve(rel_path)
@@ -140,7 +146,7 @@ func play_sfx(rel_path: String) -> void:
 func _note_game_end(path: String, rel_path: String) -> void:
 	var stream := _load(path)
 	if stream == null: return
-	var start := Engine.get_process_frames()
+	var start: int = Debug._frame
 	if _is_kaiba_speech(rel_path):
 		start = maxi(start, _game_speech_end)
 	_game_ends[path] = start + int(ceil(stream.get_length() * NativeClock.HZ))
@@ -171,7 +177,7 @@ func sfx_finished(rel_path: String) -> bool:
 	if level == 0: return true
 	var path := Assets.resolve(rel_path)
 	if game_clock:
-		return Engine.get_process_frames() >= int(_game_ends.get(path, 0))
+		return Debug._frame >= int(_game_ends.get(path, 0))
 	for queued in _speech_queue:
 		if queued.path == path: return false
 	var stream: AudioStream = _cache.get(path)

@@ -15,6 +15,7 @@ static func hand_cursor_offset(p: int) -> Vector2:
 
 ## Joey 45c280 (tabla 5db5e0) coloca la zona de campo aparte; Yugi y Kaiba comparten la suya.
 const JOEY_FIELD := [Vector2(286, 353), Vector2(766, 236)]
+const JOEY_EXCLUDED := [Vector2(762, 308), Vector2(292, 292)] # 45c280, tabla 5db5f0.
 
 static func zone(p: int, z: int, game := "") -> Vector2:
 	if z == 10:

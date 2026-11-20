@@ -798,9 +798,13 @@ func f5ade40(p: int, excluded: int) -> int:
 	var maximum := -1
 	var local := m.local(12)
 	for z in range(5):
-		if z != excluded and m.u32(JoeyMem.zone(p, z)) & 0xfff and f56b7d0(p, z, 1):
+		var zone := JoeyMem.zone(p, z)
+		if z == excluded or (m.u32(zone) & 0xfff) == 0 or _jc_can_attack(p, z, 1, local) == 0:
+			continue
+		# Solo una carta oculta necesita la estimación de la IA en lugar del ATK efectivo.
+		if (m.u8(zone + JoeyMem.Z_FLAGS) & 2) == 0:
 			f5addc0(p, z, local)
-			maximum = maxi(maximum, _s32(m.u32(local + 4)))
+		maximum = maxi(maximum, _s32(m.u32(local + 4)))
 	return maximum
 
 

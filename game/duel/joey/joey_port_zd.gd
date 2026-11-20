@@ -703,25 +703,29 @@ func f5b0b90(p: int) -> int:
 	for z in range(5):
 		if f56b730(p, z, 1) != 0:
 			attackers.append(z)
+	# Los ATK no cambian al ordenar. Conserva los intercambios y desempates nativos.
+	var scores: Array[int] = []
+	for z in attackers:
+		var attack := f56f690(p, z)
+		var id := f4022e0(m.u16(JoeyMem.zone(p, z)) & 0xfff) & 0xffff
+		var priority := 3 if id in [0x2f9, 0x226, 0x2e8] else (1 if id == 0x5f3 else 2)
+		scores.append(priority << 16 | attack & 0xffff)
 	for i in range(attackers.size() - 1):
 		var best := 0xffffffff
 		var chosen := i
 		for j in range(i, attackers.size()):
-			var z := attackers[j]
-			var attack := f56f690(p, z)
-			var id := f4022e0(m.u16(JoeyMem.zone(p, z)) & 0xfff) & 0xffff
-			var priority := 3 if id in [0x2f9, 0x226, 0x2e8] else (1 if id == 0x5f3 else 2)
-			var score := priority << 16 | attack & 0xffff
+			var score := scores[j]
 			if score < best:
 				best = score
 				chosen = j
 		var swap := attackers[i]
 		attackers[i] = attackers[chosen]
 		attackers[chosen] = swap
+		scores[chosen] = scores[i]
+		scores[i] = best
 	var out := m.local(4)
 	m.set_u32(out, p)
 	for z in attackers:
-		f56f690(p, z)
 		if f5b0d90(p, z, 1, out) != 0:
 			m.copy(0xa579a6, out, 4)
 			m.set_u16(0xa579a6, m.u16(0xa579a6) | 4)

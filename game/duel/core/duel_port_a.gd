@@ -82,7 +82,10 @@ func f4028d0() -> int:
 	entry = entry ^ ((f401ad0(cmd_a() & 0xfff) ^ entry) & 0xfff)
 	var s := step()
 	if s == 0:
-		present("card_to_banish", {"p": p, "card": f401a70(entry & 0xfff), "c": cmd_c()})
+		var owner := (entry >> 12) & 1
+		present_card_motion(3, entry & 0xfff, animation_location(p, 0, cmd_c()),
+			animation_location(owner, DuelMem.LOC_BANISH, 1, 2), "card_to_banish",
+			{"p": p, "card": f401a70(entry & 0xfff), "c": cmd_c()})
 		var tmp := m.local(4)
 		m.set_u32(tmp, entry)
 		if (entry & 0xfff) != 0:
@@ -163,7 +166,7 @@ func f402d30() -> int:
 			present("sound", {"id": 0x10000047})
 		next_step()
 	elif s == 1:
-		present("flip", {"p": p, "zone": cmd_a(), "flags": m.u8(zone + 6)})
+		present_card_turn(2, p, cmd_a(), m.u8(zone + 6))
 		next_step()
 	elif s == 2:
 		var f := m.u16(zone + 6)
@@ -212,6 +215,17 @@ func f403150(p: int) -> int:
 	present("deck_top", {"p": p & 1})
 	return 0
 
+## 0x20, 403390: vuelta del objeto de pila (42eea0, estado 7).
+func f403390() -> int:
+	if step() == 0:
+		var loc := cmd_b()
+		if loc in [DuelMem.LOC_FUSION, DuelMem.LOC_DECK, DuelMem.LOC_GRAVE, DuelMem.LOC_BANISH]:
+			present("pile_flip", {"p": cmd_player(), "loc": loc})
+		next_step()
+	elif not anim_busy():
+		finish()
+	return 0
+
 
 ## 0xb5 FUN_00403180: levanta la carta de la zona (a >> 8) del jugador (a & 1): la copia en
 ## 0xa15730 y vacia la zona.
@@ -228,8 +242,14 @@ func f403180() -> int:
 		finish()
 		return 0
 	f541cb0(DuelMem.MOVING_CARD, zone)
-	present("zone_lift", {"p": a & 1, "zone": z, "b": cmd_b(),
-			"card": f401a70(m.u32(DuelMem.MOVING_CARD) & 0xfff)})
+	var index := m.u16(DuelMem.MOVING_CARD) & 0xfff
+	var to := cmd_b()
+	var loc := to >> 8
+	var flags := m.u8(zone + 6) & 3
+	present_card_motion(3, index, animation_location(a & 1, z, 0, flags),
+		animation_location(to & 1, loc, int(loc == DuelMem.LOC_GRAVE),
+			2 if loc == DuelMem.LOC_GRAVE else flags & (3 if loc < 5 else 2)),
+		"zone_lift", {"p": a & 1, "zone": z, "b": to, "card": f401a70(index)})
 	next_step()
 	return 0
 
@@ -265,7 +285,7 @@ func f4034c0() -> int:
 		next_step()
 	elif s == 1:
 		# FUN_004138b0: espera de animacion.
-		if not anim_busy(): finish()
+		if not card_and_pile_objects_busy(): finish()
 	return 0
 
 
@@ -289,7 +309,7 @@ func f4035a0() -> int:
 			present("zone_counter", {"p": p, "zone": z, "counter_type": 4})
 		next_step()
 	elif s == 1:
-		if not anim_busy(): finish()
+		if not card_and_pile_objects_busy(): finish()
 	return 0
 
 
@@ -321,11 +341,13 @@ func f403760() -> int:
 	var q := p & 1
 	var tmp := m.local(4)
 	m.set_u32(tmp, (f401ad0(cmd_b()) & 0xfff) | ((((q | 6) << 1) | q) << 12))
+	if z < 0xb:
+		# 403760 crea la carta con 413f50 antes de escribir la ranura lógica.
+		present("tutorial_place", {"p": p, "zone": z, "card": cmd_b(), "c": c,
+			"face": c < 10 if z < 5 else c == 0, "defense": z < 5 and (c % 10 & 1) != 0})
 	if z < 5:
-		present("tutorial_place", {"p": p, "zone": z, "card": cmd_b(), "c": c})
 		f5422b0(p, z % 5, tmp, c % 10, 1 if c < 10 else 0)
 	elif z < 0xb:
-		present("tutorial_place", {"p": p, "zone": z, "card": cmd_b(), "c": c})
 		f5423a0(p, z % 5, tmp, 1 if c == 0 else 0)
 	finish()
 	return 0
@@ -399,11 +421,15 @@ func f403ea0() -> int:
 		2:
 			next_step()
 		3:
-			f541cb0(DuelMem.MOVING_CARD, DuelMem.zone(p, z))
+			var at := DuelMem.zone(p, z)
+			var source := animation_field_location(p, z, m.u8(at + 6))
+			f541cb0(DuelMem.MOVING_CARD, at)
 			f543610(p, z, b)
 			# 407880 (buzon tipo 9 -> 407cb0/414810): el objeto pasa al destino sin vuelo.
-			present("zone_to", {"p": p, "zone": z, "b": b, "instant": true,
-					"card": f401a70(m.u32(DuelMem.MOVING_CARD) & 0xfff)})
+			var entry := m.u16(DuelMem.MOVING_CARD)
+			present_card_motion(4, entry & 0xfff, source,
+				animation_location((entry >> 12) & 1, 14 if b == 0 else 15, 1, 2), "zone_to",
+				{"p": p, "zone": z, "b": b, "instant": true, "card": f401a70(entry & 0xfff)})
 			next_step()
 		_:
 			finish()
@@ -426,7 +452,7 @@ func f4040f0() -> int:
 			next_step()
 		1:
 			# FUN_00403c70: espera de animacion.
-			present("flip", {"p": p, "zone": z, "flags": m.u8(zone + 6)})
+			present_card_turn(2, p, z, m.u8(zone + 6))
 			next_step()
 		2:
 			var f := m.u16(zone + 6)
@@ -535,12 +561,15 @@ func f4052b0() -> int:
 					present("destroy_effect", {"p": p, "zone": z, "card": f401a70(visual_card_index(p, z))})
 		2:
 			f541cb0(DuelMem.MOVING_CARD, zone)
+			var source := animation_location(p, z, 0, m.u8(zone + 6))
 			m.set_u32(zone, m.u32(zone) & 0xfffbffff)
 			f543740(p, z)
 			# 407880 (buzon tipo 9 -> 407cb0/414810): sin vuelo; el comando dura 7 fotogramas y
 			# la carta ya esta en el cementerio mientras sigue la explosion (traza del 10 oct).
-			present("zone_to_grave", {"p": p, "zone": z, "instant": true,
-					"card": f401a70(m.u32(DuelMem.MOVING_CARD) & 0xfff)})
+			var entry := m.u16(DuelMem.MOVING_CARD)
+			present_card_motion(4, entry & 0xfff, source,
+				animation_location((entry >> 12) & 1, DuelMem.LOC_GRAVE, 1, 2), "zone_to_grave",
+				{"p": p, "zone": z, "instant": true, "card": f401a70(entry & 0xfff)})
 			next_step()
 			return 0
 		3:
@@ -580,8 +609,11 @@ func f4054b0() -> int:
 			var owner := (m.u32(DuelMem.MOVING_CARD) >> 12) & 1
 			var destination := 14
 			# Paso 3 de 4054b0: 407880 (buzon tipo 9), sin vuelo.
-			present("zone_move", {"p": p, "zone": z, "to": (destination << 8) | owner,
-					"card": f401a70(m.u32(DuelMem.MOVING_CARD) & 0xfff), "instant": true})
+			var index := m.u16(DuelMem.MOVING_CARD) & 0xfff
+			present_card_motion(4, index, animation_field_location(p, z, m.u8(zone + 6)),
+				animation_location(owner, destination, 1, 2), "zone_move",
+				{"p": p, "zone": z, "to": (destination << 8) | owner,
+					"card": f401a70(index), "instant": true})
 			next_step()
 		4:
 			# FUN_00402690: bust-up de reaccion.
@@ -613,8 +645,14 @@ func f405d10() -> int:
 		2:
 			_a_wait_hi()
 		3:
-			if rules_game == "yugi":
-				present("special_summon_place", {"p": p, "a": a, "card": f401a70(entry & 0xfff)})
+			if rules_game in ["yugi", "kaiba"]:
+				var loc := a & 15
+				var index := (a >> 4) & 15
+				var from_grave := loc == DuelMem.LOC_GRAVE
+				present_card_motion(4, entry & 0xfff,
+					animation_location(index & 1 if from_grave else p, loc, 1 if from_grave else index, (a >> 7) & 2),
+					animation_field_location(p, dst, ((a >> 9) & 1) | ((a >> 7) & 2)), "special_summon_place",
+					{"p": p, "a": a, "card": f401a70(entry & 0xfff), "owner": (entry >> 12) & 1})
 			next_step()
 		4:
 			f544e00(p)
@@ -668,8 +706,7 @@ func f4062b0() -> int:
 				present("voice", {"id": 0x10000044 + (1 if (m.u8(zone + 6) & 1) != 1 else 0)})
 			next_step()
 		1:
-			present("change_position", {"p": p, "zone": z, "flags": m.u8(zone + 6),
-					"b": cmd_b()})
+			present_card_turn(1, p, z, m.u8(zone + 6), cmd_b())
 			next_step()
 		2:
 			var f := m.u16(zone + 6) ^ 1
@@ -756,12 +793,16 @@ func f406d20() -> int:
 			f5422b0(p, z, tmp, pos, 1)
 			var at := p * PS + 0xa11963 + z * 0x94
 			m.set_u8(at, m.u8(at) | 2)
-			present("token", {"p": p, "zone": z, "card": b + 0x780, "pos": pos})
+			present("token", {"p": p, "zone": z, "card": b + 0x780, "pos": pos,
+				"defer_object": card_objects_busy_query.is_valid()})
 			present("detail", {"card": b + 0x780}) # 5af76c+0x38, metodo +0x24.
 			_a_step_clear_hi()
 		1:
 			_a_wait_hi()
 		2:
+			if card_objects_busy_query.is_valid():
+				var location := animation_field_location(p, z, 2 | pos)
+				present_card_motion(5, index, location, location, "token_place", {"card": b + 0x780})
 			next_step()
 		3:
 			finish()

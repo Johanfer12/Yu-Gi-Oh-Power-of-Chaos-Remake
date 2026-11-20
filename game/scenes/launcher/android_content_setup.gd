@@ -12,6 +12,9 @@ var _lang := TEXTS.device_language()
 var replace := false
 var _back: Button
 
+const Tips = preload("res://scenes/launcher/tooltip_texts.gd")
+
+
 func _text(key: String) -> String:
 	return TEXTS.text(key, _lang)
 
@@ -40,12 +43,14 @@ func _ready() -> void:
 	box.add_child(instructions)
 	_choose = Button.new()
 	_choose.text = _text("pack_choose")
+	_choose.tooltip_text = Tips.text("pack", Assets.lang)
 	_choose.custom_minimum_size.y = 64
 	_choose.pressed.connect(_select_pack)
 	box.add_child(_choose)
 	if replace:
 		_back = Button.new()
 		_back.text = _text("pack_back")
+		_back.tooltip_text = Tips.text("back", Assets.lang)
 		_back.custom_minimum_size.y = 52
 		_back.pressed.connect(Game.open_launcher)
 		box.add_child(_back)

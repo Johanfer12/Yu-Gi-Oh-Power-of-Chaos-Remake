@@ -277,7 +277,8 @@ static func _exodia(owner: Node2D, event: Dictionary, frame: int) -> void:
 	if counter >= 836:
 		if _ball_shader == null:
 			_ball_shader = Shader.new()
-			_ball_shader.code = "shader_type canvas_item; varying vec2 screen_pos; uniform float hole_radius; void vertex(){screen_pos=(MODEL_MATRIX*vec4(VERTEX,0.0,1.0)).xy;} void fragment(){vec2 d=abs(screen_pos-vec2(400.0,409.0)); if(d.x<hole_radius && d.y<hole_radius){discard;} COLOR=texture(TEXTURE,UV)*COLOR; }"
+			# Fragment COLOR already contains the sampled sprite, including its alpha.
+			_ball_shader.code = "shader_type canvas_item; varying vec2 screen_pos; uniform float hole_radius; void vertex(){screen_pos=(MODEL_MATRIX*vec4(VERTEX,0.0,1.0)).xy;} void fragment(){vec2 d=abs(screen_pos-vec2(400.0,409.0)); if(d.x<hole_radius && d.y<hole_radius){discard;} }"
 		# Surface1 is NOT cleared between attack ticks. Reconstruct its retained
 		# draws, or the growing clip exposes a rectangular hole in the attack.
 		for birth in range(836, mini(counter, 1024) + 1, 4):

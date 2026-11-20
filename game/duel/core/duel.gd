@@ -230,6 +230,7 @@ func f541850(opts: int) -> int:
 
 ## FUN_0053b6f0: limpia el estado del duelo.
 func f53b6f0() -> int:
+	_animation_request.clear()
 	m.clear(0xa16180, 8)
 	m.clear(0xa11940, 0x1af8)
 	m.clear(0xa161a0, 0x34)

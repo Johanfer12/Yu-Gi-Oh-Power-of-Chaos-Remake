@@ -15,31 +15,18 @@ extends RefCounted
 ##   push 0x42edc0); al sacar una carta, la nueva imagen se lee de la memoria (0x413f50 ->
 ##   0x541a90). Una pila vacia no se dibuja (0x42f0e0).
 ##
-## El motor del port aun no tiene el buzon de animacion del original (0xa161ca, 0x407f00): sin
-## evento, la tabla adopta la memoria con `follow_memory` (ver alli que se respeta).
+## La escena inicializa objetos al cargar el duelo. Después, cada petición cambia esos objetos.
 
 const PILES := [DuelMem.LOC_FUSION, DuelMem.LOC_DECK, DuelMem.LOC_GRAVE, DuelMem.LOC_BANISH]
+const ClassicPile := preload("res://scenes/duel/classic_pile.gd")
 
 var field: Array = [[], []]
 var hand: Array = [[], []]
 var piles: Array = [{}, {}]
 ## Cartas en vuelo hacia una pila (huecos 0xc-0xf): ubicacion -> objeto.
 var inflight: Array = [{}, {}]
-## Carta que salio de cada zona por un evento mientras la memoria aun la conserva (0x7a mueve el
-## objeto sin limpiar el indice; lo limpia un comando posterior): no se vuelve a poner.
-var departed: Array = [{}, {}]
-## Llegadas por evento que la memoria aun no confirma (el objeto va por delante: 405950 escribe
-## la zona en el paso 4; 0x7a no escribe la lista del cementerio): zona -> carta y, por pila,
-## cuantas cartas llegaron antes que su escritura. El descanso no las deshace.
-var arrivals: Array = [{}, {}]
-var ahead: Array = [{}, {}]
-## Salidas visuales anteriores a su escritura lógica; no reconstruirlas durante una espera.
-var behind: Array = [{}, {}]
-## Zonas cuya carta ya esta en memoria pero cuyo objeto creara un buzon posterior (Joey a5:
-## 40ce70 llega tras la pausa de8 ticks); fuera del descanso no se adoptan.
-var awaiting: Array = [{}, {}]
-## Diferencias con la memoria que `follow_memory` corrigio (para localizar eventos que faltan).
-var corrections: Array = []
+## Índice lógico retirado antes del movimiento de su objeto (0x78).
+var detached := {}
 ## Sube con cada cambio de la tabla (la mesa se redibuja cuando cambia).
 var revision := 0
 
@@ -57,12 +44,22 @@ func clear() -> void:
 		piles[p] = {}
 		for loc in PILES: piles[p][loc] = {"count": 0, "top": -1}
 		inflight[p] = {}
-		departed[p] = {}
-		arrivals[p] = {}
-		ahead[p] = {}
-		behind[p] = {}
-		awaiting[p] = {}
-	corrections.clear()
+	detached.clear()
+
+## 413250 consulta la espera de las cartas, incluidas las que vuelan a una pila.
+func objects_busy() -> bool:
+	for p in 2:
+		for objects: Array in [field[p], hand[p], inflight[p].values()]:
+			for card: Dictionary in objects:
+				if card.get("moving", false) or card.has("counter_animation"):
+					return true
+	return false
+
+
+func tick_piles() -> void:
+	for p in 2:
+		for pile: Dictionary in piles[p].values():
+			if ClassicPile.tick(pile): revision += 1
 
 
 # --- lectura de la memoria del motor ---------------------------------------------------------
@@ -109,74 +106,28 @@ func sync(duel: Duel) -> void:
 		for loc in PILES: piles[p][loc] = memory_pile(duel, p, loc)
 
 
-## Adopta la memoria cuando no hay ningun movimiento en curso (el motor del port aun no pasa
-## todo por el buzon de animacion). Fuera de un punto de descanso (`rest`: cambio de fase o
-## espera del jugador) solo crea objetos en zonas vacias donde la memoria ya tiene una carta sin
-## evento; un objeto existente se conserva como en el original (la magia que 0x78 vacia antes de
-## que 0xb5 la levante, la carta volteada antes de que 0x80 escriba sus banderas) y mano y pilas
-## esperan a su evento. En el descanso adopta todo.
-##
-## `retained`: zonas "p:z" cuyo indice retiro 0x78 sin mover el objeto (combate, efecto de
-## volteo): el original lo conserva hasta que 0x7a / 0xb5 lo levantan, aunque entre medias el
-## duelo espere al jugador, asi que ni en el descanso se borra.
-func follow_memory(duel: Duel, rest: bool, retained: Dictionary = {}) -> void:
+## Compara al terminar una secuencia. Las cartas separadas por 0x78 siguen
+## siendo objetos válidos aunque su índice lógico haya desaparecido.
+func compare_memory(duel: Duel) -> Array[Dictionary]:
+	var differences: Array[Dictionary] = []
 	for p in 2:
 		for z in 11:
-			var mem := memory_zone(duel, p, z)
-			var obj: Dictionary = field[p][z]
-			if mem.is_empty() and not obj.is_empty() and retained.has("%d:%d" % [p, z]): continue
-			if arrivals[p].has(z):
-				if mem.is_empty() and not obj.is_empty() and int(obj["card"]) == int(arrivals[p][z]): continue
-				arrivals[p].erase(z)
-			if departed[p].has(z):
-				if not mem.is_empty() and int(mem["card"]) == int(departed[p][z]) and obj.is_empty(): continue
-				departed[p].erase(z)
-			# El objeto cambia antes que la memoria (0x80 voltea y luego escribe las banderas; 0xc4
-			# llega y luego escribe la zona): fuera del descanso nunca se corrige un objeto.
-			if not rest and (mem.is_empty() or not obj.is_empty()): continue
-			# Joey: la zona destino de un buzón aún sin despachar espera a su vuelo.
-			if obj.is_empty() and duel.has_method("pending_mail_destination") and duel.call("pending_mail_destination", p, z): continue
-			if obj.is_empty() and not rest and awaiting[p].has(z): continue
-			if not _same(obj, mem):
-				revision += 1
-				corrections.append({"where": "campo", "p": p, "z": z, "tabla": obj.duplicate(), "memoria": mem, "descanso": rest})
-				field[p][z] = mem
-		if not rest: continue
-		# Hueco que 0xc4/0xc5 vacian antes del vuelo: sale ese objeto concreto (con copias
-		# repetidas en la mano el id no basta).
-		var raw := []
-		for i in duel.m.u8(DuelMem.pl(p) + DuelMem.P_HAND_N):
-			raw.append(duel.m.u16(DuelMem.pl(p) + DuelMem.P_HAND + i * 4) & 0xfff)
-		if raw.size() == hand[p].size() and raw.has(0):
-			for i in range(raw.size() - 1, -1, -1):
-				if raw[i] == 0: hand[p].remove_at(i)
-			revision += 1
-		var mem_hand := memory_hand(duel, p)
-		if _hand_cards(hand[p]) != _hand_cards(mem_hand):
-			revision += 1
-			corrections.append({"where": "mano", "p": p, "tabla": _hand_cards(hand[p]), "memoria": _hand_cards(mem_hand), "descanso": rest})
-			hand[p] = mem_hand
+			var expected := memory_zone(duel, p, z)
+			var actual: Dictionary = field[p][z]
+			if expected.is_empty() and detached.has("%d:%d" % [p, z]): continue
+			if not _same(actual, expected):
+				differences.append({"where": "campo", "p": p, "z": z, "tabla": actual, "memoria": expected})
+		var expected_hand := _hand_cards(memory_hand(duel, p))
+		var actual_hand := _hand_cards(hand[p])
+		if actual_hand != expected_hand:
+			differences.append({"where": "mano", "p": p, "tabla": actual_hand, "memoria": expected_hand})
 		for loc in PILES:
-			var mem_pile := memory_pile(duel, p, loc)
-			var removed := int(behind[p].get(loc, 0))
-			if removed > 0:
-				var table_count := int(piles[p][loc]["count"])
-				if int(mem_pile["count"]) <= table_count: behind[p].erase(loc)
-				elif int(mem_pile["count"]) <= table_count + removed: continue
-				else: behind[p].erase(loc)
-			var lag := int(ahead[p].get(loc, 0))
-			if lag > 0:
-				var table_count := int(piles[p][loc]["count"])
-				if int(mem_pile["count"]) >= table_count: ahead[p].erase(loc)
-				elif int(mem_pile["count"]) >= table_count - lag: continue
-				else: ahead[p].erase(loc)
-			# El mazo y el mazo de fusion se dibujan boca abajo: solo cuenta el numero.
-			var same := int(mem_pile["count"]) == int(piles[p][loc]["count"])
-			if loc not in [DuelMem.LOC_DECK, DuelMem.LOC_FUSION]: same = same and int(mem_pile["top"]) == int(piles[p][loc]["top"])
-			if not same:
-				revision += 1
-				corrections.append({"where": "pila", "p": p, "loc": loc, "tabla": piles[p][loc].duplicate(), "memoria": mem_pile, "descanso": rest})
-				piles[p][loc] = mem_pile
+			var expected := memory_pile(duel, p, loc)
+			var actual: Dictionary = piles[p][loc]
+			var check_top: bool = loc in [DuelMem.LOC_GRAVE, DuelMem.LOC_BANISH]
+			if expected["count"] != actual["count"] or (check_top and expected["top"] != actual["top"]):
+				differences.append({"where": "pila", "p": p, "loc": loc, "tabla": actual, "memoria": expected})
+	return differences
 
 
 static func _same(a: Dictionary, b: Dictionary) -> bool:
@@ -198,7 +149,7 @@ func take(duel: Duel, p: int, loc: int, i: int) -> Dictionary:
 		var z := _field_slot(loc, i)
 		var obj: Dictionary = field[p][z]
 		field[p][z] = {}
-		if not obj.is_empty(): departed[p][z] = int(obj["card"])
+		detached.erase("%d:%d" % [p, z])
 		return obj
 	if loc == DuelMem.LOC_HAND:
 		if i < 0 or i >= hand[p].size(): return {}
@@ -209,10 +160,6 @@ func take(duel: Duel, p: int, loc: int, i: int) -> Dictionary:
 		var obj := {"card": int(pile["top"]), "face": loc != DuelMem.LOC_DECK, "defense": false, "owner": p}
 		var mem := memory_pile(duel, p, loc)
 		pile["count"] = maxi(0, int(pile["count"]) - 1)
-		# Si la memoria aún conserva la carta, el descanso no puede reinsertarla.
-		if int(mem["count"]) > int(pile["count"]):
-			behind[p][loc] = int(mem["count"]) - int(pile["count"])
-		else: behind[p].erase(loc)
 		pile["top"] = mem["top"] if int(mem["count"]) == int(pile["count"]) else _pile_top_below(duel, p, loc, int(pile["count"]))
 		return obj
 	return {}
@@ -233,10 +180,9 @@ static func _pile_top_below(duel: Duel, p: int, loc: int, count: int) -> int:
 func place(p: int, loc: int, i: int, obj: Dictionary) -> void:
 	revision += 1
 	if loc < 11:
-		field[p][_field_slot(loc, i)] = obj
-		departed[p].erase(_field_slot(loc, i))
-		awaiting[p].erase(_field_slot(loc, i))
-		if not obj.is_empty(): arrivals[p][_field_slot(loc, i)] = int(obj["card"])
+		var z := _field_slot(loc, i)
+		field[p][z] = obj
+		detached.erase("%d:%d" % [p, z])
 	elif loc == DuelMem.LOC_HAND:
 		hand[p].insert(hand[p].size() if i < 0 else clampi(i, 0, hand[p].size()), obj)
 	elif loc in PILES:
@@ -251,7 +197,6 @@ func land(p: int, loc: int, on_top := true) -> void:
 	inflight[p].erase(loc)
 	var pile: Dictionary = piles[p][loc]
 	pile["count"] = int(pile["count"]) + 1
-	ahead[p][loc] = int(ahead[p].get(loc, 0)) + 1
 	if on_top or int(pile["count"]) == 1: pile["top"] = int(obj.get("card", -1))
 
 

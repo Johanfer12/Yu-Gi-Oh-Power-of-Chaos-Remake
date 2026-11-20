@@ -95,17 +95,28 @@ func is_seen(internal_id: int) -> bool:
 
 ## 442900: flcrc se conserva por coleccion; al crearlo usa time32, no una clave RNG.
 ## 436ce0(0) exporta esta cabecera, y436bf0/442750 la comprueban al importar.
-func deck_file_header() -> PackedByteArray:
-	var imported := Marshalls.base64_to_raw(str(data.get("native_system", {}).get("header", "")))
-	if imported.size() == 8: return imported
-	var head := Marshalls.base64_to_raw(str(data.get("deck_header", "")))
-	if head.size() != 8:
+func deck_file_header(persist := false) -> PackedByteArray:
+	var head := _stored_deck_file_header(data)
+	var needs_save := head.size() != 8
+	if needs_save:
 		head.resize(8)
 		head.encode_u32(0, 1)
 		head.encode_u32(4, int(Time.get_unix_time_from_system()) & 0xffffffff)
 		data["deck_header"] = Marshalls.raw_to_base64(head)
-		save()
+	elif persist:
+		var stored: Variant = Store.read(path())
+		needs_save = not Store.valid(stored) or _stored_deck_file_header(stored) != head
+	if needs_save and not save() and persist:
+		return PackedByteArray()
 	return head
+
+
+static func _stored_deck_file_header(profile: Dictionary) -> PackedByteArray:
+	var head := Marshalls.base64_to_raw(str(profile.get("deck_header", "")))
+	if head.size() == 8:
+		return head
+	var native: Variant = profile.get("native_system")
+	return Marshalls.base64_to_raw(str(native.get("header", ""))) if native is Dictionary else PackedByteArray()
 
 
 func mark_seen(internal_id: int) -> void:
@@ -127,7 +138,7 @@ func unlock_all() -> void:
 ## Common; si falta uno, el mazo inicial. Yugi y Kaiba lo validan como al arrancar
 ## (_startup_decks). Conserva las preferencias propias del port (launcher, settings).
 ## Solo lee los archivos del original.
-func import_system_dat(system_dat: String) -> bool:
+func import_system_dat(system_dat: String, keep_deck_header := false) -> bool:
 	var raw := FileAccess.get_file_as_bytes(system_dat)
 	var block := SystemDat.decode(raw)
 	if block.is_empty():
@@ -147,9 +158,41 @@ func import_system_dat(system_dat: String) -> bool:
 	for key in ["launcher", "settings"]:
 		if data.has(key):
 			fresh[key] = data[key]
+	return _commit_import(fresh, keep_deck_header)
+
+
+func import_portable_save(source: String) -> bool:
+	var fresh: Variant = Store.read(source)
+	if not Store.valid(fresh):
+		return false
+	for key in ["native_system", "launcher", "settings", "options"]:
+		if fresh.has(key) and not fresh[key] is Dictionary:
+			return false
+	for options in fresh.get("options", {}).values():
+		if not options is Dictionary:
+			return false
+	fresh.get_or_add("seen", {})
+	for key in ["launcher", "settings"]:
+		if data.has(key):
+			fresh[key] = data[key]
+	return _commit_import(fresh, true)
+
+
+func _commit_import(fresh: Dictionary, keep_deck_header: bool) -> bool:
+	if keep_deck_header:
+		var current_header := _stored_deck_file_header(data)
+		if current_header.size() == 8:
+			fresh["deck_header"] = Marshalls.raw_to_base64(current_header)
+	var previous := data
 	data = fresh
+	if int(data["version"]) == 1:
+		_migrate_shared_stats()
+		data["version"] = VERSION
+	if not save():
+		data = previous
+		return false
 	_startup_checked.clear()
-	return save()
+	return true
 
 
 ## Carga de Deck.ydc al arrancar (Yugi 436e80 -> 436db0 -> 436bf0; Kaiba 437430, mismas

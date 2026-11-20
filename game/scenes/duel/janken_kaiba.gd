@@ -6,6 +6,13 @@ var _rotation := 400
 func _init() -> void:
 	super("kaiba")
 
+## 4694b0 pone el reloj a cero y el bucle original lo incrementa al final de
+## ese mismo tick. Game lo incrementa antes de que el título lo reinicie.
+## Si hay varios pasos pendientes, 4443d0/445540 leen el reloj de este paso.
+func _draw_tick() -> int:
+	return (Game.native_tick + 1 - int(_clock)) & 0xffffffff
+
+
 func _middle_draw(v: int) -> void:
 	if _state > 3: return
 	if v >= 256:
@@ -23,7 +30,7 @@ func _middle_draw(v: int) -> void:
 				continue
 			_blit(index, pos)
 			# 44469f/444991: tres filas desplazadas al azar, recorren el alto de la imagen.
-			var row := Game.native_tick % (size.y * 3 / 2) - size.y / 2 # 44469f/444991: DAT5b1d38 global.
+			var row := _draw_tick() % (size.y * 3 / 2) - size.y / 2 # 44469f/444991: DAT5b1d38 global.
 			for spread in [6, 4, 2]:
 				if row >= 0 and row < size.y:
 					var dx: int = UiRandom.draw() % (spread * 2 + 1) - spread   # MT 533640
@@ -49,7 +56,7 @@ func _button_blit(which: int, pos: Vector2, alpha: int) -> void:
 	super._button_blit(which, pos, alpha)
 	if alpha < 256 or _state == 5: return
 	var selected := _button == which
-	var index := 36 + which * 3 + int(selected) + int(selected and (Game.native_tick & 16) != 0) # 445540.
+	var index := 36 + which * 3 + int(selected) + int(selected and (_draw_tick() & 16) != 0) # 445540.
 	var size := Vector2i(_tex[index].get_size())
 	var offset := Vector2i(_layout.position(index))
 	var radius := 300 - offset.y - size.y / 2 - Y0 if which == 0 else offset.y + size.y / 2 + Y2 - 300

@@ -23,6 +23,9 @@ const ROW_TOP := 92.0             # primera fila bajo la cabecera del panel
 const ROW_PITCH := 50.0
 const CONTROL_X := 220.0          # columna de valores, alineada en todas las filas
 const KEY_STEP := 0.05
+const OPTION_KEYS := ["aspect", "fps", "speed", "fast_play", "translations"]
+const Tips = preload("res://scenes/launcher/tooltip_texts.gd")
+const TOOLTIP_DELAY := 0.45
 
 # Iconos de linea estilo Feather (viewBox 24), trazo blanco para tintarlos al dibujar.
 const SVG_HEAD := "<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='#ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>"
@@ -45,6 +48,11 @@ var _hover := ""             # "sound", "settings", "close", "slider", "mute"
 var _dragging := false
 var _focused_row := 0
 var _time := 0.0
+var _tip_key := ""
+var _tip_point := Vector2.ZERO
+var _tip_at := 0.0
+var _tip_text := ""
+var _tip_paragraph := TextParagraph.new()
 var _font := ThemeDB.fallback_font
 var _reset_dialog := ConfirmationDialog.new()
 var _reset_result := AcceptDialog.new()
@@ -63,6 +71,8 @@ func _ready() -> void:
 	DialogTheme.apply(_reset_result)
 	DialogTheme.apply(_cloud_dialog)
 	CloudSync.changed.connect(_cloud_changed)
+	get_window().mouse_exited.connect(_clear_tooltip)
+	get_viewport().size_changed.connect(_clear_tooltip)
 	# Los iconos se rasterizan grandes y se dibujan reducidos: con mipmaps no se ven dentados.
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	var saved: Dictionary = SaveData.data.get("launcher", {})
@@ -74,6 +84,7 @@ func _ready() -> void:
 	for pair in [["sound", SVG_SOUND], ["muted", SVG_MUTED], ["gear", SVG_GEAR],
 			["close", SVG_CLOSE], ["exit", SVG_EXIT], ["update", SVG_UPDATE], ["cloud", SVG_CLOUD]]:
 		_icons[pair[0]] = _rasterize(pair[1])
+	_icons["reimport"] = _rasterize(SVG_UPDATE.replace("stroke-width='2'", "stroke-width='3.4'"))
 
 
 ## Volumen efectivo de la musica (0..1).
@@ -190,7 +201,7 @@ func _hit(pos: Vector2) -> String:
 			return "slider"
 		for row in 5:
 			if _option_rect(row).has_point(pos):
-				return ["aspect", "fps", "speed", "fast_play", "translations"][row]
+				return OPTION_KEYS[row]
 		return "panel" if _panel_rect().has_point(pos) else "outside"
 	if pos.distance_to(_sound_center()) <= RADIUS:
 		return "sound"
@@ -210,13 +221,20 @@ func _hit(pos: Vector2) -> String:
 ## _input: va antes que el _unhandled_input del selector, que asi no mueve la seleccion
 ## ni abre un juego mientras se usan estos botones o el panel.
 func _input(event: InputEvent) -> void:
-	if _reset_dialog.visible or _reset_result.visible or _cloud_dialog.visible:
+	if _dialog_visible():
+		_clear_tooltip()
 		return
+	if event is InputEventMouseButton or event is InputEventKey or event is InputEventScreenTouch:
+		_clear_tooltip()
 	var local_pos := Vector2.ZERO
 	if event is InputEventMouse:
 		local_pos = get_global_transform_with_canvas().affine_inverse() * event.position
 	if event is InputEventMouseMotion:
 		_hover = _hit(local_pos)
+		if event.device != InputEvent.DEVICE_ID_EMULATION and not _dragging and event.button_mask == 0:
+			_track_tooltip(local_pos)
+		else:
+			_clear_tooltip()
 		if _dragging:
 			_set_volume_from(local_pos.x)
 		if panel_open or _hover != "":
@@ -260,7 +278,7 @@ func _input(event: InputEvent) -> void:
 				_dragging = true
 				_set_volume_from(local_pos.x)
 			"aspect", "fps", "speed", "fast_play", "translations":
-				_focused_row = ["aspect", "fps", "speed", "fast_play", "translations"].find(_hit(local_pos)) + 1
+				_focused_row = OPTION_KEYS.find(_hit(local_pos)) + 1
 				_cycle_option(_focused_row - 1, 1)
 			"panel":
 				pass
@@ -367,6 +385,7 @@ func _open_panel(open: bool) -> void:
 	panel_open = open
 	_dragging = false
 	_hover = ""
+	_clear_tooltip()
 
 
 func _toggle_mute() -> void:
@@ -416,25 +435,62 @@ func _draw() -> void:
 	if update_available:
 		_medallion(_update_center(), RADIUS, "update", _hover == "update")
 		draw_circle(_update_center() + Vector2(17, -17), 5, GOLD_LIGHT)
-	if update_available and _hover == "update" and not panel_open:
-		var text := ("Actualizar desde GitHub" if Assets.lang == "s" else "Update from GitHub")
-		if update_available:
-			text += " · " + Updates.available
-		var width := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
-		var pos := Vector2(_screen().x - MARGIN - width, _update_center().y - RADIUS - 12)
-		var bubble := Rect2(pos - Vector2(7, 20), Vector2(width + 14, 28))
-		draw_rect(bubble, Color(0.04, 0.03, 0.05, 0.97))
-		draw_rect(bubble, Color(GOLD, 0.45), false, 1.0)
-		_label(text, pos)
-	if _hover == "cloud" and not panel_open:
-		var width := _font.get_string_size("Google Drive", HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
-		_label("Google Drive", _cloud_center() + Vector2(-width / 2.0, -RADIUS - 10))
-	if _hover == "exit" and not panel_open:
-		var text: String = {"s": "Salir", "e": "Exit", "g": "Beenden", "f": "Quitter", "i": "Esci", "j": "終了"}.get(Assets.lang, "Exit")
-		var width := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
-		_label(text, _exit_center() + Vector2(-width / 2.0, -RADIUS - 10))
 	if panel_open:
 		_draw_panel()
+	_draw_tooltip()
+
+
+func _dialog_visible() -> bool:
+	return _reset_dialog.visible or _reset_result.visible or _cloud_dialog.visible
+
+
+func _clear_tooltip() -> void:
+	_tip_key = ""
+
+
+func _track_tooltip(point: Vector2) -> void:
+	var key := _hover
+	if key == "panel":
+		# Los rótulos explican el mismo ajuste sin ampliar su área de clic.
+		key = ""
+		for row in OPTION_KEYS.size() + 1:
+			if _row_rect(row).has_point(point):
+				key = "slider" if row == 0 else OPTION_KEYS[row - 1]
+				break
+	elif key == "outside":
+		key = ""
+	if key != _tip_key:
+		_tip_key = key
+		_tip_at = _time
+	_tip_point = point
+
+
+func _tooltip_text() -> String:
+	if _tip_key.is_empty() or _time - _tip_at < TOOLTIP_DELAY or _dialog_visible():
+		return ""
+	match _tip_key:
+		"sound": return Tips.text("unmute" if muted else "mute", Assets.lang)
+		"update": return Tips.text("update", Assets.lang) % Updates.available if update_available else ""
+	return Tips.text(_tip_key, Assets.lang)
+
+
+func _draw_tooltip() -> void:
+	var text := _tooltip_text()
+	if text.is_empty():
+		return
+	if text != _tip_text:
+		_tip_text = text
+		_tip_paragraph.clear()
+		_tip_paragraph.width = minf(290, ceilf(_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x))
+		_tip_paragraph.add_string(text, _font, 15)
+	var size := _tip_paragraph.get_size().ceil() + Vector2(20, 14)
+	var point := _tip_point + Vector2(14, 20)
+	var screen := _screen()
+	if point.y + size.y > screen.y - 8:
+		point.y = _tip_point.y - size.y - 12
+	point = point.clamp(Vector2(8, 8), (screen - size - Vector2(8, 8)).max(Vector2(8, 8)))
+	_round_rect(Rect2(point, size), Color(0.04, 0.03, 0.05, 0.98), 6, Color(GOLD, 0.55))
+	_tip_paragraph.draw(get_canvas_item(), (point + Vector2(10, 7)).round(), GOLD_LIGHT)
 
 
 ## Punto de estado de Drive: gris sin vincular, verde al dia, oro trabajando, rojo error o conflicto.
@@ -456,15 +512,15 @@ func _medallion(c: Vector2, r: float, icon: String, hot: bool) -> void:
 	draw_circle(c, s - 6.0, STONE, true, -1.0, true)
 	draw_arc(c, s - 3.0, PI * 1.15, PI * 1.85, 16, Color(GOLD_LIGHT, 0.85), 1.5, true)
 	draw_arc(c, s - 8.5, PI * 0.15, PI * 0.85, 16, Color(GOLD, 0.18), 3.0, true)
-	_draw_icon(icon, c, ICON_SIZE * (1.08 if hot else 1.0), GOLD_LIGHT if hot else GOLD)
+	draw_icon_on(self, icon, c, ICON_SIZE * (1.08 if hot else 1.0), GOLD_LIGHT if hot else GOLD)
 
 
-func _draw_icon(name: String, center: Vector2, size: float, color: Color) -> void:
+func draw_icon_on(surface: CanvasItem, name: String, center: Vector2, size: float, color: Color) -> void:
 	var icon: Dictionary = _icons[name]
 	var tex: Texture2D = icon["tex"]
 	var k := size / tex.get_width()
 	var rect := Rect2(center - tex.get_size() * k / 2.0 + icon["offset"] * size, tex.get_size() * k)
-	draw_texture_rect(tex, rect, false, color)
+	surface.draw_texture_rect(tex, rect, false, color)
 
 
 func _draw_panel() -> void:
@@ -498,7 +554,7 @@ func _draw_panel() -> void:
 		"Normal" if LauncherSettings.simulation_speed == 1.0 else "2×",
 		("Activado" if LauncherSettings.fast_play else "Desactivado") if spanish else ("On" if LauncherSettings.fast_play else "Off"),
 		("Mejoradas (ES)" if spanish else "Enhanced (ES)") if LauncherSettings.improved_card_texts else ("Originales" if spanish else "Original")]
-	var keys := ["slider", "aspect", "fps", "speed", "fast_play", "translations"]
+	var keys := ["slider"] + OPTION_KEYS
 	for row in 6:
 		var line := _row_rect(row)
 		var hot: bool = _focused_row == row or _hover == keys[row] or (row == 0 and _dragging)
@@ -532,11 +588,12 @@ func _draw_panel() -> void:
 		_round_rect(pack_box, STONE, 7, GOLD if pack_hot else Color(GOLD, 0.35))
 		var pack_label := "Importar .pck…" if spanish else "Import .pck…"
 		_label_mid(pack_label, pack_box.get_center() - Vector2(_font.get_string_size(pack_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x / 2.0, 0), 16, GOLD_LIGHT)
-	var foot := r.end.y - 34
-	draw_line(Vector2(r.position.x + 36, foot - 16), Vector2(r.end.x - 36, foot - 16), Color(GOLD, 0.18), 1.0, true)
-	var status: String = CardTranslations.status_text(spanish) if LauncherSettings.improved_card_texts else ("Traducciones: solo nombres y descripciones de cartas" if spanish else "Translations: card names and descriptions only")
-	var width := minf(_font.get_string_size(status, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x, r.size.x - 72)
-	draw_string(_font, Vector2(r.get_center().x - width / 2.0, foot + _baseline(13)), status,
+	if LauncherSettings.improved_card_texts:
+		var foot := r.end.y - 34
+		draw_line(Vector2(r.position.x + 36, foot - 16), Vector2(r.end.x - 36, foot - 16), Color(GOLD, 0.18), 1.0, true)
+		var status: String = CardTranslations.status_text(spanish)
+		var width := minf(_font.get_string_size(status, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x, r.size.x - 72)
+		draw_string(_font, Vector2(r.get_center().x - width / 2.0, foot + _baseline(13)), status,
 			HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 72, 13, Color(GOLD_LIGHT, 0.6))
 
 
@@ -568,11 +625,6 @@ func _draw_slider() -> void:
 	var text := "%d%%" % roundi(volume * 100)
 	var width := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
 	_label_mid(text, Vector2(_control_rect(0).end.x - 16 - width, t.get_center().y), 16, GOLD_LIGHT)
-
-
-func _label(text: String, pos: Vector2) -> void:
-	draw_string_outline(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, 4, Color(0, 0, 0, 0.8))
-	draw_string(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, GOLD_LIGHT)
 
 
 ## Texto centrado verticalmente en `left_mid.y` (por altura de letra, no por linea base).

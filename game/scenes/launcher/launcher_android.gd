@@ -40,6 +40,7 @@ var _halo: Sprite2D
 var _time := 0.0
 var _font := ThemeDB.fallback_font
 var _screen := DESIGN                    # pantalla visible
+const Tips = preload("res://scenes/launcher/tooltip_texts.gd")
 var _language := OptionButton.new()
 var _release_footer := preload("res://scenes/launcher/release_footer.gd").new()
 var _origin := Vector2.ZERO              # esquina de la composicion DESIGN centrada en ella
@@ -87,10 +88,11 @@ func _ready() -> void:
 		_language.add_item(Assets.LANGUAGES[code])
 	_language.item_selected.connect(func(index: int) -> void:
 		Assets.remember_language(["s", "e"][index])
+		_language.tooltip_text = Tips.text("language", Assets.lang)
 		_release_footer.refresh()
 		queue_redraw())
 	_language.select(0 if Assets.lang == "s" else 1)
-	_language.tooltip_text = "Idioma / Language"
+	_language.tooltip_text = Tips.text("language", Assets.lang)
 	_language.add_theme_font_size_override("font_size", 16)
 	add_child(_language)
 	_layout()

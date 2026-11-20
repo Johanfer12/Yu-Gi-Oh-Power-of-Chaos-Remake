@@ -36,8 +36,9 @@ func _d_expect_found(found: int, card_id: int, what: String) -> void:
 
 ## FUN_00407830 (presentacion): movimiento de una carta (indice) entre dos sitios.
 func _d_move(index: int, src: int, dst: int, grave_inserted: bool = false) -> void:
-	present("move", {"index": index & 0xfff, "card": f401a70(index & 0xfff),
-			"from": src & 0xffff, "to": dst & 0xffff, "grave_inserted": grave_inserted})
+	present_card_motion(3, index & 0xfff, src, dst, "move", {"index": index & 0xfff,
+		"card": f401a70(index & 0xfff), "from": src & 0xffff, "to": dst & 0xffff,
+		"grave_inserted": grave_inserted})
 
 
 # --- Manejadores: banderas de zona -------------------------------------------------------

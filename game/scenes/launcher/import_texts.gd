@@ -6,6 +6,20 @@ const TEXT := {
 	"reimport": {
 		"s": "Volver a importar", "e": "Reimport", "g": "Erneut importieren",
 		"f": "Réimporter", "i": "Reimporta", "j": "再インポート"},
+	"resources_tooltip": {
+		"s": "Importa voces, mazos, repeticiones o una partida guardada.",
+		"e": "Import voice packs, decks, replays, or a saved game.",
+		"g": "Stimmen, Decks, Wiederholungen oder einen Spielstand importieren.",
+		"f": "Importe des voix, decks, rediffusions ou une sauvegarde.",
+		"i": "Importa voci, mazzi, replay o un salvataggio.",
+		"j": "音声、デッキ、リプレイ、セーブデータをインポートします。"},
+	"android_tooltip": {
+		"s": "Crea un paquete .pck o descarga el APK de Android.",
+		"e": "Create a .pck pack or download the Android APK.",
+		"g": "Erstelle ein .pck-Paket oder lade die Android-APK herunter.",
+		"f": "Crée un paquet .pck ou télécharge l’APK Android.",
+		"i": "Crea un pacchetto .pck o scarica l’APK Android.",
+		"j": ".pck を作成するか、Android APK をダウンロードします。"},
 	"apk_tooltip": {
 		"s": "Crea tus recursos privados (.pck) para importarlos una vez en el APK público.",
 		"e": "Creates your private content (.pck) to import once into the public APK.",

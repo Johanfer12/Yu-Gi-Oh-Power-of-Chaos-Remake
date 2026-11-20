@@ -790,5 +790,6 @@ func f54b910(p: int, amount: int) -> int:
 		m.set_u16(at, m.u16(at) + amount)
 	else:
 		f541b90(0xa11944, p, -amount)
-	present("lp_total", {"p": p & 1, "from": before, "to": m.u16(DuelMem.pl(p & 1)), "amount": amount})
+	# El sonido sale al preparar el cambio (paso 0 de 404270/4045a0).
+	present("lp_total", {"p": p & 1, "from": before, "to": m.u16(DuelMem.pl(p & 1)), "amount": amount, "native_silent": true})
 	return 0

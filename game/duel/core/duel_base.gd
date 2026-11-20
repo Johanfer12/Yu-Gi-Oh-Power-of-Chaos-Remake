@@ -15,6 +15,7 @@ const MODE_REPLAY := 1   ## bits 12-13 de 0xa114b4
 const MODE_NETWORK := 3
 
 var m := DuelMem.new()
+var animation_mailbox := preload("res://core/duel_animation_mailbox.gd").new(m)
 var rng := MsvcRand.new()
 var cards: CardTables
 ## DAT_005af778: tipo de partida
@@ -329,6 +330,8 @@ func incoming_left() -> int:
 ## FUN_0053b4e0: ejecuta comandos. Devuelve true si hay trabajo en curso.
 ## Sub-estado en el byte 0xa13412: 0 tomar comando, 1 ejecutar, 2 despues de ejecutar.
 func exec_commands() -> bool:
+	if dispatch_animation_mailbox():
+		return true
 	var phase := m.u8(0xa13412)
 	if phase == 0:
 		var n := m.u16(DuelMem.QUEUE_COUNT)
@@ -434,6 +437,96 @@ func invoke_original(addr: int, arguments: Array = []) -> int:
 ## Sin presentacion se conserva la proyeccion logica para simulaciones headless.
 var card_visual_query := Callable()
 
+## 413250: espera los objetos de cartas. Se conecta al abrir una mesa animada.
+var card_objects_busy_query := Callable()
+var _animation_request: Dictionary = {}
+
+func animation_request_pending() -> bool:
+	return card_objects_busy_query.is_valid() and animation_mailbox.pending()
+
+
+func dispatch_animation_mailbox() -> bool:
+	if not animation_request_pending(): return false
+	return animation_mailbox.dispatch({0x4079c0: _dispatch_card_turn, 0x407a60: _dispatch_card_motion,
+		0x407cb0: _dispatch_card_motion, 0x407df0: _dispatch_card_motion, 0x407e40: _dispatch_card_motion})
+
+
+## 4077f0 (Kaiba 407a90): jugador, zona, posición y cara en cuatro bytes.
+func present_card_turn(kind: int, p: int, z: int, flags: int, reveal := 0) -> void:
+	if not card_objects_busy_query.is_valid():
+		present("change_position" if kind == 1 else "flip", {"p": p, "zone": z, "flags": flags, "b": reveal})
+		return
+	var target := ((flags ^ 1) | (2 if reveal != 0 else 0)) if kind == 1 else flags ^ 2
+	var payload := (p & 1) | ((z & 15) << 8) | ((target & 1) << 16) | ((target & 2) << 23)
+	animation_mailbox.f4077f0(kind, payload)
+
+
+static func animation_location(p: int, loc: int, index := 0, flags := 0) -> int:
+	return (p & 1) | ((loc & 15) << 1) | ((index & 511) << 5) | ((flags & 3) << 14)
+
+
+static func animation_field_location(p: int, zone: int, flags := 0) -> int:
+	var group := zone - zone % 5
+	return animation_location(p, group, zone % 5, flags)
+
+
+## 407830/407880/4078d0/407920. El consumidor lee las dos ubicaciones
+## del buzón. El evento conserva el contexto gráfico particular del comando.
+func present_card_motion(request: int, index: int, source: int, destination: int, event: String, data: Dictionary) -> void:
+	if not card_objects_busy_query.is_valid():
+		present(event, data)
+		return
+	var locations := m.local(4)
+	m.set_u16(locations, source)
+	m.set_u16(locations + 2, destination)
+	match request:
+		3: animation_mailbox.f407830(index, locations, locations + 2)
+		4: animation_mailbox.f407880(index, locations, locations + 2)
+		5: animation_mailbox.f4078d0(index, locations + 2)
+		6: animation_mailbox.f407920(locations, locations + 2)
+	_animation_request = {"event": event, "data": data}
+
+
+func _dispatch_card_motion(mailbox: RefCounted) -> void:
+	var phase := m.u8(mailbox.PHASE)
+	var travel: bool = mailbox.kind() == 3
+	if travel and phase == 0:
+		var source := m.u16(mailbox.SOURCE)
+		var index := m.u16(mailbox.PAYLOAD)
+		if ((source >> 1) & 15) == DuelMem.LOC_GRAVE and visual_card_index(source & 1, DuelMem.LOC_GRAVE) != index:
+			# 407a60: eleva la carta y deja pasar el cambio de cima antes de retirarla.
+			call("f544890", source & 1, index)
+			present("grave_top", {"p": source & 1, "card": cards.id_of(index)})
+			m.set_u8(mailbox.PHASE, 1)
+			return
+		phase = 0x10
+		m.set_u8(mailbox.PHASE, phase)
+	if travel and phase < 0x10:
+		m.set_u8(mailbox.PHASE, phase + 1)
+	elif phase == (0x10 if travel else 0):
+		if travel and card_objects_busy_query.call(): return
+		m.set_u8(mailbox.PHASE, phase + 1)
+		var data: Dictionary = _animation_request["data"]
+		data["source_word"] = m.u16(mailbox.SOURCE)
+		data["destination_word"] = m.u16(mailbox.DESTINATION)
+		data["from_mailbox"] = true
+		present(_animation_request["event"], data)
+	elif not card_objects_busy_query.call():
+		mailbox.acknowledge()
+		_animation_request = {}
+
+
+func _dispatch_card_turn(mailbox: RefCounted) -> void:
+	if m.u8(mailbox.PHASE) == 0:
+		m.set_u8(mailbox.PHASE, 1)
+		var payload := m.u32(mailbox.PAYLOAD)
+		present("change_position" if mailbox.kind() == 1 else "flip", {
+			"p": payload & 1, "zone": (payload >> 8) & 15,
+			"native_target_flags": ((payload >> 16) & 1) | ((payload >> 23) & 2),
+			"from_mailbox": true})
+	elif not card_objects_busy_query.call():
+		mailbox.acknowledge()
+
 
 ## 442130: posición actual de la carta, usada por la navegación horizontal.
 var card_screen_position_query := Callable()
@@ -467,6 +560,12 @@ func visual_card_index(p: int, loc: int) -> int:
 ## nucleo; la escena del duelo reproduce los eventos con sus propios tiempos.
 func anim_busy() -> bool:
 	return false
+
+
+## 4138b0: espera 413250 y también los cuatro objetos de pila de cada jugador.
+func card_and_pile_objects_busy() -> bool:
+	if card_objects_busy_query.is_valid(): return bool(card_objects_busy_query.call(true))
+	return anim_busy()
 
 
 func present(kind: String, data := {}) -> void:

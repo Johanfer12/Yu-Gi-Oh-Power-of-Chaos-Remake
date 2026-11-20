@@ -1353,7 +1353,8 @@ func _toggle_window() -> void:
 	_bag_direction = 2 if _bag_progress != 0 else 1
 	_expanded = _bag_direction == 1
 	_relayout()
-	Audio.play_sfx("%s/voice/internal/decide.wav" % game)
+	# Y447800/Ka448850/Jo46cea0 piden card_open al abrir o cerrar la bolsa.
+	Audio.play_sfx("%s/voice/internal/card_open.wav" % game)
 
 
 # --- reglas del original -------------------------------------------------------------------
@@ -1586,11 +1587,11 @@ func _open_sort(at := Vector2(-1, -1)) -> void:
 		var b: Array = SORT_BUTTONS[i]
 		var location: Vector2 = SORT_POS.get(game, SORT_POS.yugi)[i]
 		d.add_button(b[0], location, _script_tex(b[1], 0), _script_tex(b[1], 1))
+	d.closing.connect(func(id: String) -> void:
+		Audio.play_sfx("%s/voice/internal/%s.wav" % [game, "return" if id == "cancel" else "decide"]))
 	d.closed.connect(func(id: String) -> void:
 		_modal = null
-		if id == "cancel":
-			Audio.play_sfx("%s/voice/internal/return.wav" % game)
-		else:
+		if id != "cancel":
 			if at.x < 0: _sort = id
 			var changed: Array = []
 			for zone in ZONES:
@@ -1599,8 +1600,7 @@ func _open_sort(at := Vector2(-1, -1)) -> void:
 					changed.append(zone)
 			_sort_deck(changed)
 			_relayout()
-			_apply_view()
-			Audio.play_sfx("%s/voice/internal/decide.wav" % game))
+			_apply_view())
 	if at.x < 0:
 		Audio.play_sfx("%s/voice/internal/decide.wav" % game)
 	_open_modal(d)

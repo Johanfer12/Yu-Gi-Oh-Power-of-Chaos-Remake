@@ -215,7 +215,7 @@ const DISPATCH := {
 ## lee los LP para elegir la musica).
 const PRESENTATION := [
 	"f4027e0", "f4029d0", "f402ab0", "f402ad0", "f402ba0", "f402cd0", "f402f70",
-	"f4030b0", "f4030f0", "f4032e0", "f403390", "f4039b0",
+	"f4030b0", "f4030f0", "f4032e0", "f4039b0",
 	"f405190", "f405230", "f405c10", "f4061c0", "f4067f0",
 	"f406a30", "f406f30", "f406ff0", "f4070c0", "f404070",
 ]
@@ -501,6 +501,7 @@ func f406710() -> int:
 		if not anim_busy():
 			rng.srand(seed)
 			f5426d0(p, 3)
+			f403150(p)
 			finish()
 	return 0
 
@@ -518,7 +519,10 @@ func f548e80() -> int:
 	elif s == 1:
 		f541cb0(DuelMem.MOVING_CARD, 0xa120f8 + q)
 		f542960(p)
-		present("draw", {"p": p, "card": f401a70(m.u32(DuelMem.MOVING_CARD) & 0xfff)})
+		var index := m.u16(DuelMem.MOVING_CARD) & 0xfff
+		var to := animation_location(p, DuelMem.LOC_HAND, m.u8(DuelMem.pl(p) + DuelMem.P_HAND_N) - 1)
+		present_card_motion(3, index, animation_location(p, DuelMem.LOC_DECK), to,
+			"draw", {"p": p, "card": f401a70(index)})
 		next_step()
 		return 0
 	elif s == 2:
@@ -547,9 +551,13 @@ func f405750() -> int:
 			expect_card(cmd_a(), m.u32(slot), "mano[%d]" % hand_i)
 			f541cb0(DuelMem.MOVING_CARD, slot)
 			m.set_u32(slot, m.u32(slot) & 0xfffff000)
-			present("hand_to_monster", {"p": p, "card": cmd_a(), "zone": z, "b": b})
+			present_card_motion(3, f401ad0(cmd_a()), animation_location(p, DuelMem.LOC_HAND, hand_i, bit8 << 1),
+				animation_field_location(p, z, bit9 | (bit8 << 1)), "hand_to_monster",
+				{"p": p, "card": cmd_a(), "zone": z, "b": b})
 			next_step()
 		2:
+			if bit8 == 0 and card_objects_busy_query.is_valid():
+				present("hand_set", {"p": p, "card": cmd_a(), "zone": z, "flags": bit9, "monster": true})
 			next_step()
 		3:
 			if not anim_busy():
@@ -573,10 +581,9 @@ func f405950() -> int:
 	var hand_i := (b & 0xff) >> 4
 	if z > 4:
 		z -= 5
-	if ctype(index) == 0x16:
-		var t := ctype(index)
-		if t > 0x14 and t < 0x17 and csub(index) == 2:
-			z = 0
+	var field_spell := ctype(index) == 0x16 and csub(index) == 2
+	if field_spell: z = 0
+	var field_zone := 10 if field_spell else z + 5
 	match step():
 		0:
 			# Con c == 0: colocarla (bit 8 a 0) -> FUN_00402660 -> FUN_004022f0, voz 0x1000003a
@@ -596,12 +603,15 @@ func f405950() -> int:
 				f541cb0(DuelMem.MOVING_CARD, slot)
 				m.set_u32(slot, m.u32(slot) & 0xfffff000)
 				# zona del campo (0-10): magia/trampa = 5 + z, magia de campo = 10
-				var field_zone := 10 if ctype(index) == 0x16 and csub(index) == 2 else z + 5
-				present("hand_to_spell", {"p": p, "card": cmd_a(), "zone": field_zone, "b": b})
+				present_card_motion(3, index, animation_location(p, DuelMem.LOC_HAND, hand_i, bit8 << 1),
+					animation_field_location(p, field_zone, bit8 << 1), "hand_to_spell",
+					{"p": p, "card": cmd_a(), "zone": field_zone, "b": b})
 				next_step()
 		2:
 			# Al activarla (bit 8) con c == 0: FUN_00402630, bust-up de reaccion (no en modo 6).
-			if bit8 != 0 and cmd_c() == 0 and game_mode != 6:
+			if bit8 == 0 and card_objects_busy_query.is_valid():
+				present("hand_set", {"p": p, "card": cmd_a(), "zone": field_zone, "flags": 0, "monster": false})
+			elif bit8 != 0 and cmd_c() == 0 and game_mode != 6:
 				present("reaction_flip", {"p": p, "card": f401a70(index)})
 			next_step()
 		3:

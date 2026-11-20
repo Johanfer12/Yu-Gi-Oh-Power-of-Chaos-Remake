@@ -26,6 +26,7 @@ var _arrows: Array[Texture2D] = []
 ## +0x1c]. Al cambiar uno, el objeto de la carta pasa al estado 3 o 4 con +0x1c = 0x200, que
 ## baja 0x10 por fotograma (FUN_00410030; comandos 0x8b/0x97 en 0x4034c0/0x4035a0).
 var _counters := {}
+var _card_objects: DuelCardTable
 var _suna: Texture2D
 var _skul: Texture2D
 var _eff: Texture2D
@@ -35,9 +36,10 @@ var _yellow: Texture2D
 var hides_at: Callable
 
 
-func setup(duel: Duel, game: String) -> void:
+func setup(duel: Duel, game: String, card_objects: DuelCardTable = null) -> void:
 	_duel = duel
 	_game = game
+	_card_objects = card_objects if game in ["yugi", "kaiba"] else null
 	_shown.clear()
 	_fonts = [
 		Assets.texture("%s/duel/font/duel_fontm.png" % game),
@@ -70,6 +72,11 @@ func _step_counters() -> void:
 			var flags := _duel.m.u16(at + 6)
 			var counters := (flags >> 2) & 15
 			var turns := (flags >> 6) & 7
+			if _card_objects != null:
+				var object: Dictionary = _card_objects.field[p][z]
+				var animation: Vector2i = object.get("counter_animation", Vector2i.ZERO)
+				_counters[key] = [counters, turns, animation.x, animation.y]
+				continue
 			var st: Array = _counters.get(key, [counters, turns, 0, 0])
 			if counters != st[0]:
 				st = [counters, turns, 3, 0x200]

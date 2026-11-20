@@ -448,6 +448,10 @@ static func render(owner: Node2D, event: Dictionary, frame: int) -> void:
 	_sprite(canvas, portrait_game, layout.resource(0), origin)
 	var visual_tick: Variant = owner.get("visual_tick")
 	var tick := int(visual_tick) if visual_tick != null else int(event.get("visual_tick_origin", 0)) + frame
+	# 40c140 / 40c370 incrementan después de dibujar. Los ojos y la boca conservan
+	# la fase del bucle global, también al entrar al duelo desde otra pantalla.
+	if visual_tick != null and portrait_game in ["yugi", "kaiba"]:
+		tick = maxi(0, Game.native_tick - 1)
 	var duration_ms: int = int(event.get("voice_duration_ms", voice_ms(event.get("sound", ""))))
 	if event.get("sound_after_played", false): duration_ms = voice_ms(event["sound_after"])
 	for group in range(5, mini(layout.items.size(), 14), 3):

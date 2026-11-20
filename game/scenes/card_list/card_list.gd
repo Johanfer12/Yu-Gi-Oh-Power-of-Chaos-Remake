@@ -420,7 +420,7 @@ func _decide() -> void:
 	Audio.play_sfx("%s/voice/internal/decide.wav" % game)   # 0x10000001
 
 
-## 0x45f780 (guarda) y vuelta al titulo. PENDIENTE D10: barrido 532390(0x13, 0x10, 0, 0x100).
+## 0x45f780 guarda. La vuelta al título usa el barrido 532390(0x13, 0x10, 0, 0x100).
 func _leave() -> void:
 	SaveData.save()
 	Game.open_title(game, "list")

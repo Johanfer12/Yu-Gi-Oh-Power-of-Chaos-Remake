@@ -695,15 +695,15 @@ func f53dbf0() -> int:
 	if dialog_open.is_empty() and list_open.is_empty():
 		f5798a0()
 	frame_stage = 1
-	var busy := 0
-	if (m.u16(0xa16180) & 0x100) != 0:
+	var busy := int(dispatch_animation_mailbox())
+	if busy == 0 and (m.u16(0xa16180) & 0x100) != 0:
 		# En red: primero el comando que mando el rival (53b650, confirma con 0xf043) y despues
 		# la cola propia, que 53b4e0 envia al rival y no suelta hasta su confirmacion.
 		if (m.u32(0xa15a44) & 0x2000) != 0:
 			busy = f53b650()
 		if busy == 0:
 			busy = f53b4e0()
-	else:
+	elif busy == 0:
 		busy = int(exec_commands())
 	if busy == 0:
 		frame_stage = 2

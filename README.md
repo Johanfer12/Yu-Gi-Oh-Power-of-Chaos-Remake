@@ -6,15 +6,15 @@
 
 **English** | [Español](README.es.md)
 
-[![Download EXE for Windows](https://img.shields.io/badge/Download_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.41/PowerOfChaos.exe)
+[![Download EXE for Windows](https://img.shields.io/badge/Download_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.42/PowerOfChaos.exe)
 
-[![Download Android APK](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.41/PowerOfChaos-Android.apk)
+[![Download Android APK](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.42/PowerOfChaos-Android.apk)
 
-**Direct download · Windows · v0.1.0-alpha.41 preview · No ZIP required**
+**Direct download · Windows · v0.1.0-alpha.42 preview · No ZIP required**
 
 **Bring your Power of Chaos games together in one modern Windows launcher.**
 
-**New in alpha.41.** Hover over any installed game and use **↻** to reimport from an ISO or folder. Joey can duel without Yugi installed, and the launcher remembers music mute and Windows fullscreen. [Release notes](RELEASE_NOTES.md)
+**New in alpha.42.** Restore original progress and import decks, replays, and voice packs directly from the Windows launcher. Preview release notes before updating. [Release notes](RELEASE_NOTES.md)
 
 ## Contents
 
@@ -71,9 +71,9 @@ Enable it with an internet connection to prepare the local pack. The first downl
 
 Select your ISO images or installed game folders, then choose:
 
-- **Extract for PC** to prepare the games for Windows.
-- **Create .pck** to prepare a private **`.pck` resource pack** made from your games, saved with its validation receipt in **`PoC Data/android/pck/`**. Already prepared games can also be reused.
-- **Download APK** to download this version's public Android APK from GitHub.
+- **Build** appears after selecting an ISO or folder and prepares the games for Windows.
+- **Android → Create .pck** prepares a private **`.pck` resource pack** made from your games, saved with its validation receipt in **`PoC Data/android/pck/`**. Already prepared games can also be reused.
+- **Android → Download APK** downloads this version's public Android APK from GitHub.
 
 **Android setup is handled by the launcher.** The public APK is built and signed by GitHub Actions; the launcher prepares the resource pack locally. No account, Android SDK, JDK, signing-key setup or author signing key is needed for this normal workflow. Install the APK, open it and select your `.pck` once. Later compatible updates keep those resources and your saves. [Prepare your Android files](#build-your-android-apk).
 
@@ -87,7 +87,7 @@ Your ISO images and converted resources stay on your computer; no original game 
 
 **Import your resources and choose PC extraction or Android APK creation**
 
-![English import screen showing ISO and folder selection, Extract for PC, Create .pck resources and Download APK](docs/images/launcher-import-en.png)
+![English import screen with ISO and folder selection](docs/images/launcher-import-en.png)
 
 The screenshots show the Windows launcher. Game logos appear after importing your own compatible copies.
 
@@ -117,10 +117,10 @@ You provide a compatible copy of the game you want to play. The launcher reads i
 
 ## Get started on Windows
 
-1. [Download **`PowerOfChaos.exe`** directly](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.41/PowerOfChaos.exe). Development builds are also available in [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
+1. [Download **`PowerOfChaos.exe`** directly](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.42/PowerOfChaos.exe). Development builds are also available in [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
 2. Put the EXE in a folder where you want to keep the launcher and its saves, then open it.
 3. In **ADD YOUR RESOURCES**, move over the game you want to add and choose **ISO** or **Folder**.
-4. Select a compatible disc image or installed game folder, then click **Extract for PC** and wait for conversion to finish.
+4. Select a compatible disc image or installed game folder, then click **Build** and wait for conversion to finish.
 5. Click the prepared game's logo to play. The remaining games can be added later from the same screen.
 
 The download is a single EXE; no installation wizard is required. The first import extracts and verifies the bundled conversion tools in `PoC Data/tools/`. Opening the menu does not wait for that extraction.
@@ -198,13 +198,15 @@ The language selector controls the launcher and the game's available text resour
 
 Voice packs are detected from the supplied `Voice.dat`. Switching language uses the matching installed dub when available, otherwise the primary imported dub remains in use. Selecting a language does not download its voices.
 
-To add a voice pack from another compatible copy of the same game, click **Voices +** in the import screen, choose the game and select that copy's `Voice.dat`, then click **Extract for PC**. The source tools can do the same:
+Open **Import more resources**, choose the game and select its `Voice.dat` with **Import voices**. If you have selected an ISO or folder, click **Build** to import them together. For an already prepared game, voice import starts when you select the file. The source tools can do the same:
 
 ```powershell
 python -m pocx.import_games --base "existing-data" --voice "joey=C:\My Joey Copy\Voice.dat" --out "new-data"
 ```
 
 Use a new output directory for manual imports. The launcher manages its own atomic in-place updates. Two different voice packs for the same game and language are rejected as a conflict rather than silently replacing one another.
+
+The same menu imports `.ydc` decks into the shared library and `.ydr` replays into the selected or detected game. It also restores the original `Common/system.dat` or the remake’s `system.json`, including the unlocked collection and progress. Replacing a file requires confirmation, and the launcher backs up the active save before replacing it.
 
 ## Run from source
 
@@ -257,7 +259,7 @@ Third-party components retain their own licenses. See [THIRD_PARTY_NOTICES.md](T
 ## Build your Android APK
 
 1. Select your ISO images/folders or reuse the library already prepared for PC.
-2. Click **Create .pck**. The launcher downloads Godot's resource packer when needed, verifies its SHA-256 checksum and prepares your private resources locally. It opens **`PoC Data/android/pck/`**, containing the **`.pck`** and a JSON validation receipt.
+2. Open **Android → Create .pck**. The launcher downloads Godot's resource packer when needed, verifies its SHA-256 checksum and prepares your private resources locally. It opens **`PoC Data/android/pck/`**, containing the **`.pck`** and a JSON validation receipt.
 3. Click **Download APK** to get this version's public APK from GitHub. Copy both the APK and PCK to your Android device.
 4. Install the APK. At first launch, choose **Select .pck resource pack** and select that PCK. Import it once; the app keeps its own copy alongside your saves.
 5. **Adding another game later** (for example Kaiba after Yugi): add it in the PC launcher and click **Create .pck** again; the new pack includes every prepared game. Copy it to the device, then in the Android launcher open **Settings → Save data → Import .pck…**, select it and reopen the app. Your saves and settings are kept.

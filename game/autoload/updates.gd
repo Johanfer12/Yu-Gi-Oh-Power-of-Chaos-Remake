@@ -5,7 +5,7 @@ extends Node
 signal changed
 
 const REPOSITORY := "https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake"
-const _FORWARDED := [&"current", &"available", &"state", &"detail", &"_http"]
+const _FORWARDED := [&"current", &"available", &"release_notes", &"state", &"detail", &"_http"]
 
 # Por el script y no por el autoload: las pruebas pueden compilar este archivo antes.
 var impl: Node = load("res://core/updates_android.gd" if preload("res://autoload/paths.gd").android_platform()

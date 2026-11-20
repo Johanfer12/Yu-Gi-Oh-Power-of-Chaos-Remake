@@ -17,7 +17,9 @@ const DETAIL_COLORS := {
 	"joey": {"name": "#101010", "type": "#b4491e", "body": "#6e580b", "stats": "#6e580b"},
 }
 const CARD_SIZE := DuelGeometry.FIELD_SIZE
+const JoeyPile = preload("res://scenes/duel/joey_pile.gd")
 const HAND_SIZE := DuelGeometry.HAND_SIZE
+const PHASE_NAMES := ["dr", "st", "m1", "ba", "m2", "en"]
 const PHASES := ["Robo", "Espera", "Principal 1", "Batalla", "Principal 2", "Final"]
 const SPEEDS := [0.6, 0.3, 0.12, 0.04]
 ## Comandos del guion de los tutoriales que solo mueven el cursor o esperan: pasan rapido.
@@ -28,7 +30,7 @@ const MUSIC := {
 	"joey": ["joey/voice/stream/m_duel2.wav", "joey/voice/stream/m_duel2.wav"],
 }
 
-static var _next_demo := 0
+static var _next_demo := {}
 
 var game: String
 var kind: String
@@ -43,6 +45,21 @@ var _text := ""
 ## Paginas pendientes del texto en curso (el original las separa con <HR>).
 var _pages: PackedStringArray = []
 var _finished := false
+var _kaiba_demo := false
+## Estado del objeto: +0x15c jugador, +0x160 fase mostrada, +0x164 fundido de la fase actual,
+## +0x168 volteo de entrada, +0x16c ficha iluminada (0x4614b0: 0x15c = DAT_005af770,
+## 0x160 = -1, 0x164 = 0x100, 0x168 = 0x200, 0x16c = -1).
+var _ph_p := 0
+var _ph_phase := -1
+var _ph_fade := 0x100
+var _ph_intro := 0x200
+var _ph_drawn := []
+var _phase_layer: Node2D
+## Kaiba (Kaiba_Pc.exe, objeto 0x463600 con vtable 0x59f9a8, mismo estado +0x15c..+0x16c):
+## phase.txt trae ph_b_* (jugador 0) y ph_r_* (jugador 1), tiras de 8 celdas de 29 x 65, en
+## x=220, y=69+80k, y ph_mask (indice 12). Posiciones [x, y] leidas del .txt por indice.
+var _ph_pos: Array[PackedInt32Array] = []
+
 var _board := Node2D.new()
 var _info: Label
 var _log: Label
@@ -58,12 +75,14 @@ var _detail_icons: Node2D
 var _preview_card_id := -1
 var _preview_hover_point := Vector2(-9999, -9999)
 var _preview_hover_ticks := 0
+var _dialog_box: Node2D
 ## Joey 41b050 llegado del motor en este tick (normal_duel._collect_events).
 var _detail_this_tick := false
 var _oriented_hand_textures := {}
 var _native_hand_textures := {}
 var _hover_card: Dictionary = {}
 var _hit_cards: Array[Dictionary] = []
+var _joey_excluded_masks: Dictionary = {}
 var _hand_positions: Dictionary = {}
 ## Índices de cartas por hueco: la compactación del núcleo no cambia su posición visual.
 var _hand_cards := [[], []]
@@ -98,7 +117,7 @@ func _setup_presentation(conceal_hand: bool = false) -> void:
 	_life.setup(game)
 	_visual = preload("res://scenes/duel/duel_presentation.gd").new(game, conceal_hand)
 	add_child(_visual)
-	_card_stats.setup(_duel, game)
+	_card_stats.setup(_duel, game, _visual.table)
 	_affect.setup(_duel, game)
 	_card_stats.hides_at = func(pos: Vector2) -> bool: return _visual.hides(pos)
 	_visual_event_pos = 0
@@ -113,21 +132,28 @@ func _native_card_position(p: int, loc: int, i: int) -> Vector2:
 	if loc == 11:
 		if i >= count: return Vector2(525,600 if p == 0 else 0)
 		return _hand_positions.get(p * 256 + i, DuelGeometry.hand(p,i,count))
-	if loc in [12, 13, 14] and _visual != null:
+	if loc in DuelCardTable.PILES and _visual != null:
 		return _visual.pile_object_position(p, loc, i)
 	return DuelGeometry.location(p,loc,i,count)
 
 func _collect_visual_events() -> bool:
 	if _visual == null: return false
+	var revision: int = _visual.table.revision
 	_sync_hand_layout()
 	while _visual_event_pos < _duel.events.size():
 		var event: Dictionary = _duel.events[_visual_event_pos]
 		if _tutorial != null: _tutorial.event(event)
 		if _tutorial != null and event.get("kind", "") == "tutorial_bubble": _log.hide()
+		if _kaiba_demo and event.get("kind", "") == "phase":
+			_phase_panel_set(int(event["p"]) & 1, int(event["phase"]))
 		_visual.enqueue(event, _duel)
 		if kind == "demo": _detail_event(event)
 		if _cursor_visual != null: _cursor_visual.event(event, _duel)
 		_visual_event_pos += 1
+	# Encolar un vuelo puede quitar su carta de la mesa entre ticks.
+	if revision != _visual.table.revision:
+		_table_revision = _visual.table.revision
+		_redraw()
 	return _visual.busy() or (_tutorial != null and _tutorial.busy())
 
 func _advance_visual(delta: float) -> bool:
@@ -136,14 +162,23 @@ func _advance_visual(delta: float) -> bool:
 	if _visual == null: return false
 	var was_busy: bool = _visual.busy()
 	var had_overlays: bool = not _visual.overlays.is_empty()
+	var previous_tick: int = _visual.visual_tick
 	_visual.advance(delta)
-	if _blocked_zones != null: _blocked_zones.refresh(_duel, _visual.visual_tick)
+	var native_advanced: bool = _visual.visual_tick != previous_tick
+	if _blocked_zones != null and native_advanced: _blocked_zones.refresh(_duel, _visual.visual_tick)
 	var table_changed: bool = _visual.table.revision != _table_revision
 	_table_revision = _visual.table.revision
-	if was_busy or had_overlays or hands_changed or table_changed or not _hover_card.is_empty(): _redraw()
+	if game == "joey" and native_advanced and not table_changed:
+		for p in 2:
+			var pile: Dictionary = _visual.table.piles[p][DuelMem.LOC_BANISH]
+			if JoeyPile.excluded_flash(pile, previous_tick) != JoeyPile.excluded_flash(pile, _visual.visual_tick):
+				table_changed = true
+	if hands_changed or table_changed or (native_advanced and (was_busy or had_overlays or not _hover_card.is_empty())):
+		_redraw()
 	_show_hands(_hand_clock)
 	if _field_visual != null: _field_visual.show_between(_visual.between())
-	return was_busy
+	# El despacho precede a la cola incluso con otro efecto dibujándose.
+	return was_busy and not _duel.animation_request_pending()
 
 
 ## Cartas de la mano entre dos ticks de su recolocacion.
@@ -168,7 +203,10 @@ func _show_between(fraction: float) -> void:
 func _setup_cursor() -> void:
 	_cursor_visual = preload("res://scenes/duel/duel_cursor_visual.gd").new()
 	add_child(_cursor_visual)
-	_pointer_pos = get_viewport().get_mouse_position()
+	_pointer_pos = get_local_mouse_position() if _kaiba_demo else get_viewport().get_mouse_position()
+	if _kaiba_demo and not Rect2(0, 0, 800, 600).has_point(_pointer_pos):
+		# La demo empieza con el puntero del campo aun si el raton quedo fuera al entrar.
+		_pointer_pos = Vector2(400, 300)
 	_pointer_pos = Debug.replay_pointer_position(_pointer_pos)
 	_refresh_cursor(true)
 
@@ -182,6 +220,100 @@ func _refresh_cursor(force: bool = false) -> void:
 	if force or context != _cursor_context:
 		_cursor_context = context
 		_cursor_visual.update(_pointer_pos, context[0], action, _pointer_pressed)
+
+func _setup_phase_panel() -> void:
+	if _phase_layer == null: _phase_layer = Node2D.new()
+	add_child(_phase_layer)
+	if game in ["kaiba", "joey"]:
+		for item in Assets.layout("%s/duel/phase/phase.txt" % game).items:
+			_ph_pos.append(Layout.groups(item["value"]))
+
+
+## 0x460b00 (desde el comando de fase 0x402840): mismo jugador -> fundido de la nueva fase;
+## otro jugador -> volteo de todas las fichas.
+func _phase_panel_set(p: int, phase: int) -> void:
+	if phase == -1:
+		_ph_phase = -1
+		_ph_p = p
+		return
+	if _ph_p != p:
+		_ph_intro = 0
+	_ph_p = p
+	_ph_phase = phase
+	_ph_fade = 0
+
+
+## 0x460bb0, una vez por tick nativo.
+func _phase_panel_tick() -> void:
+	if _ph_intro < 0x200:
+		_ph_intro += 8
+	elif _ph_fade < 0x100:
+		_ph_fade += 4 if _ph_phase == 3 and _ph_fade >= 0x40 and _ph_fade < 0x80 else 8
+	elif game == "joey":
+		_ph_fade += 8
+		if _ph_fade > 0x3ff: _ph_fade = 0x100
+
+
+## Kaiba 0x4631e0. Tras el volteo cada ficha k es una celda de ph_b_k (jugador 0) o ph_r_k
+## (jugador 1): la fase actual recorre las celdas 1-7 con (DAT_005b1d38 >> 2) & 15 < 7 y si no
+## se queda en la 1; la ficha iluminada (+0x16c) es la celda 1; el resto, la 0. No hay
+## fundido (+0x164 solo retrasa el fin de la animacion). Durante el volteo (+0x168 < 0x200) la
+## ficha k, con t = +0x168 - 24k - 64, muestra la tira del jugador anterior hasta t = 0x80 y
+## despues la del nuevo; con 0 < t < 0x100 la celda 0 se dibuja recortada por la izquierda
+## (0x80 - max(|t - 0x80|, 0x40)) * 17 / 64 px sin moverla y encima va ph_mask una linea
+## mas arriba.
+func _draw_phase_panel_kaiba(glow: int = -1) -> void:
+	if _ph_pos.size() < 12:
+		return
+	var tick: int = _visual.visual_tick if _visual != null else 0
+	var state := [_ph_p, _ph_phase, _ph_intro, glow, (tick >> 2) & 0xf if _ph_intro >= 0x200 else 0]
+	if state == _ph_drawn:
+		return
+	_ph_drawn = state
+	for c in _phase_layer.get_children():
+		c.free()
+	for k in 6:
+		if _ph_intro < 0x200:
+			var t := _ph_intro - k * 24 - 0x40
+			var index := k + 6 * (int(t < 0x80) ^ _ph_p)
+			var at := Vector2(_ph_pos[index][0], _ph_pos[index][1])
+			if t > 0 and t < 0x100:
+				var left := ((0x80 - maxi(absi(t - 0x80), 0x40)) * 0x11) / 64
+				_phase_strip(index, at, 0, left)
+				var mask := Assets.texture("kaiba/duel/phase/ph_mask.png")
+				if mask != null:
+					var s := Sprite2D.new()
+					s.texture = mask
+					s.centered = false
+					s.position = at - Vector2(0, 1)
+					_phase_layer.add_child(s)
+			else:
+				_phase_strip(index, at, 0)
+			continue
+		var index := k + 6 * _ph_p
+		var cell := 0
+		if k == _ph_phase:
+			var c := (tick >> 2) & 0xf
+			cell = c + 1 if c < 7 else 1
+		elif k == glow:
+			cell = 1
+		_phase_strip(index, Vector2(_ph_pos[index][0], _ph_pos[index][1]), cell)
+
+
+## Celda `cell` (de 8) de la tira ph_* de indice `index`, sin sus `left` primeros px.
+func _phase_strip(index: int, at: Vector2, cell: int, left := 0) -> void:
+	var tex := Assets.texture("kaiba/duel/phase/ph_%s_%s.png" % ["b" if index < 6 else "r", PHASE_NAMES[index % 6]])
+	if tex == null:
+		return
+	var w := tex.get_width() / 8
+	var s := Sprite2D.new()
+	s.texture = tex
+	s.centered = false
+	s.region_enabled = true
+	s.region_rect = Rect2(cell * w + left, 0, w - left, tex.get_height())
+	s.position = at
+	_phase_layer.add_child(s)
+
 
 func _setup_field() -> void:
 	_field_visual = preload("res://scenes/duel/duel_field_visual.gd").new()
@@ -204,14 +336,14 @@ func _setup_detail() -> void:
 	var description_scroll := ScrollContainer.new()
 	description_scroll.position = Vector2(8, 365)
 	# La ultima linea queda para "ATK/%4d DEF/%4d" (se dibuja aparte).
-	description_scroll.size = Vector2(184, 161 - 18)
+	description_scroll.size = Vector2(176, 161) if game == "joey" else Vector2(184, 161 - 18)
 	description_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	description_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	add_child(description_scroll)
 	var native_scroll := preload("res://scenes/duel/duel_detail_scroll.gd").new()
 	native_scroll.setup(game, description_scroll)
 	add_child(native_scroll)
-	_description.custom_minimum_size.x = 174
+	_description.custom_minimum_size.x = 176 if game == "joey" else 174
 	_description.fit_content = true
 	_description.bbcode_enabled = true
 	# Componer el parrafo completo evita que las palabras cambien de linea al revelarse.
@@ -232,9 +364,29 @@ func _setup_detail() -> void:
 	_detail_stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_detail_stats)
 	if game == "joey":
+		if Assets.lang != "j":
+			_set_joey_detail_fonts()
 		_detail_icons = load("res://scenes/duel/duel_detail_icons.gd").new()
 		_detail_icons.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		add_child(_detail_icons)
+
+
+func _set_joey_detail_fonts() -> void:
+	# 41b3e0 usa Arial para el texto latino y Courier New para el renglón de cifras.
+	var body := SystemFont.new()
+	body.font_names = PackedStringArray(["Arial", "Liberation Sans", "Roboto", "sans-serif"])
+	var title := SystemFont.new()
+	title.font_names = body.font_names
+	title.font_weight = 700
+	_description.add_theme_font_override("normal_font", body)
+	_description.add_theme_font_override("bold_font", title)
+	_description.add_theme_font_size_override("normal_font_size", 11)
+	_description.add_theme_constant_override("line_separation", 19 - ceili(body.get_height(11)))
+	var stats := SystemFont.new()
+	stats.font_names = PackedStringArray(["Courier New", "Liberation Mono", "monospace"])
+	stats.font_weight = 700
+	_detail_stats.add_theme_font_override("font", stats)
+	_detail_stats.add_theme_font_size_override("font_size", 12)
 
 
 ## Eventos del motor que fijan la carta del panel de detalle (duelo normal y demo).
@@ -242,7 +394,7 @@ func _detail_event(data: Dictionary) -> void:
 	if data.get("kind", "") == "detail":
 		# Joey 41b050: los comandos que ponen o activan una carta la muestran en el panel.
 		_set_preview(int(data["card"]))
-		_detail_this_tick = true
+		_detail_this_tick = game == "joey"
 	# Yugi/Kaiba: 4029d0 (0x6e, 0x75, 0x76) y 405c10 (0x6f) ponen su carta en el panel con el metodo
 	# +0x24 del objeto de detalle (5af76c+0x38), como Joey 41b050; el nucleo los emite como "cmd".
 	# Los manejadores portados (0x1e, 0x71, 0x72, 0xa5, 0xdf) emiten "detail" ellos mismos.
@@ -250,7 +402,6 @@ func _detail_event(data: Dictionary) -> void:
 		var args: Array = data.get("args", [])
 		if not args.is_empty() and int(args[0]) > 0:
 			_set_preview(int(args[0]))
-			_detail_this_tick = true
 
 func _set_preview(id: int) -> void:
 	if id == _preview_card_id: return
@@ -258,14 +409,19 @@ func _set_preview(id: int) -> void:
 	_preview.texture = CardDB.card_texture(id) if id >= 0 else Assets.texture("common/card/card_ura.png")
 	if _preview.texture: _preview.scale = DuelGeometry.PREVIEW_RECT.size / _preview.texture.get_size()
 	var card := CardDB.by_id(id)
+	var has_stats: bool = id >= 0 and card.get("category", "") == "monster"
 	if _detail_icons != null: _detail_icons.show_card(card if id >= 0 else {})
 	_description.text = _detail_text(card) if id >= 0 and not card.is_empty() else ""
 	_detail_reveal.reset(_description.get_parsed_text(), Assets.lang == "j")
 	_description.visible_characters = 0
 	if _description.get_parent() is ScrollContainer:
-		_description.get_parent().scroll_vertical = 0
+		var scroll := _description.get_parent() as ScrollContainer
+		if game == "joey":
+			# 41bb40 reserva el renglón de estadísticas solo para monstruos.
+			scroll.size.y = 142 if has_stats else 161
+		scroll.scroll_vertical = 0
 	_detail_stats.text = ""
-	if id >= 0 and card.get("category", "") == "monster":
+	if has_stats:
 		_detail_stats.text = "ATK/%4d DEF/%4d" % [int(card.get("atk", 0)), int(card.get("defense", 0))]
 
 
@@ -293,9 +449,8 @@ func _table() -> DuelCardTable:
 	if _visual != null: return _visual.table
 	if _plain_table == null or _plain_table_duel != _duel:
 		_plain_table = DuelCardTable.new()
-		_plain_table.sync(_duel)
 		_plain_table_duel = _duel
-	_plain_table.follow_memory(_duel, true)
+	_plain_table.sync(_duel)
 	return _plain_table
 
 
@@ -385,33 +540,36 @@ func _tick_preview_hover() -> void:
 	var detail := _detail_this_tick
 	_detail_this_tick = false
 	if _visual != null and (_visual._shade_on or _visual._shade_c != 0): return
-	# Yu4378a0/Ka437e50 no buscan carta bajo el puntero si la ranura de cuadro (+0x11ec) responde:
-	# con un cuadro abierto (p. ej. el aviso de elegir objetivo, mensaje 102) el panel conserva su
-	# carta. En los cotejos de duelo completo (29/30-10-2026) tampoco cambia durante el parpadeo de
-	# 0x08, el cambio de turno ni la activacion de una carta, y la espera de cuatro ticks quietos
-	# vuelve a empezar despues; con el rotulo de fase si cambia.
-	# Los selectores 8/9 (descartar, materiales) y el cuadro que ya se cierra no bloquean (tanda
-	# variada: el original pone en el panel la carta de la mano que se va a descartar).
-	if game in ["yugi", "kaiba"] and _duel != null and not _duel.dialog_open.is_empty() 			and int(_duel.dialog_open.get("type", 0)) not in [8, 9] and not _duel.dialog_open.get("closing", false): return
-	if game in ["yugi", "kaiba"] and _visual != null and _visual.active.get("mode", "") in ["card_blink", "next_turn", "card_effect"]:
-		_preview_hover_ticks = 0
-		return
+	var classic := game in ["yugi", "kaiba"]
+	var preview := -2
+	# Yu4378a0/Ka437e50 consultan primero el cuadro y después el tablero.
+	if classic and is_instance_valid(_dialog_box):
+		preview = _dialog_box.position_preview(_pointer_pos)
+		if preview == -2 and _dialog_box.captures_board_hover(_pointer_pos): return
+	if preview == -2:
+		var hover := _hit_card(_pointer_pos)
+		if not hover.is_empty(): preview = int(hover.id) if hover.known else -1
+	# Los clásicos solo observan la posición y avanzan el contador si hay una carta debajo.
+	if classic and preview == -2: return
 	if _pointer_pos != _preview_hover_point:
 		_preview_hover_point = _pointer_pos
 		_preview_hover_ticks = 0
 	else:
 		_preview_hover_ticks += 1
 	if _preview_hover_ticks != 4: return
-	# Jo44dd00 llama a 44dbc0 antes del motor (5c0000): si un comando fija el panel con 41b050
-	# en el mismo tick, su carta queda (Red Medicine en el cotejo de magicas, 26-10-2026). El
-	# port recorre el motor primero.
+	# Jo44dd00 consulta el puntero antes de 5c0000. El duelo normal de Joey recorre el motor
+	# primero y conserva su carta (Red Medicine). Yu/Ka ya consultan en orden nativo.
 	if detail: return
-	var hover := _hit_card(_pointer_pos)
-	if not hover.is_empty(): _set_preview(int(hover.id) if hover.known else -1)
+	if preview != -2: _set_preview(preview)
 
 func _hit_card(point: Vector2) -> Dictionary:
 	for i in range(_hit_cards.size() - 1, -1, -1):
-		if _hit_cards[i]["rect"].has_point(point): return _hit_cards[i]
+		var card := _hit_cards[i]
+		var rect: Rect2 = card["rect"]
+		if not rect.has_point(point): continue
+		var mask: Image = card.get("mask")
+		if mask == null or mask.get_pixelv(Vector2i((point - rect.position).floor())).a > 0:
+			return card
 	return {}
 
 func _hit_zone(point: Vector2) -> Dictionary:
@@ -466,6 +624,8 @@ func _ready() -> void:
 	add_child(bg)
 	_setup_detail()
 	_setup_field()
+	_kaiba_demo = game == "kaiba" and kind == "demo"
+	if _kaiba_demo: _setup_phase_panel()
 	add_child(_board)
 	_setup_cursor()
 	_info = _label(Vector2(238, 66), Vector2(552, 26), 12)
@@ -483,13 +643,13 @@ func _ready() -> void:
 		_log.text = "No hay repeticiones de este tipo en data/."
 		_log.show()
 		return
-	_index = (_next_demo % _files.size()) if kind == "demo" else 0
+	_index = (int(_next_demo.get(game, 0)) % _files.size()) if kind == "demo" else 0
 	if kind == "demo":
 		# Demostracion (modo 5): rotulo "DEMOSTRACION" del comando 0x14 (0x43dbe0).
 		var label := DuelDemoLabel.new()
 		label.setup(game)
 		add_child(label)
-		_next_demo += 1
+		_next_demo[game] = _index + 1
 	var music: Array = MUSIC.get(game, MUSIC["yugi"])
 	Audio.play_music(music[1] if kind == "tutorial" else music[0])
 	_start(_index)
@@ -519,12 +679,15 @@ func _start(i: int) -> void:
 	_duel.start_replay(Ydr.load_file(_files[i]))
 	_duel.game_mode = 6 if kind == "tutorial" else 5 if kind == "demo" else 4
 	_duel.begin_replay_flow()
+	if _kaiba_demo:
+		_ph_p = _duel.options & 1
+		_draw_phase_panel_kaiba()
 	if _visual == null: _setup_presentation()
 	else:
 		_visual_event_pos = 0
 		_visual.reset(_duel)
 		if _field_visual != null: _field_visual.reset(_duel, game)
-		_card_stats.setup(_duel, game)
+		_card_stats.setup(_duel, game, _visual.table)
 		_affect.setup(_duel, game)
 	if _duel is JoeyPresentationAdapter:
 		var adapter := _duel as JoeyPresentationAdapter
@@ -585,7 +748,13 @@ func _process(delta: float) -> void:
 		while _replay_clock >= 1.0:
 			_replay_clock -= 1.0
 			_tick_card_stats(1.0 / NativeClock.HZ)
-			if _advance_visual(1.0 / NativeClock.HZ): continue
+			var presenting := _advance_visual(1.0 / NativeClock.HZ)
+			if _kaiba_demo:
+				_phase_panel_tick()
+				_draw_phase_panel_kaiba()
+				# 437f80 habilita el primer paso del motor tras los 16 ticks del barrido.
+				if _visual.visual_tick <= 16: continue
+			if presenting: continue
 			if _finished:
 				_leave_replay()
 				return
@@ -718,20 +887,23 @@ func _redraw() -> void:
 		if int(fusion["count"]) > 0:
 			# Jo44c3e0 ->43c550(p,12,0): existe desde la construccion de la mesa.
 			var fusion_top := _pile_position(p, DuelMem.LOC_FUSION, int(fusion["count"]))
-			_card(0, fusion_top, CARD_SIZE, false, false, p == 1)
+			_pile_top_card(p, DuelMem.LOC_FUSION, fusion, fusion_top)
 			_register_card(fusion_top, CARD_SIZE, p, 12, int(fusion["count"]) - 1, int(fusion["top"]), p == 0)
 		var deck: Dictionary = table.piles[p][DuelMem.LOC_DECK]
-		if int(deck["count"]) > 0:
-			_card(0, _pile_position(p, DuelMem.LOC_DECK, int(deck["count"])), CARD_SIZE, false, false, p == 1)
+		var deck_height := DuelCardTable.ClassicPile.visible_count(deck)
+		if deck_height > 0:
+			_pile_top_card(p, DuelMem.LOC_DECK, deck, _pile_position(p, DuelMem.LOC_DECK, deck_height))
 			_count(DuelGeometry.DECK[p], int(deck["count"]))
 		var grave: Dictionary = table.piles[p][DuelMem.LOC_GRAVE]
 		if int(grave["count"]) > 0:
 			var grave_top := _pile_position(p, DuelMem.LOC_GRAVE, int(grave["count"]))
-			_card(int(grave["top"]), grave_top, CARD_SIZE, true, false, p == 1)
+			_pile_top_card(p, DuelMem.LOC_GRAVE, grave, grave_top)
 			_register_card(grave_top, CARD_SIZE, p, 14, int(grave["count"]) - 1, int(grave["top"]), true)
-			_count(preload("res://scenes/duel/joey_pile.gd").base_position(p, 14) if game == "joey" else DuelGeometry.GRAVE[p], int(grave["count"]))
+			_count(JoeyPile.base_position(p, 14) if game == "joey" else DuelGeometry.GRAVE[p], int(grave["count"]))
 		if game == "kaiba" and int(table.piles[p][DuelMem.LOC_BANISH]["count"]) > 0:
 			_excluded_pile(p, int(table.piles[p][DuelMem.LOC_BANISH]["count"]))
+		if game == "joey" and int(table.piles[p][DuelMem.LOC_BANISH]["count"]) > 0:
+			_draw_joey_excluded_pile(p, table.piles[p][DuelMem.LOC_BANISH])
 		# 441d90: ambas manos centradas525, parcialmente fuera de los bordes600/0.
 		var hand_n: int = table.hand[p].size()
 		for i in hand_n:
@@ -764,6 +936,14 @@ func _redraw() -> void:
 			PHASES[phase] if phase < PHASES.size() else "-"]
 	_log.text = _text
 
+func _pile_top_card(p: int, loc: int, pile: Dictionary, center: Vector2) -> void:
+	var face := bool(pile.get("face", loc == DuelMem.LOC_GRAVE))
+	var flip := int(pile.get("animation_state", 0)) == 7
+	var counter := int(pile.get("animation_counter", 0))
+	var sprite := _card(int(pile["top"]), center, CARD_SIZE, face != (flip and counter >= 128), false, p == 1)
+	if sprite != null and flip:
+		sprite.scale.x *= absf(DuelVisualMath.cos_fx(counter) / 65536.0)
+
 
 func _label_on_board(pos: Vector2, font_size: int) -> Label:
 	var l := Label.new()
@@ -778,7 +958,7 @@ func _label_on_board(pos: Vector2, font_size: int) -> Label:
 ## paso 7, desde x = centro + 7 y con la parte de arriba en el borde inferior de la carta.
 func _pile_position(p: int, loc: int, count: int) -> Vector2:
 	var textures := [Assets.texture("%s/duel/card/deck.png" % game), Assets.texture("%s/duel/card/deck_shadow.png" % game), Assets.texture("%s/duel/card/grave.png" % game)]
-	if game == "joey": return preload("res://scenes/duel/joey_pile.gd").draw(_board, textures, p, loc, count)
+	if game == "joey": return JoeyPile.draw(_board, textures, p, loc, count)
 	return preload("res://scenes/duel/classic_pile.gd").draw(_board, textures, p, loc, count)
 
 func _count(center: Vector2, n: int, centered := false) -> void:
@@ -829,9 +1009,43 @@ func _excluded_pile(p: int, count: int) -> void:
 	_register_card(center, tex.get_size(), p, 15, 0, 0, false)
 
 
-func _register_card(pos: Vector2, size: Vector2, p: int, loc: int, i: int, id: int, known: bool) -> void:
-	if _visual != null and _visual.hides(pos): return
-	_hit_cards.append({"rect": Rect2(pos - size / 2, size), "p": p, "loc": loc, "i": i, "id": id, "known": known})
+## Joey 43d670/43d4d0: deck.txt da el punto activo de cada imagen de excluidas.
+func _draw_joey_excluded_pile(p: int, pile: Dictionary) -> void:
+	var center: Vector2 = DuelGeometry.JOEY_EXCLUDED[p]
+	var layout := Assets.layout("joey/duel/card/deck.txt")
+	var normal := 3 + 2 * p
+	var acknowledged: bool = (
+		_duel is JoeyPresentationAdapter
+		and (_duel as JoeyPresentationAdapter).focused_excluded_player == p
+		and _hover_card.get("p", -1) == p and _hover_card.get("loc", -1) == DuelMem.LOC_BANISH
+	)
+	var flashing := _visual != null and JoeyPile.excluded_flash(pile, _visual.visual_tick)
+	var index := normal + int(acknowledged or flashing)
+	var texture := Assets.texture("joey/duel/card/" + layout.resource(index))
+	if texture == null: return
+	var sprite := Sprite2D.new()
+	sprite.texture = texture
+	sprite.centered = false
+	sprite.position = center - Vector2(layout.position(index))
+	_board.add_child(sprite)
+	_count(center, int(pile["count"]), true)
+	var hit_index := 3 + 3 * p
+	if not _joey_excluded_masks.has(p):
+		var base := Assets.texture("joey/duel/card/" + layout.resource(hit_index))
+		if base != null: _joey_excluded_masks[p] = base.get_image()
+		else: return
+	var mask: Image = _joey_excluded_masks[p]
+	var half := Vector2(mask.get_size()) / 2
+	_register_card(center - Vector2(layout.position(hit_index)) + half, half * 2, p, DuelMem.LOC_BANISH, 0, 0, false, mask)
+
+
+func _register_card(pos: Vector2, size: Vector2, p: int, loc: int, i: int, id: int, known: bool, mask: Image = null) -> void:
+	if _visual != null and _visual.hides(pos):
+		# 413420 sigue localizando la carta ya colocada mientras 43e280 dibuja su destello.
+		if _visual.active.get("kind", "") != "hand_set" or _visual.active.get("center") != pos: return
+	var card := {"rect": Rect2(pos - size / 2, size), "p": p, "loc": loc, "i": i, "id": id, "known": known}
+	if mask != null: card["mask"] = mask
+	_hit_cards.append(card)
 
 func _hides_rival_hand() -> bool:
 	return false
