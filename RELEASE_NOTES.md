@@ -110,8 +110,6 @@ Android browser sign-in has not been tested on a physical device.
 
 ## v0.1.0-alpha.24
 
-## v0.1.0-alpha.24
-
 - Joey: the duel now matches recordings of the original game much more closely. Three full recorded duels (normal, spells and traps) replay with every engine command identical to the original.
 - Joey: the card-set effect (frame, light and falling sparkles) is now ported method by method from the original.
 - Joey: the card detail panel follows played and activated cards, including your own spells; a card shown by the duel wins over the pointer on the same frame.
