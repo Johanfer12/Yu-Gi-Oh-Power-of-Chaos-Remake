@@ -3,7 +3,7 @@
   "files": {
     ".gitattributes": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c",
     ".github/workflows/build-windows.yml": "e6568b1f87459e55a175abd1e8a39a10f01e5d95cc9414289277294ce34b8b17",
-    "docs/ANDROID_UPDATES.md": "556d128e25f43fe6f4d1bdf577610c333b2da63a3ac7f6fe47a9e2147525439a",
+    "docs/ANDROID_UPDATES.md": "df5aad8eebec9fec63e9a2afda497a5fc5d4ae658e4ac916916f082cb10432e5",
     "docs/CARD_TRANSLATIONS.md": "35146c856f9cd861a53bf00059b728a32c098f3f631ce3f7ecd5fdf6a89b5c31",
     "docs/images/launcher-import-en.png": "0533e5dd1089f5dca8df69728040e18050c5c351feb4cf218dfea37168cb9080",
     "docs/images/launcher-library-en.png": "1712cc3ede3c06fa20099c5161233393db416620486d742459aae3701f1a04c4",
@@ -238,7 +238,7 @@
     "Jugar demo.bat": "0d0e4a481a8c78294ff9cf540811ab9e6ab1659807f4dd21a1db5a9222c00efc",
     "README.es.md": "df67d5b8538e56054cafa8b2f2b8f48f668c49793c285d0e82c399e93146afd1",
     "README.md": "8f9ff964880cc1d85df5d74c15cca9dc22c5b0e7026be3a479f6d9d097da2c39",
-    "RELEASE_NOTES.md": "628a961d834f13f77572525dbf5d78997fb964dbda12e9817a845fd6778e54db",
+    "RELEASE_NOTES.md": "beee6350d48f9b9c7e2e01b7eed92bd93971d4ba5a774e8ba00b751e1762e02f",
     "THIRD_PARTY_NOTICES.md": "fb85351d3f3c16e5eb72e84ca94f242183839a39a4d95cc65059cb8312b3f8bf",
     "tools/android/build_apk.py": "b457ef6932306c3a94d437d3a0bfa4f16a57a5d706f745a1eb9e1610ef1ac1f4",
     "tools/android/pack_data.gd": "c4a314755679e4834a6b480104498c87f38e4e690f59db5d44146f5c377093e1",

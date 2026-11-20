@@ -10,6 +10,10 @@ Repacking an APK would invalidate its signature.
 
 ## In-app update
 
+Close and reopen the Android launcher to check for an update. Select **Update** and
+confirm the installation in Android. Update over your installed copy to keep the
+imported resource pack, saves and preferences.
+
 The Android launcher downloads `PowerOfChaos-Android.apk` into app storage
 (`user://updates`, exposed by Godot's FileProvider) with progress, verifies its SHA-256
 against the validated `ANDROID_RELEASE.json` (package, version code, signing certificate)
@@ -41,6 +45,8 @@ installer launch falls back to the browser download. Old downloads are removed a
    - `tools/build_windows.py --android` checks that APK and embeds in the EXE the exact
      source snapshot it came from, so the launcher packs PCKs in the format that APK
      reads; end users neither modify nor sign the APK.
+   - Write the release notes in English and describe the tagged version's changes.
+     This guide contains the standard Android update instructions.
    - A tag publishes the EXE, the APK and `ANDROID_RELEASE.json` together. A tag build
      without the signing secret fails; other builds without it (forks) use a throwaway
      key as a build check only.
