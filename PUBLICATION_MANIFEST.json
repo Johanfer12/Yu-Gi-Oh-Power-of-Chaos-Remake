@@ -2,7 +2,7 @@
   "format": 1,
   "files": {
     ".gitattributes": "d60f352d0db1404c70afb4bb8b2ca3fd1c610572aa40720e8a0b7baa7885418c",
-    ".github/workflows/build-windows.yml": "27707f0475a5304533fefad2717170b4a00930803c3506551e226d1a363f356b",
+    ".github/workflows/build-windows.yml": "e6568b1f87459e55a175abd1e8a39a10f01e5d95cc9414289277294ce34b8b17",
     "docs/ANDROID_UPDATES.md": "556d128e25f43fe6f4d1bdf577610c333b2da63a3ac7f6fe47a9e2147525439a",
     "docs/CARD_TRANSLATIONS.md": "35146c856f9cd861a53bf00059b728a32c098f3f631ce3f7ecd5fdf6a89b5c31",
     "docs/images/launcher-import-en.png": "0533e5dd1089f5dca8df69728040e18050c5c351feb4cf218dfea37168cb9080",
@@ -284,7 +284,8 @@
     "tools/tests/test_reviewed_card_pack.py": "15759966062a74de074d788187f7342b15edfb3736dd7e775106293f2b633110",
     "tools/tests/test_updater.py": "d42c3fc079b2695ab877dc58093bbbf510daa13d782f20db1308a563e9e361d3",
     "tools/trace_logo_contours.py": "12e2bda5a0275c49a211bdef07b504e2963db112258807586b319bc32bc935ec",
-    ".gitignore": "998e5dd1b3b4a35bb0d97f7bc8a9cef3d6a0d4f31217be1fd2595bae04ae91f5"
+    ".gitignore": "998e5dd1b3b4a35bb0d97f7bc8a9cef3d6a0d4f31217be1fd2595bae04ae91f5",
+    "tools/pocx/release_notes.py": "33c726c3fcadbfd9abcfd14f61a79c1e6880fa6c3d3f220967b53edfb6e6e0fc"
   },
   "git_history_included": false,
   "policy": "source and explicit remake asset allowlist; approved launcher screenshots for documentation; no standalone original game assets or native fixtures",

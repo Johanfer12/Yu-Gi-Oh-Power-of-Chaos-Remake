@@ -124,6 +124,10 @@ jobs:
         with:
           name: PowerOfChaos-Windows
           path: release-files
+      - name: Preparar las notas de la etiqueta
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 tools/pocx/release_notes.py RELEASE_NOTES.md "$RELEASE_TAG" release-body.md
       - name: Publicar preliminar de la etiqueta
         env:
           GH_TOKEN: ${{ github.token }}
@@ -132,7 +136,7 @@ jobs:
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release-files/* --clobber
-            gh release edit "$RELEASE_TAG" --notes-file RELEASE_NOTES.md
+            gh release edit "$RELEASE_TAG" --notes-file release-body.md
           else
-            gh release create "$RELEASE_TAG" release-files/* --verify-tag --notes-file RELEASE_NOTES.md --prerelease --title "$RELEASE_TAG"
+            gh release create "$RELEASE_TAG" release-files/* --verify-tag --notes-file release-body.md --prerelease --title "$RELEASE_TAG"
           fi
