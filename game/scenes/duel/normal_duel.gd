@@ -491,7 +491,7 @@ func _collect_events() -> void:
 			PointerGlide.request(_pointer_pos, at, game)
 			_hover_card = _hit_card(PointerGlide.hover(_pointer_pos))
 			if not _hover_card.is_empty():
-				_set_preview(_hover_card["id"] if _hover_card["known"] else -1)
+				_set_preview(_hover_card["id"] if _hover_card["known"] else -1, _is_rival_hand_card(_hover_card))
 		var message: int = int(data.get("message", data.get("msg", -1)))
 		if message >= 0:
 			var pages := _dialog(message)
@@ -600,9 +600,6 @@ func _phase_cell(path: String, at: Vector2, cell: Vector2, alpha: float, add := 
 		s.material = mat
 	_phase_layer.add_child(s)
 
-
-func _hides_rival_hand() -> bool:
-	return true
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and _duel == null:

@@ -4,6 +4,12 @@
 
 For installation and updates, see the [Android update guide](docs/ANDROID_UPDATES.md#in-app-update).
 
+## v0.1.0-alpha.43
+
+- Muting the launcher now silences its music completely. Setting the in-game volume to zero also silences the music (issue #13).
+- In Yugi, the damage number disappears when Kuriboh negates the damage. Fusion markers disappear when their material is used, even if an identical copy remains in hand (issue #13).
+- Effects that reveal the opponent's hand now show the cards and their details in Yugi, Kaiba, and Joey. The hand and its preview are concealed again when the effect ends (issue #14).
+
 ## v0.1.0-alpha.42
 
 - On Windows, **Import more resources** restores the unlocked collection and progress from the original `Common/system.dat` or the remake's `system.json` (issue #12). The same dialog imports `.ydc` decks, `.ydr` replays, and additional voice packs. The launcher asks before replacing files and backs up the active save before replacing it.

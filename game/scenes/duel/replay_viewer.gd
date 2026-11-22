@@ -73,6 +73,8 @@ var _detail_reveal := preload("res://core/card_detail_reveal.gd").new()
 var _detail_stats := Label.new()
 var _detail_icons: Node2D
 var _preview_card_id := -1
+var _preview_from_rival_hand := false
+var _rival_hand_face_up := false
 var _preview_hover_point := Vector2(-9999, -9999)
 var _preview_hover_ticks := 0
 var _dialog_box: Node2D
@@ -173,7 +175,8 @@ func _advance_visual(delta: float) -> bool:
 			var pile: Dictionary = _visual.table.piles[p][DuelMem.LOC_BANISH]
 			if JoeyPile.excluded_flash(pile, previous_tick) != JoeyPile.excluded_flash(pile, _visual.visual_tick):
 				table_changed = true
-	if hands_changed or table_changed or (native_advanced and (was_busy or had_overlays or not _hover_card.is_empty())):
+	var visibility_changed: bool = _visual.hand_face_up(1) != _rival_hand_face_up
+	if hands_changed or table_changed or visibility_changed or (native_advanced and (was_busy or had_overlays or not _hover_card.is_empty())):
 		_redraw()
 	_show_hands(_hand_clock)
 	if _field_visual != null: _field_visual.show_between(_visual.between())
@@ -403,7 +406,8 @@ func _detail_event(data: Dictionary) -> void:
 		if not args.is_empty() and int(args[0]) > 0:
 			_set_preview(int(args[0]))
 
-func _set_preview(id: int) -> void:
+func _set_preview(id: int, from_rival_hand := false) -> void:
+	_preview_from_rival_hand = from_rival_hand and id >= 0
 	if id == _preview_card_id: return
 	_preview_card_id = id
 	_preview.texture = CardDB.card_texture(id) if id >= 0 else Assets.texture("common/card/card_ura.png")
@@ -542,13 +546,16 @@ func _tick_preview_hover() -> void:
 	if _visual != null and (_visual._shade_on or _visual._shade_c != 0): return
 	var classic := game in ["yugi", "kaiba"]
 	var preview := -2
+	var from_rival_hand := false
 	# Yu4378a0/Ka437e50 consultan primero el cuadro y después el tablero.
 	if classic and is_instance_valid(_dialog_box):
 		preview = _dialog_box.position_preview(_pointer_pos)
 		if preview == -2 and _dialog_box.captures_board_hover(_pointer_pos): return
 	if preview == -2:
 		var hover := _hit_card(_pointer_pos)
-		if not hover.is_empty(): preview = int(hover.id) if hover.known else -1
+		if not hover.is_empty():
+			preview = int(hover.id) if hover.known else -1
+			from_rival_hand = _is_rival_hand_card(hover)
 	# Los clásicos solo observan la posición y avanzan el contador si hay una carta debajo.
 	if classic and preview == -2: return
 	if _pointer_pos != _preview_hover_point:
@@ -560,7 +567,11 @@ func _tick_preview_hover() -> void:
 	# Jo44dd00 consulta el puntero antes de 5c0000. El duelo normal de Joey recorre el motor
 	# primero y conserva su carta (Red Medicine). Yu/Ka ya consultan en orden nativo.
 	if detail: return
-	if preview != -2: _set_preview(preview)
+	if preview != -2: _set_preview(preview, from_rival_hand)
+
+
+static func _is_rival_hand_card(card: Dictionary) -> bool:
+	return card.get("p", -1) == 1 and card.get("loc", -1) == DuelMem.LOC_HAND
 
 func _hit_card(point: Vector2) -> Dictionary:
 	for i in range(_hit_cards.size() - 1, -1, -1):
@@ -869,6 +880,7 @@ func _redraw() -> void:
 	_hand_sprites.clear()
 	var m := _duel.m
 	var table := _table()
+	var rival_face_up: bool = _visual == null or _visual.hand_face_up(1)
 	for p in 2:
 		# 410ca0: cada objeto en reposo; los que se mueven los dibuja la presentacion.
 		for z in 11:
@@ -906,12 +918,15 @@ func _redraw() -> void:
 			_draw_joey_excluded_pile(p, table.piles[p][DuelMem.LOC_BANISH])
 		# 441d90: ambas manos centradas525, parcialmente fuera de los bordes600/0.
 		var hand_n: int = table.hand[p].size()
+		var known := p == 0 or rival_face_up
+		# El duelo normal reutiliza kind "demo", con la visibilidad decidida por su motor.
+		var face_up: bool = known and (p == 0 or kind != "demo" or (_visual != null and _visual.hidden_hand))
 		for i in hand_n:
 			var obj: Dictionary = table.hand[p][i]
 			if obj.has("moving"): continue
 			var hid := int(obj["card"])
 			var pos: Vector2 = _hand_positions.get(p * 256 + i, DuelGeometry.hand(p, i, hand_n))
-			var sprite := _card(hid, pos, HAND_SIZE, true, false, p == 1)
+			var sprite := _card(hid, pos, HAND_SIZE, face_up, false, p == 1)
 			if sprite != null:
 				sprite.position = _hand_blend.at(p * 256 + i, pos)
 				_hand_sprites.append([p * 256 + i, sprite, pos])
@@ -926,7 +941,14 @@ func _redraw() -> void:
 						frame.position = sprite.position
 						_board.add_child(frame)
 						_hand_sprites.append([p * 256 + i, frame, pos])
-			_register_card(pos, HAND_SIZE, p, 11, i, hid, p == 0 or _visual == null or not _visual.hidden_hand)
+			_register_card(pos, HAND_SIZE, p, DuelMem.LOC_HAND, i, hid, known)
+	if _rival_hand_face_up != rival_face_up:
+		_rival_hand_face_up = rival_face_up
+		if not rival_face_up and _preview_from_rival_hand: _set_preview(-1)
+		var hover := _hit_card(_pointer_pos)
+		if _is_rival_hand_card(hover):
+			_hover_card = hover
+			_preview_hover_ticks = 0
 	var turn := m.u16(0xa133f2)
 	var phase := (turn >> 1) & 7
 	if _info.visible and not _files.is_empty():
@@ -1047,15 +1069,10 @@ func _register_card(pos: Vector2, size: Vector2, p: int, loc: int, i: int, id: i
 	if mask != null: card["mask"] = mask
 	_hit_cards.append(card)
 
-func _hides_rival_hand() -> bool:
-	return false
-
 ## Todas las posiciones de cartas son absolutas, compartidas con hitboxes y animaciones.
 func _card(card_id: int, center: Vector2, size: Vector2, face_up: bool, sideways: bool,
 		flipped: bool) -> Sprite2D:
 	if _visual != null and _visual.hides(center): return null
-	# El duelo normal y la demo ocultan la mano rival; las repeticiones muestran ambas.
-	if size == HAND_SIZE and flipped and (kind == "demo" or _hides_rival_hand()): face_up = false
 	# A escala 1 (800x600) se dibuja como el original: minis nativas y cache de mano de
 	# 41f130. Reducir el arte completo con filtro lineal y sin mipmaps produce aliasing en
 	# reversos y pilas (cotejo de inicio de duelo de Joey, 25-10-2026). Con la ventana

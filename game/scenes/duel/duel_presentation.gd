@@ -427,11 +427,13 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 			if int(e.get("type", 0)) == 2:
 				# FUN_00465640 (comando 0x59): efecto de material de fusion (0x4652d0) sobre la
 				# carta de la ubicacion `zone` (codigo 0-15) y posicion `value`, si no existe.
-				var fkey := "f:%d:%d:%d" % [p, int(e.get("zone", 0)), int(e.get("value", 0))]
-				if not _sacrifice.has(fkey):
+				var loc := int(e.get("zone", 0))
+				var index := int(e.get("value", 0))
+				var material := table.fusion_material(p, loc, index)
+				var fkey := "f:%d:%d:%d" % [p, loc, index]
+				if not _sacrifice.has(fkey) and not material.is_empty():
 					_sacrifice[fkey] = {"kind": "fusion", "counter": 0, "rot": 0, "release": false,
-							"p": p, "loc": int(e.get("zone", 0)), "index": int(e.get("value", 0)),
-							"card": duel.m.u16(duel.f5419b0(p, int(e.get("zone", 0)), int(e.get("value", 0)))) & 0xfff}
+							"p": p, "hand": loc == DuelMem.LOC_HAND, "object": material}
 				return
 			var key := "%d:%d" % [p, int(e.get("zone", 0))]
 			if not _sacrifice.has(key):
@@ -737,6 +739,11 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 					d["frames"] = 32 # 40cc40 inicia estado4;40ccf0 suma0x10 hasta>0x1ff.
 				0x31:
 					d["mode"] = "battle_result"
+				0xea:
+					# Yugi 402f70 / Kaiba 4032a0 limpian el daño retenido de ambos paneles.
+					if game in ["yugi", "kaiba"]:
+						_lp_number.clear()
+					return
 				0x14:
 					d["mode"] = "banner"
 					d["asset"] = "duel_start_?"
@@ -764,8 +771,10 @@ func enqueue(e: Dictionary, duel: Duel) -> void:
 					# soltada siga viva (464bf0 -> 464b90).
 					for key in _sacrifice:
 						var m: Dictionary = _sacrifice[key]
-						var here: bool = int(m["loc"]) + int(m["index"]) == int(args[0]) + int(args[1])
-						if m.get("kind", "") == "fusion" and int(m["p"]) == p and here:
+						if m.get("kind", "") != "fusion" or int(m["p"]) != p: continue
+						var slot := _fusion_mark_slot(m)
+						var offset := DuelMem.LOC_HAND if m["hand"] else 0
+						if slot >= 0 and slot + offset == int(args[0]) + int(args[1]):
 							m["release"] = true
 					d = {"mode": "marker_wait", "kind": "cmd", "p": p, "frames": 0x7fffffff}
 				0x0b:
@@ -1071,31 +1080,33 @@ func _new_sacrifice(p: int, z: int, duel: Duel) -> Dictionary:
 func _tick_sacrifice() -> void:
 	for key in _sacrifice.keys():
 		var s: Dictionary = _sacrifice[key]
+		var fusion: bool = s.get("kind", "") == "fusion"
+		if fusion and not s["release"] and _fusion_mark_slot(s) < 0:
+			_sacrifice.erase(key)
+			continue
 		if s["release"] or s["counter"] <= 0x7f:
 			s["counter"] += 8
-		if s["counter"] == 0x88 and s.get("kind", "") != "fusion":
+		if s["counter"] == 0x88 and not fusion:
 			Audio.play_sfx("%s/voice/internal/ikenie.wav" % game)
 		# 464bb0: la marca de fusion vive mientras su contador < 0x180.
-		if s["counter"] >= (0x180 if s.get("kind", "") == "fusion" else 0x181):
+		if s["counter"] >= (0x180 if fusion else 0x181):
 			_sacrifice.erase(key)
 
 
-## FUN_00464fe0: fusion_mark girando sobre el objeto de la carta (posicion actual; nada si la
-## carta ya no esta en esa ubicacion), con la misma curva que eff_set_y y alfa base 0xa0.
-func _render_fusion_mark(s: Dictionary, duel: Duel) -> void:
+## 4652d0 guarda el objeto elegido. El hueco de la mano puede cambiar al consumir otro material.
+func _fusion_mark_slot(s: Dictionary) -> int:
+	var cards: Array = table.hand[s["p"]] if s["hand"] else table.field[s["p"]]
+	for slot in cards.size():
+		if is_same(cards[slot], s["object"]): return slot
+	return -1
+
+
+## FUN_00464fe0 dibuja sobre el objeto mientras siga en la mano o el campo.
+func _render_fusion_mark(s: Dictionary) -> void:
 	var p: int = s["p"]
-	var loc: int = s["loc"]
-	var index: int = s["index"]
-	if (duel.m.u16(duel.f5419b0(p, loc, index)) & 0xfff) != s["card"]:
-		return
-	var pos: Vector2
-	if loc == 11:
-		var count := duel.m.u8(DuelMem.pl(p) + 2)
-		pos = hand_positions.get(p * 256 + index, DuelGeometry.hand(p, index, count))
-	elif loc == 0 or loc == 5:
-		pos = zone(p, loc + index)
-	else:
-		pos = DuelGeometry.location(p, loc, index)
+	var slot := _fusion_mark_slot(s)
+	if slot < 0: return
+	var pos := hand(p, slot, table.hand[p].size()) if s["hand"] else zone(p, slot)
 	var c: int = s["counter"]
 	var after := c - 0x80
 	var scale := 0x10000
@@ -1275,10 +1286,13 @@ func _active_finished() -> bool:
 
 # --- objetos de la mesa (0x414190, 0x410030, 0x4135f0) -------------------------------------
 
-## Cara que se ve de un objeto en una ubicacion: bit 15 de su palabra. En la mano lo fija
-## 0x4135f0 con 0x5450e0 (la del rival, oculta); mazo y mazo de fusion boca abajo.
+func hand_face_up(p: int) -> bool:
+	return p == 0 or not hidden_hand or (_duel_ref != null and _duel_ref.hand_face_up(p))
+
+
+## Cara que se ve de un objeto en una ubicación (bit 15 de su palabra).
 func _shown_face(p: int, loc: int, obj: Dictionary) -> bool:
-	if loc == DuelMem.LOC_HAND: return not (hidden_hand and p == 1)
+	if loc == DuelMem.LOC_HAND: return hand_face_up(p)
 	if loc in [DuelMem.LOC_DECK, DuelMem.LOC_FUSION]: return false
 	if loc in [DuelMem.LOC_GRAVE, DuelMem.LOC_BANISH]: return true
 	return bool(obj.get("face", true))
@@ -1833,7 +1847,7 @@ func _render() -> void:
 	_render_battle()
 	for key in _sacrifice:
 		if _sacrifice[key].get("kind", "") == "fusion":
-			if _duel_ref != null: _render_fusion_mark(_sacrifice[key], _duel_ref)
+			_render_fusion_mark(_sacrifice[key])
 		else:
 			_render_sacrifice(_sacrifice[key])
 	for overlay in overlays:

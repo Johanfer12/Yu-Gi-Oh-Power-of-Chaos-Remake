@@ -98,6 +98,9 @@ func _ready() -> void:
 	CloudSync.sync_now(true)
 	Audio.stop_music()
 	_music.stream = MUSIC
+	_music.bus = Audio.LAUNCHER_MUSIC_BUS
+	_controls.changed.connect(_update_music_mute)
+	_update_music_mute()
 	_music.finished.connect(_start_music)
 	add_child(_music)
 	_start_music()
@@ -224,6 +227,10 @@ func _update_music() -> void:
 	if fade_in > 0.0:
 		level = minf(level, pos / fade_in)
 	_music.volume_db = _volume_db(level)
+
+
+func _update_music_mute() -> void:
+	Audio.set_launcher_music_muted(_controls.level() == 0.0)
 
 
 func _choose(index: int) -> void:

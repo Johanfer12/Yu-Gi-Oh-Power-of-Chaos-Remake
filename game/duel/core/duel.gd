@@ -14,6 +14,10 @@ var options := 0
 var seed := 0
 
 
+func hand_face_up(p: int) -> bool:
+	return f5450e0(p) != 0
+
+
 ## Carga tablas de cartas e imagen de datos. Devuelve null si falta algo en data/.
 static func create(data_dir: String, game_id: String = "yugi") -> Duel:
 	if game_id not in ["yugi", "kaiba", "joey"]:

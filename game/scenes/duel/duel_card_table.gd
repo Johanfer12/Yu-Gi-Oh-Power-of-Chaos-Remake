@@ -207,6 +207,14 @@ static func _field_slot(loc: int, i: int) -> int:
 
 # --- consultas (0x413170 / 0x412f20) ---------------------------------------------------------
 
+## Objeto que recibe la marca de fusión (413170).
+func fusion_material(p: int, loc: int, i: int) -> Dictionary:
+	if loc == DuelMem.LOC_HAND:
+		return hand[p][i] if i >= 0 and i < hand[p].size() else {}
+	var z := loc + i
+	return field[p][z] if z >= 0 and z < field[p].size() else {}
+
+
 ## Indice de carta del objeto (-1 sin objeto, 0 objeto sin carta), como lee el motor +0x10.
 func object_index(duel: Duel, p: int, loc: int) -> int:
 	if loc in PILES:

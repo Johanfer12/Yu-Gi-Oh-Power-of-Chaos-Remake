@@ -625,7 +625,8 @@ static func _hand_shuffle(owner: Node2D, event: Dictionary, frame: int) -> void:
 	var cards: Array = event.get("hand_cards", [])
 	var positions: Array = event.get("hand_frames", [])[mini(frame, 32)]
 	var p: int = int(event.get("p", 0)) & 1
+	var face_up: bool = owner.hand_face_up(p)
 	for index in cards.size():
 		var card := event.duplicate()
 		card["card"] = cards[index]
-		_card(owner, card, positions[index], Geometry.HAND_SIZE, 256, p * 256, p == 0 or not owner.hidden_hand)
+		_card(owner, card, positions[index], Geometry.HAND_SIZE, 256, p * 256, face_up)

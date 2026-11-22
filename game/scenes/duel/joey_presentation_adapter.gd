@@ -470,6 +470,11 @@ func winner() -> int:
 	return (engine.m.u8(JoeyMem.TURN) >> 6) & 3
 
 
+## Joey 41e7b0 consulta 56d3c0 para la mano opuesta al jugador local.
+func hand_face_up(p: int) -> bool:
+	return p == 0 or (joey_player_flags[p] & 8) != 0
+
+
 func synchronize_view() -> void:
 	help_index = JoeyBase._s32(engine.m.u32(0x5ebee4))
 	_stats.clear()
