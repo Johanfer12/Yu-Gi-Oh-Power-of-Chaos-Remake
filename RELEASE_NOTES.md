@@ -4,6 +4,13 @@
 
 For installation and updates, see the [Android update guide](docs/ANDROID_UPDATES.md#in-app-update).
 
+## v0.1.0-alpha.44
+
+- Joey’s deck editor now centers the sort icon in its gold frame. You can click or tap the frame as the collection panel opens (issue #17).
+- The touch prompt for selecting monsters to Tribute now follows the selected interface language in Yugi and Kaiba (issue #18).
+- Time Wizard’s coin animation now lands on the face that matches the duel outcome (issue #25).
+- Kaiba now plays his Trap Hole line when he activates the card. Mirror Force uses the standard trap line, Soul Exchange plays its own line, and Crush Card plays its reaction before it flips (issue #28).
+
 ## v0.1.0-alpha.43
 
 - Muting the launcher now silences its music completely. Setting the in-game volume to zero also silences the music (issue #13).

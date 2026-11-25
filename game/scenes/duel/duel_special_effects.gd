@@ -31,7 +31,8 @@ static func coin_state(counter: int, count: int, n: int, result: int, source: Ve
 	if q < -64: alpha = q * 4 + 512
 	elif end > -64: alpha = -end * 4
 	var bit := (result >> n) & 1
-	var face := 13 if q > 0 and bit != 0 else 6
+	# 43b49a/43bbba: después del giro, el bit visual cero muestra la celda 13.
+	var face := 13 if q > 0 and bit == 0 else 6
 	if q > 0 and q < 256: face = (int((70 if bit else 63) * q / 256) + 6) % 14
 	return {"q": q, "end": end, "visible": q > -128, "pos": pos, "elevation": int(wave * -50 / 256), "zoom": zoom, "alpha": clampi(alpha, 0, 256), "face": face, "shadow": [1,2,3,3,2,1,0,1,2,3,3,2,1,0][face]}
 

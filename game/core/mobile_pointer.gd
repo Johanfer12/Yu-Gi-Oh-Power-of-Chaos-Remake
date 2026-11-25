@@ -37,6 +37,14 @@ const HOLD_SECONDS := 0.5
 const JOEY_VIEW_PILE_ACTION := 1 << 12
 const JOEY_PILE_TIMEOUT_MS := 2500
 const ACTION_NAMES := {1: "Invocar", 2: "Voltear", 3: "Atacar", 4: "Activar", 5: "Colocar", 6: "Posición de defensa", 7: "Posición de ataque", 8: "Robar", 9: "Rendirse", 10: "Fusión", 11: "Invocación especial en ataque", 12: "Invocación especial en defensa"}
+const TRIBUTE_HINTS := {
+	"s": ["Toca un monstruo para sacrificarlo", "Selecciona el primer sacrificio", "Selecciona el segundo sacrificio"],
+	"e": ["Tap a monster to Tribute", "Select the first Tribute", "Select the second Tribute"],
+	"g": ["Tippe auf ein Monster, um es als Tribut anzubieten", "Wähle das erste Tributmonster", "Wähle das zweite Tributmonster"],
+	"f": ["Touchez un monstre pour le Sacrifier", "Sélectionnez le premier Sacrifice", "Sélectionnez le second Sacrifice"],
+	"i": ["Tocca un mostro per offrirlo come Tributo", "Seleziona il primo Tributo", "Seleziona il secondo Tributo"],
+	"j": ["リリースするモンスターをタップ", "1体目のモンスターを選択", "2体目のモンスターを選択"],
+}
 
 func _scene_point(point: Vector2) -> Vector2:
 	return Game._screen.get_viewport().get_screen_transform().affine_inverse() * _physical(point)
@@ -548,7 +556,8 @@ func _update_tribute_hint() -> void:
 	if not _material_selection(scene) or ((action >> 2) & 15) not in [0, 4] or not d.dialog_open.is_empty(): return
 	var state: int = d.m.u8(0xa1340d)
 	if state not in [2, 3, 4, 5, 10, 11]: return
-	_tribute_hint.text = "Toca un monstruo para sacrificarlo" if state in [10, 11] else "Selecciona el primer sacrificio" if state in [2, 3] else "Selecciona el segundo sacrificio"
+	var hint_index := 0 if state in [10, 11] else (1 if state in [2, 3] else 2)
+	_tribute_hint.text = TRIBUTE_HINTS.get(Assets.lang, TRIBUTE_HINTS["e"])[hint_index]
 	var bounds := get_viewport().get_visible_rect()
 	_tribute_hint.position = bounds.position + Vector2(4, 8)
 	_tribute_hint.size = Vector2(bounds.size.x - 8, 36)

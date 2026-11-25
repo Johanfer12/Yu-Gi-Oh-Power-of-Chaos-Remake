@@ -320,22 +320,28 @@ static func _kaiba(d: Dictionary, duel: Duel) -> Dictionary:
 				if type == 21: return _portrait(d, "reaction11", "ka46")
 				if type == 22: return _portrait(d, "reaction03" if card == 0x3f0 else "reaction11", "ka48" if card == 0x3f0 else "ka51")
 			elif card == 0x3c0: return _portrait(d, "reaction12", "ka68")
+			elif card == 0x4c4: return _ka_voice(d, 0x62) # Soul Exchange.
 			elif card not in [0x290, 0x3ca]:
 				# 401e40: las cartas con voz propia hablan sea cual sea su tipo (Ancient Lamp 0x4db, un
 				# monstruo, dice Ka64); solo la voz por defecto exige tipo 21 (cotejo por valores).
-				var voices := {0x150: "ka23", 0x294: "ka17", 0x3ab: "ka27", 0x3ea: "ka24", 0x3f0: "ka25", 0x403: "ka24", 0x420: "ka26", 0x4be: "ka66", 0x4db: "ka64"}
+				var voices := {0x150: "ka23", 0x294: "ka17", 0x3ab: "ka27", 0x3ea: "ka26", 0x3f0: "ka25", 0x403: "ka24", 0x4db: "ka64"}
 				if voices.has(card): return _portrait(d, "reaction09", voices[card])
 				if type == 21: return _portrait(d, "reaction09", "ka21")
 		"reaction_card": # 402600 -> tabla 59d4ac -> 401c80. Humano no retrato.
 			if p == 0 or card == 0x3c0: return {}
-			if card in [0x290, 0x294, 0x3ca, 0x3f0] and type != 22: return {}
+			var voice_id: int = {0x290: 0x61, 0x3ca: 0x63}.get(card, 0)
+			if card == 0x294: voice_id = 0x2f + (visual_rand(duel) & 1)
+			if card == 0x3f0: voice_id = 0x3f + (visual_rand(duel) & 1)
+			if voice_id != 0:
+				if type == 22: return _portrait(d, "reaction09", "ka%02d" % (voice_id - 0x20))
+				return _ka_voice(d, voice_id)
 			if type == 21:
 				var variant := (visual_rand(duel) & 1) * 2 if duel.m.u8(0xa133f2) & 1 else visual_rand(duel) % 3
 				return _portrait(d, "reaction05", "ka%02d" % (18 + variant))
 			if type == 22:
 				# 401c80: Ka45 si 56e150 (Yu53b880, subtipo) vale 2; antes se miraba el modo de juego
 				# (cotejo por valores de la tanda variada, 30-10-2026).
-				var voice := "ka%02d" % (31 + (visual_rand(duel) & 1)) if card == 0x3f0 else "ka%02d" % (15 + (visual_rand(duel) & 1)) if card == 0x294 else "ka65" if card == 0x290 else "ka67" if card == 0x3ca else "ka45" if duel.f53b880(index) == 2 else "ka22"
+				var voice := "ka45" if duel.f53b880(index) == 2 else "ka22"
 				return _portrait(d, "reaction09", voice)
 		"reaction_lp": # 4028e0, selección determinista exacta sin RNG.
 			var delta: int = int(d.get("delta", 0))

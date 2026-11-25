@@ -885,8 +885,15 @@ func _buttons() -> Dictionary:
 	if _bag_progress != 0:
 		var control_y := -40 + maxi(0, _bag_progress - 128) * 40 / 128
 		out["filter_label"] = {"rect": Rect2(_kaban_x() + 46, 4 + control_y, 90, 22), "on": null, "push": null}
-		out["sort"] = {"rect": Rect2(_kaban_x() + 146, control_y, 30, 31), "on": null, "push": null}
+		out["sort"] = {"rect": _sort_button_rect(control_y), "on": null, "push": null}
 	return out
+
+
+func _sort_button_rect(control_y: int) -> Rect2:
+	# El marco dorado de Joey mide 28x27. Abierto, su icono de 22x21 empieza en (734, 9).
+	if game == "joey":
+		return Rect2(_kaban_x() + 147, control_y + 6, 28, 27)
+	return Rect2(_kaban_x() + 146, control_y, 30, 31)
 
 
 func _cap_button(script: String, pos: Vector2) -> Dictionary:
@@ -1267,10 +1274,13 @@ func _draw_trunk_header() -> void:
 	var font: Layout = _scripts["font"]
 	# 44d0c0/44e610/46ddb0: fondo con gemas, fijo en620; los botones son capas On/Push.
 	draw_texture(_script_tex("kaban_list", 2), Vector2(620, _trunk_header_background_y()))
-	var sort_strip := _tex(font.resource(11))  # icon_sort: 14 iconos de 30
+	var sort_strip := _tex(font.resource(11))  # icon_sort: 14 iconos.
 	var active: int = SORT_ICON[_sort]
 	var sw := sort_strip.get_width() / 14.0
-	draw_texture_rect_region(sort_strip, Rect2(Vector2(_kaban_x() + 146, control_y), Vector2(sw, sort_strip.get_height())),
+	var button := _sort_button_rect(control_y)
+	var icon_size := Vector2(sw, sort_strip.get_height())
+	var icon_position := button.get_center() - icon_size / 2.0 if game == "joey" else button.position
+	draw_texture_rect_region(sort_strip, Rect2(icon_position, icon_size),
 			Rect2(active * sw, 0, sw, sort_strip.get_height()))
 
 
