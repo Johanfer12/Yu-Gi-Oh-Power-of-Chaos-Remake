@@ -42,6 +42,8 @@ var _font := ThemeDB.fallback_font
 var _screen := DESIGN                    # pantalla visible
 const Tips = preload("res://scenes/launcher/tooltip_texts.gd")
 var _language := OptionButton.new()
+var _resources := Button.new()
+var _resource_import: Node
 var _release_footer := preload("res://scenes/launcher/release_footer.gd").new()
 var _origin := Vector2.ZERO              # esquina de la composicion DESIGN centrada en ella
 
@@ -78,6 +80,13 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_layout)
 	_halo.position = _logos[_selected].position
 	_apply()
+	_resource_import = load("res://scenes/launcher/resource_import_dialog.gd").new()
+	add_child(_resource_import)
+	_resources.theme = preload("res://scenes/launcher/dialog_theme.gd").theme()
+	_resources.pressed.connect(func() -> void: _resource_import.open([] as Array[String]))
+	_resources.disabled = Paths.storage_error
+	_refresh_resources()
+	add_child(_resources)
 	add_child(_controls)
 	_controls.exit_requested.connect(func() -> void: get_tree().quit())
 	_controls.update_requested.connect(func() -> void: _release_footer.open_update())
@@ -89,6 +98,7 @@ func _ready() -> void:
 	_language.item_selected.connect(func(index: int) -> void:
 		Assets.remember_language(["s", "e"][index])
 		_language.tooltip_text = Tips.text("language", Assets.lang)
+		_refresh_resources()
 		_release_footer.refresh()
 		queue_redraw())
 	_language.select(0 if Assets.lang == "s" else 1)
@@ -107,6 +117,10 @@ func _ready() -> void:
 	_start_music()
 
 
+func _refresh_resources() -> void:
+	_resources.text = _resource_import.text("resources")
+
+
 ## Recoloca los logos al cambiar el tamano visible (ventana redimensionada o maximizada).
 func _layout() -> void:
 	_screen = get_viewport_rect().size
@@ -119,6 +133,8 @@ func _layout() -> void:
 		_halo.position = _logos[_selected].position
 	_language.position = Vector2(_screen.x - 170, 24)
 	_language.size = Vector2(146, 38)
+	_resources.size = Vector2(275, 52)
+	_resources.position = Vector2((_screen.x - _resources.size.x) / 2.0, _origin.y + 471)
 	queue_redraw()
 
 

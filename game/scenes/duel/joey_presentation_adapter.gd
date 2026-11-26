@@ -512,9 +512,11 @@ func synchronize_view() -> void:
 	if OS.has_feature("mobile") or "--mobile-controls=true" in OS.get_cmdline_user_args():
 		# Vista táctil de solo lectura: acciones y estado del selector nativo (mobile_pointer).
 		var native_action := engine.m.u32(0xa57804)
+		m.set_u16(0xa13404, engine.m.u16(0xa57802))
 		m.set_u32(0xa13408, (native_action & 3) | (((native_action >> 3) & 15) << 2))
 		m.set_u16(0xa1340a, engine.m.u16(0xa57806))
 		m.set_u8(0xa1340d, engine.m.u8(0xa57809))
+		m.set_u8(0xa1340f, engine.m.u8(0xa5780b) ^ local_native_player)
 		for action_i in 12:
 			m.set_u8(0x59df1c + action_i * 4, engine.m.u8(0x5dd980 + action_i * 4))
 	m.set_u8(0xa16180, engine.m.u8(0xa577fd))

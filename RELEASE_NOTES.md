@@ -4,6 +4,16 @@
 
 For installation and updates, see the [Android update guide](docs/ANDROID_UPDATES.md#in-app-update).
 
+## v0.1.0-alpha.45
+
+- Cards placed face down show their backs as soon as the placement animation ends.
+- In Kaiba, Cyber Jar reveals the cards it takes from each deck and leaves the next card hidden. Kaiba’s match results use the original scoreboard fade, result banner animation, and marker positions (issue #27).
+- On Android, tapping outside a duel’s Yes/No prompt keeps the prompt open. The Tribute hint appears only when selecting Tributes for a monster, so setting or activating Spells and Traps no longer flashes the hint (issues #27 and #30).
+- Joey’s comic reaction now animates the hand, eyes, and mouth. The Regulation of Tribe and DNA Surgery display the selected monster type on the field (issue #29).
+- Yugi and Kaiba tutorials use the interface language selected in the launcher (issue #32).
+
+- On Android, **Import more resources** can now import a save, a deck, or a replay from the device. The importer asks for confirmation and backs up the current save before replacing it (issue #12).
+
 ## v0.1.0-alpha.44
 
 - Joey’s deck editor now centers the sort icon in its gold frame. You can click or tap the frame as the collection panel opens (issue #17).

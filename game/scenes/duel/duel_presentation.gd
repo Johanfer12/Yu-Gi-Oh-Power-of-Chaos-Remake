@@ -1293,7 +1293,7 @@ func hand_face_up(p: int) -> bool:
 ## Cara que se ve de un objeto en una ubicación (bit 15 de su palabra).
 func _shown_face(p: int, loc: int, obj: Dictionary) -> bool:
 	if loc == DuelMem.LOC_HAND: return hand_face_up(p)
-	if loc in [DuelMem.LOC_DECK, DuelMem.LOC_FUSION]: return false
+	if loc == DuelMem.LOC_FUSION: return false
 	if loc in [DuelMem.LOC_GRAVE, DuelMem.LOC_BANISH]: return true
 	return bool(obj.get("face", true))
 
@@ -1332,7 +1332,8 @@ func _begin_objects() -> void:
 				# Sin objeto ni carta (salida repetida tras vaciar la zona): nada que mover.
 				active["frames"] = 0
 				return
-			obj = {"card": int(active["card"]), "face": not active.get("hidden", false), "defense": false, "owner": src[0]}
+			obj = {"card": int(active["card"]), "face": src[1] != DuelMem.LOC_DECK and not active.get("hidden", false),
+				"defense": false, "owner": src[0]}
 		elif mode == "move" and int(src[1]) < 5:
 			# La referencia del movimiento puede omitir la postura de la carta en la zona.
 			active["from_angle"] = (PI if src[0] == 1 else 0.0) + (PI / 2 if obj["defense"] else 0.0)
@@ -1402,7 +1403,9 @@ func _finish_objects() -> void:
 	if _duel_ref == null: return
 	var mode: String = active.get("mode", "")
 	var placed: Dictionary = active.get("placed", {})
-	placed.erase("moving")
+	# The board owns the sprite again even if the effect ends between visual ticks.
+	if placed.erase("moving") or not active.get("hide", []).is_empty():
+		table.revision += 1
 	if mode == "pile_top":
 		table.piles[active.p][active.loc]["top"] = int(active.card)
 		table.revision += 1

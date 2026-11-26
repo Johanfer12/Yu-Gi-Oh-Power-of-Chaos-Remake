@@ -11,6 +11,8 @@ const LABELS := {
 	"resources": ["Importar más recursos", "Import more resources", "Weitere Ressourcen importieren", "Importer plus de ressources", "Importa altre risorse", "リソースを追加でインポート"],
 	"game": ["Juego · automático para repeticiones", "Game · auto-detect for replays", "Spiel · Wiederholungen automatisch erkennen", "Jeu · détection des rediffusions", "Gioco · rilevamento automatico dei replay", "ゲーム（リプレイは自動検出）"],
 	"game_hint": ["Elige el juego para las voces o para asignar una repetición.", "Choose a game for voices or to assign a replay.", "Wähle ein Spiel für Stimmen oder eine Wiederholung.", "Choisis un jeu pour les voix ou pour classer une rediffusion.", "Scegli un gioco per le voci o per assegnare un replay.", "音声やリプレイの対象ゲームを選択します。"],
+	"replay_game": ["Juego para las repeticiones", "Replay destination", "Spiel für Wiederholungen", "Jeu de la rediffusion", "Gioco del replay", "リプレイのゲーム"],
+	"automatic": ["Auto", "Auto", "Auto", "Auto", "Auto", "自動"],
 	"voice": ["Importar voces", "Import voices", "Stimmen importieren", "Importer des voix", "Importa voci", "音声をインポート"],
 	"ydc": ["Importar mazo", "Import deck", "Deck importieren", "Importer un deck", "Importa mazzo", "デッキをインポート"],
 	"ydr": ["Importar repetición", "Import replay", "Wiederholung importieren", "Importer une rediffusion", "Importa replay", "リプレイをインポート"],
@@ -34,6 +36,7 @@ var _heading := Label.new()
 var _game_hint := Label.new()
 var _status := Label.new()
 var _game := OptionButton.new()
+var _replay_choices: Array[Button] = []
 var _voice: Button
 var _buttons := {}
 var _action_titles := {}
@@ -45,6 +48,8 @@ var _pending := {}
 func _ready() -> void:
 	for window: Window in [review, picker, confirm]:
 		add_child(window)
+		if window != picker and Paths.android_platform():
+			window.window_input.connect(_touch_window.bind(window))
 	var backdrop := CanvasLayer.new()
 	backdrop.layer = 80
 	add_child(backdrop)
@@ -107,21 +112,43 @@ func _ready() -> void:
 	_game_hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_game_hint.add_theme_font_size_override("font_size", 13)
 	_game_hint.add_theme_color_override("font_color", Color(DialogTheme.GOLD_LIGHT, 0.76))
-	_box.add_child(_game_hint)
+	if not Paths.android_platform():
+		_box.add_child(_game_hint)
 	_game.item_selected.connect(func(_index: int) -> void: _update_voice())
 	var actions := GridContainer.new()
 	actions.columns = 2
 	actions.add_theme_constant_override("h_separation", 12)
 	actions.add_theme_constant_override("v_separation", 9)
+	if Paths.android_platform():
+		_buttons["save"] = _make_action("save")
+		_box.add_child(_buttons["save"])
 	_box.add_child(actions)
 	for kind: String in FORMATS:
+		if _buttons.has(kind): continue
 		var button := _make_action(kind)
 		actions.add_child(button)
 		_buttons[kind] = button
 	_voice = _buttons["voice"]
+	_voice.visible = not Paths.android_platform()
 	_voice.pressed.connect(_choose_voice)
 	for kind in ["ydc", "ydr", "save"]:
 		_buttons[kind].pressed.connect(_choose.bind(kind))
+	if Paths.android_platform():
+		_game.hide()
+		_box.add_child(_game_hint)
+		var choices := HBoxContainer.new()
+		choices.add_theme_constant_override("separation", 8)
+		_box.add_child(choices)
+		var group := ButtonGroup.new()
+		for index in Game.GAMES.size() + 1:
+			var choice := Button.new()
+			choice.toggle_mode = true
+			choice.button_group = group
+			choice.custom_minimum_size.y = 40
+			choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			choice.pressed.connect(_game.select.bind(index))
+			choices.add_child(choice)
+			_replay_choices.append(choice)
 	_box.add_child(_status)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.add_theme_font_size_override("font_size", 14)
@@ -137,6 +164,25 @@ func _ready() -> void:
 	confirm.canceled.connect(func() -> void:
 		_pending.clear()
 		_return_to_review())
+
+
+func _touch_window(event: InputEvent, window: Window) -> void:
+	# Embedded windows receive touch directly, outside the launcher's pointer adapter.
+	if not event is InputEventScreenTouch or event.index != 0: return
+	var root := get_tree().root
+	var point: Vector2 = root.get_screen_transform().affine_inverse() * (window.get_screen_transform() * event.position)
+	var motion := InputEventMouseMotion.new()
+	motion.position = point
+	motion.global_position = point
+	root.push_input.call_deferred(motion, true)
+	var click := InputEventMouseButton.new()
+	click.position = point
+	click.global_position = point
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.button_mask = MOUSE_BUTTON_MASK_LEFT if event.pressed else 0
+	click.pressed = event.pressed
+	click.canceled = event.canceled
+	root.push_input.call_deferred(click, true)
 
 
 func _make_action(kind: String) -> Button:
@@ -174,10 +220,15 @@ func open(voice_games: Array[String]) -> void:
 	_voice_games = voice_games
 	_game.clear()
 	_game.add_item(text("game"))
-	_game_hint.text = text("game_hint")
+	_game_hint.text = text("replay_game" if Paths.android_platform() else "game_hint")
 	for game in Game.GAMES:
 		_game.add_item(Game.TITLES[game])
 	_game.select(0)
+	if not _replay_choices.is_empty():
+		_replay_choices[0].text = text("automatic")
+		_replay_choices[0].set_pressed_no_signal(true)
+		for index in Game.GAMES.size():
+			_replay_choices[index + 1].text = str(Game.GAMES[index]).capitalize()
 	review.title = text("resources")
 	_heading.text = review.title
 	review.ok_button_text = text("close")
@@ -212,7 +263,12 @@ func _choose(kind: String) -> void:
 	picker.title = text(kind)
 	picker.filters = PackedStringArray(["*.dat, *.json ; system.dat / system.json"] if kind == "save" else ["*.%s ; %s" % [kind, kind.to_upper()]])
 	review.hide()
-	picker.popup_centered_ratio.call_deferred(0.8)
+	if OS.has_feature("android"):
+		# Binary save/deck formats can be reported as different MIME types by document providers.
+		picker.filters = PackedStringArray()
+		picker.popup_file_dialog.call_deferred()
+	else:
+		picker.popup_centered_ratio.call_deferred(0.8)
 
 
 func _return_to_review() -> void:
@@ -229,8 +285,8 @@ func _show_review() -> void:
 
 func _selected(path: String) -> void:
 	picker.hide()
-	var name := path.get_file()
-	var plan := _prepare(_selected_kind, path, _game_id())
+	var name := _document_name(path)
+	var plan := _prepare(_selected_kind, path, _game_id(), name)
 	if plan.is_empty():
 		_status.text = text("invalid") % name
 		_return_to_review()
@@ -256,19 +312,35 @@ func _destination_label(plan: Dictionary) -> String:
 	return plan.target.get_file() if not plan.has("game") else "%s · %s" % [Game.TITLES[plan.game], plan.target.get_file()]
 
 
-func _prepare(kind: String, path: String, selected_game: String) -> Dictionary:
+func _document_name(path: String) -> String:
+	if path.begins_with("content://") and Engine.has_singleton("AndroidRuntime"):
+		var runtime := Engine.get_singleton("AndroidRuntime")
+		var uri_class: Object = Engine.get_singleton("JavaClassWrapper").wrap("android.net.Uri")
+		var uri: Object = uri_class.parse(path)
+		var resolver: Object = runtime.getApplicationContext().getContentResolver()
+		var cursor: Object = resolver.query(uri, PackedStringArray(["_display_name"]), null, null, null)
+		if cursor != null:
+			var name: String = str(cursor.getString(0)) if cursor.moveToFirst() and not cursor.isNull(0) else ""
+			cursor.close()
+			if not name.is_empty(): return name.replace("\\", "/").get_file()
+	return path.get_file().uri_decode().replace("\\", "/").get_file() if path.begins_with("content://") else path.get_file()
+
+
+func _prepare(kind: String, path: String, selected_game: String, name := "") -> Dictionary:
 	var target := ""
 	var plan := {"kind": kind, "source": path}
-	var filename := path.get_file().get_basename()
+	if name.is_empty(): name = path.get_file()
+	var filename := name.get_basename()
+	var extension := name.get_extension().to_lower()
 	match kind:
 		"ydc":
-			if path.get_extension().to_lower() != "ydc": return {}
+			if extension != "ydc": return {}
 			var deck := Ydc.load(path)
 			if deck.is_empty() or deck.main.size() > 80 or deck.fusion.size() > 15 or deck.side.size() > 15: return {}
 			plan["deck"] = deck
 			target = Paths.save_dir.path_join("decks").path_join(filename + ".ydc")
 		"ydr":
-			if path.get_extension().to_lower() != "ydr": return {}
+			if extension != "ydr": return {}
 			var raw := FileAccess.get_file_as_bytes(path)
 			var replay: RefCounted = load("res://duel/core/ydr.gd").parse(raw)
 			if replay == null: return {}
@@ -283,12 +355,15 @@ func _prepare(kind: String, path: String, selected_game: String) -> Dictionary:
 		"save":
 			plan["source_digest"] = FileAccess.get_sha256(path)
 			if plan.source_digest.is_empty(): return {}
-			match path.get_extension().to_lower():
+			if path.begins_with("content://") and extension not in ["dat", "json"]:
+				extension = "dat" if not SystemDat.decode(FileAccess.get_file_as_bytes(path)).is_empty() else "json"
+			match extension:
 				"dat":
 					if SystemDat.decode(FileAccess.get_file_as_bytes(path)).is_empty(): return {}
 				"json":
 					if not Store.valid(Store.read(path)): return {}
 				_: return {}
+			plan["save_format"] = extension
 			target = SaveData.path()
 		_: return {}
 	var source_path := path.simplify_path()
@@ -333,7 +408,7 @@ func _replace_save(plan: Dictionary) -> bool:
 			DirAccess.remove_absolute(backup)
 			return false
 	var source: String = plan.source
-	return SaveData.import_system_dat(source, true) if source.get_extension().to_lower() == "dat" else SaveData.import_portable_save(source)
+	return SaveData.import_system_dat(source, true) if plan.save_format == "dat" else SaveData.import_portable_save(source)
 
 
 func _write_file(plan: Dictionary) -> bool:

@@ -891,7 +891,9 @@ func _redraw() -> void:
 			var face_up := bool(obj["face"])
 			# bit 14 de la palabra: posicion de defensa (va tumbada)
 			var defense := z < 5 and bool(obj["defense"])
-			_card(int(obj["card"]), pos, CARD_SIZE, face_up, defense, p == 1)
+			var card := _card(int(obj["card"]), pos, CARD_SIZE, face_up, defense, p == 1)
+			if card != null and face_up and game == "joey" and _duel is JoeyPresentationAdapter and int(obj["card"]) in [0x479, 0x47a]:
+				_draw_joey_trap_type(p, z, pos)
 			_register_card(pos, Vector2(CARD_SIZE.y, CARD_SIZE.x) if defense else CARD_SIZE, p, 0 if z < 5 else 5 if z < 10 else 10, z if z < 5 else z - 5 if z < 10 else 0, int(obj["card"]), face_up or p == 0)
 			# Los contadores de la carta los dibuja DuelCardStats (0x4103e0 / 0x410640).
 		# 42f0e0: una pila vacia no se dibuja; durante un vuelo sigue la imagen anterior.
@@ -957,6 +959,23 @@ func _redraw() -> void:
 			"rival" if (turn & 1) != 0 else "jugador",
 			PHASES[phase] if phase < PHASES.size() else "-"]
 	_log.text = _text
+
+## Joey 419b70: 1-based type from the active trap, at the owner's upper corner.
+func _draw_joey_trap_type(p: int, z: int, center: Vector2) -> void:
+	var adapter := _duel as JoeyPresentationAdapter
+	var race: int = adapter.joey_zone_counters[p * 12 + z]
+	if race < 1 or race > 20: return
+	var atlas := Assets.texture("joey/duel/card/icon_syuzoku.png")
+	if atlas == null: return
+	var cell := Vector2(int(atlas.get_width()) / 20, atlas.get_height())
+	var icon := Sprite2D.new()
+	icon.texture = atlas
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.region_enabled = true
+	icon.region_rect = Rect2((race - 1) * cell.x, 0, cell.x, cell.y)
+	icon.position = center - CARD_SIZE * (0.5 if p == 0 else -0.5)
+	_board.add_child(icon)
+
 
 func _pile_top_card(p: int, loc: int, pile: Dictionary, center: Vector2) -> void:
 	var face := bool(pile.get("face", loc == DuelMem.LOC_GRAVE))

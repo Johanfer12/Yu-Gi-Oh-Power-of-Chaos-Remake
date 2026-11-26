@@ -554,6 +554,11 @@ func _update_tribute_hint() -> void:
 	var d = scene._duel
 	var action: int = d.m.u32(0xa13408)
 	if not _material_selection(scene) or ((action >> 2) & 15) not in [0, 4] or not d.dialog_open.is_empty(): return
+	# Colocar o activar magia/trampa también usa el paso 2 del selector compartido.
+	# El aviso es para un monstruo de la mano local que requiere sacrificios.
+	if d.m.u8(0xa1340f) != (DuelMem.LOC_HAND << 1) or (d.m.u16(0xa133f2) & 1) != 0: return
+	var card_index: int = d.m.u16(0xa13404)
+	if card_index == 0 or d.f4457d0(card_index) <= 4: return
 	var state: int = d.m.u8(0xa1340d)
 	if state not in [2, 3, 4, 5, 10, 11]: return
 	var hint_index := 0 if state in [10, 11] else (1 if state in [2, 3] else 2)

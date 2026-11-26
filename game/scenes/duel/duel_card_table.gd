@@ -158,6 +158,10 @@ func take(duel: Duel, p: int, loc: int, i: int) -> Dictionary:
 		var pile: Dictionary = piles[p][loc]
 		if int(pile["count"]) == 0: return {}
 		var obj := {"card": int(pile["top"]), "face": loc != DuelMem.LOC_DECK, "defense": false, "owner": p}
+		# Ciber Jarra revela la carta que sale. La siguiente empieza boca abajo.
+		if loc == DuelMem.LOC_DECK and i == 0:
+			obj["face"] = bool(pile.get("face", false))
+			pile.erase("face")
 		var mem := memory_pile(duel, p, loc)
 		pile["count"] = maxi(0, int(pile["count"]) - 1)
 		pile["top"] = mem["top"] if int(mem["count"]) == int(pile["count"]) else _pile_top_below(duel, p, loc, int(pile["count"]))

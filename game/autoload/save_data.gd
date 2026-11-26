@@ -147,7 +147,8 @@ func import_system_dat(system_dat: String, keep_deck_header := false) -> bool:
 	for card in CardDB.cards:
 		by_index[int(card["index"])] = int(card["internal_id"])
 	var head := SystemDat.header(raw)
-	var startup := _startup_decks(block, head, SystemDat.find_decks(system_dat))
+	var decks := {} if system_dat.begins_with("content://") else SystemDat.find_decks(system_dat)
+	var startup := _startup_decks(block, head, decks)
 	block = startup["block"]
 	var fresh := _new_game()
 	fresh.merge(SystemDat.to_save(block, by_index), true)

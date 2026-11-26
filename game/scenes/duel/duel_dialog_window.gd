@@ -272,7 +272,10 @@ func _add_button(dx: int, base: String, answer: int, mask_img: Image) -> void:
 	var dimensions := Vector2(BTN)
 	if game in ["kaiba", "joey"]:
 		var index: int = {"ok": 0, "yes": 4, "no": 8}[base]
-		var layout := Assets.layout("joey/duel/dialog/button_s.txt" if game == "joey" else "kaiba/duel/dialog/button.txt")
+		var layout_path := "kaiba/duel/dialog/button.txt"
+		if game == "joey":
+			layout_path = "joey/duel/dialog/button_?.txt" if Assets.exists("joey/duel/dialog/button_?.layout.json") else "joey/duel/dialog/button_s.txt"
+		var layout := Assets.layout(layout_path)
 		dx = int(str(layout.items[index].get("value", 0)))
 		cy = bottom_y() + int(str(layout.items[index + 1].get("value", 0)))
 		var tex := _button_tex(base, "b")
@@ -495,8 +498,9 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton:
 		_pointer = event.position - position
 		_hover = _pick(_pointer)
-		var cancellable := type == 1 or (type == 3 and int(data.get("default", -1)) >= 0)
-		var outside := cancellable and preload("res://core/touch_input.gd").outside(event, _over_window(_pointer) or _hover >= 0)
+		# Las preguntas Sí/No requieren elegir un botón al tocar la pantalla.
+		var outside := type == 3 and int(data.get("default", -1)) >= 0 \
+			and preload("res://core/touch_input.gd").outside(event, _over_window(_pointer) or _hover >= 0)
 		if event.button_index == MOUSE_BUTTON_LEFT and not outside:
 			if event.pressed:
 				if (_icons != null or (game == "yugi" and type == 6)) and _hover >= 0:

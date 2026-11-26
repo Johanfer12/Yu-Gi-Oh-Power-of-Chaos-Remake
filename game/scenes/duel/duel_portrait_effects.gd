@@ -466,6 +466,24 @@ static func render(owner: Node2D, event: Dictionary, frame: int) -> void:
 		var code := full_code % 1000
 		var index := animation_index(full_code, group, frame, duration_ms, tick)
 		match code:
+			10, 11:
+				if portrait_game != "joey": continue
+				# Joey 416bc0: mueve la mano antes de dibujar ojos y boca.
+				var voice_ticks := duration_ms / 33
+				var start := mini(16, (voice_ticks if voice_ticks > 0 else 32) / 2)
+				if code == 11:
+					var weight := (frame << 8) / start if frame < start else 256
+					var from := layout.position(group + 1)
+					var to := layout.position(group + 2)
+					var at := Vector2i((from.x * (256 - weight) + to.x * weight) >> 8,
+						(from.y * (256 - weight) + to.y * weight) >> 8)
+					_sprite(canvas, portrait_game, layout.resource(group + 1), origin + Vector2(at))
+				elif frame >= start and group + 4 < layout.items.size():
+					var step := mini((frame - start) / 2, maxi(full_code / 1000, 2) - 1)
+					for first in [group + 3, group + 1]:
+						var piece: int = first + step
+						if piece < layout.items.size():
+							_sprite(canvas, portrait_game, layout.resource(piece), origin + Vector2(layout.position(piece)))
 			5:
 				var a := origin + Vector2(layout.position(group + 1))
 				var b := origin + Vector2(layout.position(group + 2))

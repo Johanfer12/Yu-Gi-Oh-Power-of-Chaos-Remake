@@ -37,7 +37,8 @@ func _ready() -> void:
 	z_index = 20
 	_portrait = Assets.layout(_dir + "bustup_l.txt")
 	_popup = Assets.layout(_dir + "popup.txt")
-	_dialogs = Assets.read_json("common/db/dlg_spa.json")
+	var dialogs: Variant = Assets.dialog_texts()
+	_dialogs = dialogs if dialogs is Array else []
 	_text.bbcode_enabled = true
 	_text.size.x = Assets.texture(_dir + _popup.resource(0)).get_width() - 64
 	_text.fit_content = true
