@@ -252,7 +252,7 @@ PoC Remake is an independent, unofficial project. It is not affiliated with or e
 
 The launcher theme, the three external duel backgrounds and the custom application icon belong to this project. The pending-game frames include vector outlines derived from the original logos; the original logo images are loaded only after importing a user's copy.
 
-The source includes work derived through reverse engineering. Its provenance and project-wide licensing remain under review; no blanket license for the repository has been assigned. Publishing the sources does not license the original games or grant rights to redistribute their assets.
+The project-authored build and publication tools listed in [NOTICE](NOTICE) are available under the [Apache License 2.0](LICENSES/Apache-2.0.txt). Keep the license and applicable attribution notices when redistributing them. The scope is limited to those files. The game implementation includes work derived through reverse engineering, and its provenance and licensing remain under review. Rights in the original games, their assets and trademarks remain with their respective holders.
 
 Third-party components retain their own licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and **Licenses** in the packaged launcher for the bundled engine and tool notices, including the matching 7-Zip source archive.
 

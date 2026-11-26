@@ -74,4 +74,4 @@ Para preparar sólo el paquete privado de recursos basta con Godot:
 
 La compilación comprueba certificado, integridad del APK, alineación de 16 KB y el arranque correspondiente: primera importación o recursos integrados. La importación, persistencia, metadatos de actualización y regresiones táctiles se comprobaron en el equipo de compilación. **El nuevo flujo de importación y actualización todavía no se verificó en un Android físico.**
 
-Fuentes experimentales no oficiales, derivadas en parte mediante ingeniería inversa. La fidelidad, el soporte de hardware y la licencia general siguen en revisión. Consulta los [avisos de terceros](THIRD_PARTY_NOTICES.md).
+Estas fuentes incluyen trabajo experimental no oficial derivado en parte mediante ingeniería inversa. La fidelidad, el soporte de hardware y la licencia de la implementación del juego siguen en revisión. La [licencia Apache 2.0](LICENSES/Apache-2.0.txt) cubre las herramientas propias que figuran en [NOTICE](NOTICE) y están presentes en esta copia. Consulta los [avisos de terceros](THIRD_PARTY_NOTICES.md).

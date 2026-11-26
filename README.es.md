@@ -229,7 +229,7 @@ Este es un proyecto independiente y no oficial, sin afiliación ni respaldo de l
 
 El tema musical del launcher, sus tres fondos externos de duelo y el icono propio pertenecen a este proyecto. Los marcos de juegos pendientes incluyen contornos vectoriales derivados de los logos originales; sus imágenes se cargan únicamente tras importar la copia del usuario.
 
-El código incluye trabajo derivado de ingeniería inversa. Su procedencia y la licencia general siguen en revisión; no se ha asignado una licencia global al repositorio. Publicar estas fuentes no otorga derechos para redistribuir los recursos originales.
+Las herramientas propias de compilación y publicación que se enumeran en [NOTICE](NOTICE) se ofrecen bajo la [licencia Apache 2.0](LICENSES/Apache-2.0.txt). Al redistribuirlas, conserva la licencia y los avisos de atribución aplicables. El alcance se limita a esos archivos. La implementación del juego incluye trabajo derivado de ingeniería inversa y su procedencia y licencia siguen en revisión. Los derechos sobre los juegos originales, sus recursos y sus marcas corresponden a sus respectivos titulares.
 
 Cada componente de terceros conserva su licencia. Consulta [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) y **Licencias** en el launcher, incluidas las fuentes correspondientes de 7-Zip.
 

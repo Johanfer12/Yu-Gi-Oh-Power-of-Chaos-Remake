@@ -1,0 +1,19 @@
+Power of Chaos Remake
+Copyright 2026 Johanfer12
+
+Developed by Johanfer12 and the Power of Chaos Remake contributors.
+https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake
+
+Apache License 2.0 applies to the following project-authored files where present,
+to the extent the project holds the rights to license them:
+
+  tools/android/build_apk.py
+  tools/android/pack_data.gd
+  tools/build_android.py
+  tools/build_windows.py
+  tools/configure_android_builder.py
+  tools/prepare_android_public.py
+  tools/prepare_public.py
+
+License text: LICENSES/Apache-2.0.txt
+Third-party notices: THIRD_PARTY_NOTICES.md

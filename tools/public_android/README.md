@@ -74,4 +74,4 @@ Game code is in **game/**; generated export projects are not the editable source
 
 Build checks cover the signing certificate, APK integrity, 16 KB alignment and the appropriate first-run or bundled-resource startup path. Resource imports, persistence, update metadata and touch regressions have been checked on the build computer. **The new import/update flow has not yet been verified on a physical Android device.**
 
-These are unofficial experimental sources derived in part through reverse engineering. Fidelity, hardware support and project-wide licensing remain under review. See [third-party notices](THIRD_PARTY_NOTICES.md).
+The source includes unofficial experimental work derived in part through reverse engineering. Fidelity, hardware support and licensing of the game implementation remain under review. The [Apache License 2.0](LICENSES/Apache-2.0.txt) covers the project-authored tools listed in [NOTICE](NOTICE) where present. See [third-party notices](THIRD_PARTY_NOTICES.md).

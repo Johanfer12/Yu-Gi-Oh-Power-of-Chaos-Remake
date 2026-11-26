@@ -7,7 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
-from prepare_public import ROOT, OWN_ASSETS, LAUNCHER_ART, allowed
+from prepare_public import ROOT, OWN_ASSETS, LAUNCHER_ART, PROJECT_LICENSE_FILES, allowed
 
 ANDROID_LAUNCHER_ART = {
     "game/assets/icons/launcher-adaptive-foreground.svg",
@@ -57,7 +57,10 @@ def prepare_android(source: Path, output: Path) -> dict:
         'config/icon="res://assets/icon.svg"', 'config/icon="res://assets/icons/launcher.svg"')), encoding="utf8")
     for name in ("README.md", "README.es.md"):
         shutil.copyfile(ROOT / "tools/public_android" / name, output / name)
-    shutil.copyfile(ROOT / "THIRD_PARTY_NOTICES.md", output / "THIRD_PARTY_NOTICES.md")
+    for name in sorted(PROJECT_LICENSE_FILES | {"THIRD_PARTY_NOTICES.md"}):
+        destination = output / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / name, destination)
     (output / ".gitignore").write_text(
         "data/\nartifacts/\nsaves/\n.godot/\n__pycache__/\n*.pyc\n*.uid\n*.import\n"
         "*.apk\n*.pck\n*.iso\n*.exe\n*.dat\n*.bin\n*.keystore\n*.jks\n.env*\n", encoding="utf8")
