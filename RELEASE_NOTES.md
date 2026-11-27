@@ -6,6 +6,13 @@ For installation and updates, see the [Android update guide](docs/ANDROID_UPDATE
 
 ## v0.1.0-alpha.49
 
+### Changes since alpha.47
+
+- **Custom duel backgrounds.** In the launcher, open **Import more resources → Import duel background** and choose a PNG, JPEG, or WebP. The image is centered and cropped to fill the space around the board without stretching. The same menu restores the original backgrounds.
+- **Duel autosave in Yugi, Kaiba, and Joey.** Defeats save as soon as the result appears. Victories that award cards save the result and cards together when you accept the reward. If Google Drive is linked, sync starts at the same point.
+- **Deck autosave.** Edits, undo, redo, and accepted deck imports save immediately and start syncing if Drive is linked. Incomplete decks are kept as drafts so the last playable deck remains available.
+- **Launcher changelog.** The update dialog shows the last three compatible releases.
+- **Duel visuals.** Graveyard effects no longer obscure the deck count, and messages next to the cursor scale with smoother edges.
 - Android system settings now show the same release version as the launcher.
 
 ## v0.1.0-alpha.48
