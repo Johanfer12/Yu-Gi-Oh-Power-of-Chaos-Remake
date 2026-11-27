@@ -213,7 +213,11 @@ def main():
     if previous:
         assert signer_certificate(signed) == signer_certificate(previous), "Certificate changed; update would require uninstalling"
     run([str(tools / "zipalign.exe"), "-c", "-P", "16", "-v", "4", str(apk)], f"v{CODE}-alignment.log")
-    run([str(tools / "aapt.exe"), "dump", "badging", str(apk)], f"v{CODE}-package.log", cwd=OUT)
+    badging = run([str(tools / "aapt.exe"), "dump", "badging", str(apk)], f"v{CODE}-package.log", cwd=OUT)
+    if args.release:
+        identity = next((line for line in badging.splitlines() if line.startswith("package: ")), "")
+        if f"versionName='{TAG[1:]}'" not in identity or f"versionCode='{CODE}'" not in identity:
+            raise RuntimeError(f"APK should report versionName {TAG[1:]} and versionCode {CODE}: {identity}")
     with zipfile.ZipFile(apk) as archive:
         assert archive.testzip() is None
         if args.engine_only:

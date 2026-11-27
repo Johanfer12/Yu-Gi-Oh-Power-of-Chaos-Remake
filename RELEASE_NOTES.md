@@ -4,6 +4,10 @@
 
 For installation and updates, see the [Android update guide](docs/ANDROID_UPDATES.md#in-app-update).
 
+## v0.1.0-alpha.49
+
+- Android system settings now show the same release version as the launcher.
+
 ## v0.1.0-alpha.48
 
 - Import a PNG, JPEG, or WebP from **Import more resources** to set a custom background around the duel board. Overlay mode fills the window with a centered crop and preserves the image's proportions. The same menu restores the original backgrounds.
