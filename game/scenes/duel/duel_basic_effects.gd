@@ -313,7 +313,8 @@ static func _summon(owner: Node2D, event: Dictionary, counter: int) -> void:
 		_card(owner, event, center, Vector2(200, 290) * scale / 65536.0,
 			Math.cos_fx(counter + 56) >> 8, event.get("angle", 0), bool(int(event.get("flags", 2)) & 2))
 		return
-	_card(owner, event, center, Geometry.FIELD_SIZE, 256, event.get("angle", 0), bool(int(event.get("flags", 2)) & 2))
+	if not event.get("base_on_table", false):
+		_card(owner, event, center, Geometry.FIELD_SIZE, 256, event.get("angle", 0), bool(int(event.get("flags", 2)) & 2))
 	var alpha := mini(255, (Math.cos_fx(counter - 160) * 3) >> 10)
 	var size := Geometry.FIELD_SIZE
 	if event.get("flags", 0) & 1: size = Vector2(size.y, size.x)
@@ -344,7 +345,8 @@ static func _render_set(owner: Node2D, event: Dictionary, counter: int) -> void:
 	# La carta ya llego desde la mano; el nucleo aun no ha escrito la zona mientras espera
 	# este objeto. Representar su imagen base durante toda la espera y sumar la copia
 	# luminosa de 4390d0 (Yugi) / 439810 (Kaiba), llamada de dibujo +ac.
-	_card(owner, event, center, Geometry.FIELD_SIZE, 256, event.get("angle", 0), event.get("face", false))
+	if not event.get("base_on_table", false):
+		_card(owner, event, center, Geometry.FIELD_SIZE, 256, event.get("angle", 0), event.get("face", false))
 	_additive(_card(owner, event, center, Geometry.FIELD_SIZE, wave >> 9, event.get("angle", 0), event.get("face", false)))
 	var scale := 65536 if counter < 128 else counter << 9
 	_asset(owner, "eff_set_" + color, center, scale, alpha, (-Math.cos_fx(counter / 2)) >> 8)
@@ -360,7 +362,8 @@ static func _render_set(owner: Node2D, event: Dictionary, counter: int) -> void:
 ## es de este objeto: la mesa aun no ha escrito la zona mientras espera, igual que en _render_set.
 static func _render_joey_set(owner: Node2D, event: Dictionary, frame: int) -> void:
 	var center: Vector2 = event["center"]
-	_card(owner, event, center, Geometry.FIELD_SIZE, 256, event.get("angle", 0), event.get("face", false))
+	if not event.get("base_on_table", false):
+		_card(owner, event, center, Geometry.FIELD_SIZE, 256, event.get("angle", 0), event.get("face", false))
 	var fx := JoeyFxSet.new()
 	fx.center = Vector2i(center)
 	var flags := int(event.get("flags", 0))
@@ -382,7 +385,7 @@ static func _render_joey_summon(owner: Node2D, event: Dictionary, frame: int) ->
 	fx.ref = (int(event.get("p", 0)) & 1) | ((flags & 1) << 14) | (((flags >> 1) & 1) << 15)
 	fx.card_size = Vector2i(Geometry.FIELD_SIZE)
 	for i in frame: fx.f44f9f0()
-	if (fx.counter + 0x40) << 8 > 0x8000:
+	if not event.get("base_on_table", false) and (fx.counter + 0x40) << 8 > 0x8000:
 		_card(owner, event, center, Geometry.FIELD_SIZE, 256, event.get("angle", 0), bool(flags & 2))
 	fx.f44fa10(JoeyFxCanvas.new(owner, event, "joey/duel/effect/summon.txt"), 0)
 

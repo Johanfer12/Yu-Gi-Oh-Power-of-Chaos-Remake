@@ -68,6 +68,8 @@ func setup(game_id: String, winner: int, duel_flags: int = 0, surrendered := fal
 	if _outcome == 1 and game != "joey":
 		_cards = _choose_cards(3 if _match else 1)   # 0x434ba0 en match
 		_save_cards()
+	else:
+		_save_progress()
 	# 435410 estado1, DAT_a114b4 bit8. Joey 447000 estado1: tras rendirse (a54e5c & 0x40)
 	# tampoco pregunta por la repetición.
 	if (duel_flags & 0x100) != 0 or (_surrendered and game == "joey"): _after_replay()
@@ -132,7 +134,12 @@ func _save_cards() -> void:
 	for c in _cards:
 		if SaveData.card_count(c["id"]) < 255:
 			SaveData.add_card(c["id"])
-	SaveData.save()
+	_save_progress()
+
+
+func _save_progress() -> void:
+	if SaveData.save():
+		CloudSync.sync_now(false)
 
 
 func _input(event: InputEvent) -> void:

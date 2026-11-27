@@ -48,6 +48,7 @@ var heading_y := TITLE_Y
 var _language := OptionButton.new()
 const Tips = preload("res://scenes/launcher/tooltip_texts.gd")
 var _setup_button := Button.new()
+var _continue_duel := preload("res://scenes/launcher/continue_duel.gd").new()
 var _release_footer := preload("res://scenes/launcher/release_footer.gd").new()
 
 
@@ -114,6 +115,7 @@ func _ready() -> void:
 	_language.item_selected.connect(_select_language)
 	_style_control(_language)
 	add_child(_language)
+	add_child(_continue_duel)
 	_controls.changed.connect(_language_updated)
 	_language_updated()
 	_layout()
@@ -177,6 +179,7 @@ func _language_updated() -> void:
 	_setup_button.text = "ISO / " + _folder_label()
 	if _release_footer.is_node_ready():
 		_release_footer.refresh()
+	_continue_duel.refresh()
 	queue_redraw()
 
 
@@ -196,6 +199,8 @@ func _layout() -> void:
 		_halo.position = _logos[_selected_index].position
 	_language.position = Vector2(_screen.x - 170, 24)
 	_language.size = Vector2(146, 34)
+	_continue_duel.size = Vector2(264, 58)
+	_continue_duel.position = Vector2((_screen.x - _continue_duel.size.x) / 2.0, _origin.y + (6 if import_mode else 222))
 	queue_redraw()
 
 
@@ -239,7 +244,12 @@ func _choose(index: int) -> void:
 		return
 	if _leaving:
 		return
+	_continue_duel.choose_game(_open_game.bind(index))
+
+
+func _open_game(index: int) -> void:
 	_leaving = true
+	_continue_duel.disabled = true
 	var cover := CanvasLayer.new()
 	cover.layer = 100
 	var black := ColorRect.new()
@@ -357,7 +367,7 @@ func _draw_title() -> void:
 	var title_size := mini(TITLE_SIZE, int(700.0 * TITLE_SIZE / maxf(natural_width, 1.0)))
 	var width := _font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size).x
 	var x := (_screen.x - width) / 2.0
-	var title_y := _origin.y + heading_y
+	var title_y := _origin.y + heading_y + (8 if import_mode and _continue_duel.visible else 0)
 	var base := Vector2(x, title_y)
 	draw_string_outline(_font, base + Vector2(4, 5), title, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size,
 			10, Color(0, 0, 0, 0.6))

@@ -1475,6 +1475,15 @@ func _begin() -> void:
 	if pending.is_empty(): return
 	active = pending.pop_front()
 	frame = 0
+	# Si el vuelo ya dejó la carta en la zona, el efecto se dibuja sobre ese mismo objeto.
+	var effect_mode: String = active.get("mode", "")
+	var monster_set := effect_mode == "set" and int(active.get("zone", -1)) in range(5)
+	var summon_overlay: bool = effect_mode == "summon" and (int(active.get("op", 0)) == 0x6f or active.get("native_base_visible", false))
+	if monster_set or summon_overlay:
+		var obj: Dictionary = table.field[active["p"]][active["zone"]]
+		if int(obj.get("card", -1)) == int(active["card"]) and not obj.has("moving"):
+			active["base_on_table"] = true
+			active.erase("hide")
 	_begin_objects()
 	if active["mode"] == "sacrifice_release":
 		if _sacrifice.has(active["key"]): _sacrifice[active["key"]]["release"] = true

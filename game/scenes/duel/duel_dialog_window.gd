@@ -498,8 +498,10 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton:
 		_pointer = event.position - position
 		_hover = _pick(_pointer)
-		# Las preguntas Sí/No requieren elegir un botón al tocar la pantalla.
-		var outside := type == 3 and int(data.get("default", -1)) >= 0 \
+		# Las preguntas 1/2 de invocación por tributo admiten No con un toque exterior.
+		var can_cancel := (type == 1 and int(data.get("msg", -1)) in [1, 2]) \
+			or (type == 3 and int(data.get("default", -1)) >= 0)
+		var outside := can_cancel \
 			and preload("res://core/touch_input.gd").outside(event, _over_window(_pointer) or _hover >= 0)
 		if event.button_index == MOUSE_BUTTON_LEFT and not outside:
 			if event.pressed:

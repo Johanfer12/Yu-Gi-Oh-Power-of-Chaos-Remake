@@ -4,6 +4,13 @@
 
 For installation and updates, see the [Android update guide](docs/ANDROID_UPDATES.md#in-app-update).
 
+## v0.1.0-alpha.47
+
+- On Windows and Android, **Continue** resumes a local duel against the CPU from its last saved point. The launcher shows both players’ LP and asks before discarding a saved duel.
+- On Android, tap once to select the only eligible attacker or to target a face-down monster. Tapping outside a Tribute confirmation answers **No**. Tribute selection uses the game’s localized messages and restores the original artwork for a single Tribute.
+- Monsters stay visible as their placement or summon effect plays.
+- The results screen saves progress and starts Google Drive synchronization right away when an account is connected. Joey’s reward cards sync after the player accepts the reward.
+
 ## v0.1.0-alpha.46
 
 - On Android, the duel engine loads in the background during the rival intro and rock-paper-scissors. This reduces the pause when entering the first duel of a session.

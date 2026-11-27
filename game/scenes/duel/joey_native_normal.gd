@@ -125,6 +125,17 @@ func _waiting_for_player() -> bool:
 	return _duel != null and (_duel as JoeyPresentationAdapter).waiting_for_player()
 
 
+func _attackers_available() -> int:
+	var adapter := _duel as JoeyPresentationAdapter
+	var native := adapter.engine
+	var help := native.m.u32(0x5ebee4)
+	var available := 0
+	for zone in 5:
+		available += int(native.f56b730(adapter.local_native_player, zone, 1) != 0)
+	native.m.set_u32(0x5ebee4, help)
+	return available
+
+
 func _collect_visual_events() -> bool:
 	if _duel is JoeyPresentationAdapter:
 		var adapter := _duel as JoeyPresentationAdapter

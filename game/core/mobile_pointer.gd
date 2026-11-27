@@ -19,9 +19,8 @@ var _choices: Array[Button] = []
 var _right_available := false
 var _preparing := false
 var _pending_release := false
-var _confirm_scene: Node
-var _confirm_until := 0
 var _tribute_hint := Label.new()
+var _tribute_sprite := TextureRect.new()
 var _deck_touch := false
 var _drag_starting := false
 var _pending_drop := false
@@ -34,17 +33,10 @@ var _scrolling := false
 var _scroll_last := Vector2.ZERO
 var _scroll_amount := 0.0
 const HOLD_SECONDS := 0.5
+const ATTACK_ACTION_MASK := 1 << 2
 const JOEY_VIEW_PILE_ACTION := 1 << 12
 const JOEY_PILE_TIMEOUT_MS := 2500
 const ACTION_NAMES := {1: "Invocar", 2: "Voltear", 3: "Atacar", 4: "Activar", 5: "Colocar", 6: "Posición de defensa", 7: "Posición de ataque", 8: "Robar", 9: "Rendirse", 10: "Fusión", 11: "Invocación especial en ataque", 12: "Invocación especial en defensa"}
-const TRIBUTE_HINTS := {
-	"s": ["Toca un monstruo para sacrificarlo", "Selecciona el primer sacrificio", "Selecciona el segundo sacrificio"],
-	"e": ["Tap a monster to Tribute", "Select the first Tribute", "Select the second Tribute"],
-	"g": ["Tippe auf ein Monster, um es als Tribut anzubieten", "Wähle das erste Tributmonster", "Wähle das zweite Tributmonster"],
-	"f": ["Touchez un monstre pour le Sacrifier", "Sélectionnez le premier Sacrifice", "Sélectionnez le second Sacrifice"],
-	"i": ["Tocca un mostro per offrirlo come Tributo", "Seleziona il primo Tributo", "Seleziona il secondo Tributo"],
-	"j": ["リリースするモンスターをタップ", "1体目のモンスターを選択", "2体目のモンスターを選択"],
-}
 
 func _scene_point(point: Vector2) -> Vector2:
 	return Game._screen.get_viewport().get_screen_transform().affine_inverse() * _physical(point)
@@ -68,12 +60,6 @@ func _mode() -> String:
 	return str(SaveData.data.get("launcher", {}).get("pointer_mode", "menu"))
 
 func _process(delta: float) -> void:
-	if is_instance_valid(_confirm_scene) and Game._screen == _confirm_scene and Time.get_ticks_msec() < _confirm_until:
-		var question: Dictionary = _confirm_scene._duel.dialog_open
-		# Invocar/Colocar ya se eligio: aceptar solo su pregunta redundante de sacrificio.
-		if _pressed_button == MOUSE_BUTTON_NONE and not _dispatching and is_instance_valid(_confirm_scene._dialog_box) and not question.get("closing", false) and int(question.get("type", -1)) == 1 and int(question.get("msg", -1)) in [1, 2]:
-			_confirm_scene._answer_dialog(1)
-			_confirm_scene = null
 	_update_tribute_hint()
 	if not _holding or _pressed_button != MOUSE_BUTTON_NONE or _scrolling or (_scroll_kind != "" and _scroll_kind != "bag"): return
 	if _touch_card == "pile": return
@@ -86,12 +72,12 @@ func _process(delta: float) -> void:
 			_execute_action.call_deferred(5, _target)
 		elif _touch_card != "" and _selected_card != _touch_card:
 			_finish_card_tap(_target)
-		else: _dispatch_click.call_deferred(MOUSE_BUTTON_RIGHT, _target)
+		elif _right_available: _dispatch_click.call_deferred(MOUSE_BUTTON_RIGHT, _target)
 
 func _ready() -> void:
 	layer = 100
 	_tribute_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_tribute_hint.add_theme_color_override("font_color", Color.YELLOW)
+	_tribute_hint.add_theme_color_override("font_color", Color.WHITE)
 	_tribute_hint.add_theme_color_override("font_shadow_color", Color.BLACK)
 	_tribute_hint.add_theme_constant_override("shadow_offset_x", 2)
 	_tribute_hint.add_theme_constant_override("shadow_offset_y", 2)
@@ -99,6 +85,10 @@ func _ready() -> void:
 	_tribute_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tribute_hint.hide()
 	add_child(_tribute_hint)
+	_tribute_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tribute_sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_tribute_sprite.hide()
+	add_child(_tribute_sprite)
 	_previous_emulation = Input.emulate_mouse_from_touch
 	Input.emulate_mouse_from_touch = false
 	_menu.size = Vector2(264, 82)
@@ -124,11 +114,11 @@ func _exit_tree() -> void:
 func cancel() -> void:
 	_menu.hide()
 	_tribute_hint.hide()
+	_tribute_sprite.hide()
 	_selected_card = ""
 	_touch_card = ""
 	_scroll_kind = ""
 	_scrolling = false
-	_confirm_scene = null
 	_finger = -1
 	_holding = false
 	_preparing = false
@@ -219,8 +209,15 @@ func _prepare_card(point: Vector2) -> void:
 	if generation != _generation: return
 	_preparing = false
 	var mask: int = Game._screen._duel.m.u16(0xa1340a)
-	_right_available = _has_right_action(point) and mask != 0 and (mask & (mask - 1)) != 0
+	var can_act := _has_right_action(point)
+	_right_available = can_act and mask != 0 and (mask & (mask - 1)) != 0
 	_actions.clear()
+	var scene: Node = Game._screen
+	# Con un único atacante legal, el primer toque ya elige Atacar.
+	if can_act and mask == ATTACK_ACTION_MASK and (scene._duel.m.u16(0xa133f2) & 15) == 6 \
+			and scene._visual._battle.state == 1 and scene._attackers_available() == 1:
+		_touch_card = ""
+		_selected_card = ""
 	if _right_available:
 		var d = Game._screen._duel
 		var ordered: Array[int] = []
@@ -310,9 +307,6 @@ func _choose(point: Vector2) -> void:
 
 func _execute_action(action: int, point: Vector2) -> void:
 	_selected_card = ""
-	if action in [1, 5]:
-		_confirm_scene = Game._screen
-		_confirm_until = Time.get_ticks_msec() + 5000
 	var generation := _generation
 	_dispatching = true
 	_move_mouse(point)
@@ -515,6 +509,8 @@ func _card_identity(point: Vector2) -> String:
 		var hit: Dictionary = scene._hit_card(at)
 		if not hit.is_empty():
 			if int(hit["loc"]) >= 12: return "pile"
+			if scene._visual._battle.state == 3 and hit["p"] == 1 and hit["loc"] == 0 and not hit["known"]:
+				return ""
 			return "duel:%s:%s:%s:%s" % [hit["p"], hit["loc"], hit["i"], hit["id"]]
 	return ""
 
@@ -549,6 +545,7 @@ func _target_selection(scene: Node) -> bool:
 
 func _update_tribute_hint() -> void:
 	_tribute_hint.hide()
+	_tribute_sprite.hide()
 	var scene: Node = Game._screen
 	if not is_instance_valid(scene) or not PlatformInput._normal_duel_active() or scene._duel == null: return
 	var d = scene._duel
@@ -558,12 +555,23 @@ func _update_tribute_hint() -> void:
 	# El aviso es para un monstruo de la mano local que requiere sacrificios.
 	if d.m.u8(0xa1340f) != (DuelMem.LOC_HAND << 1) or (d.m.u16(0xa133f2) & 1) != 0: return
 	var card_index: int = d.m.u16(0xa13404)
-	if card_index == 0 or d.f4457d0(card_index) <= 4: return
+	if card_index == 0: return
+	var level: int = d.f4457d0(card_index)
+	if level <= 4: return
 	var state: int = d.m.u8(0xa1340d)
 	if state not in [2, 3, 4, 5, 10, 11]: return
-	var hint_index := 0 if state in [10, 11] else (1 if state in [2, 3] else 2)
-	_tribute_hint.text = TRIBUTE_HINTS.get(Assets.lang, TRIBUTE_HINTS["e"])[hint_index]
+	# dlgs 3/4 piden el primer y segundo tributo. El 5 pide el único.
+	var message := 5 if state in [10, 11] else (3 if state in [2, 3] else 4)
+	_tribute_hint.text = scene._dialog_text({"msg": message}, false)
 	var bounds := get_viewport().get_visible_rect()
 	_tribute_hint.position = bounds.position + Vector2(4, 8)
 	_tribute_hint.size = Vector2(bounds.size.x - 8, 36)
-	_tribute_hint.show()
+	if level <= 6:
+		var texture := Assets.texture("%s/duel/help/help01_?.yga" % scene.game)
+		if texture != null:
+			_tribute_sprite.texture = texture
+			_tribute_sprite.position = _tribute_hint.position
+			_tribute_sprite.size = Vector2(_tribute_hint.size.x, texture.get_height())
+			_tribute_sprite.show()
+			_tribute_hint.position.y += _tribute_sprite.size.y
+	_tribute_hint.visible = not _tribute_hint.text.is_empty()

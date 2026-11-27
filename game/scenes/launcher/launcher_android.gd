@@ -43,6 +43,7 @@ var _screen := DESIGN                    # pantalla visible
 const Tips = preload("res://scenes/launcher/tooltip_texts.gd")
 var _language := OptionButton.new()
 var _resources := Button.new()
+var _continue_duel := preload("res://scenes/launcher/continue_duel.gd").new()
 var _resource_import: Node
 var _release_footer := preload("res://scenes/launcher/release_footer.gd").new()
 var _origin := Vector2.ZERO              # esquina de la composicion DESIGN centrada en ella
@@ -99,18 +100,21 @@ func _ready() -> void:
 		Assets.remember_language(["s", "e"][index])
 		_language.tooltip_text = Tips.text("language", Assets.lang)
 		_refresh_resources()
+		_continue_duel.refresh()
 		_release_footer.refresh()
 		queue_redraw())
 	_language.select(0 if Assets.lang == "s" else 1)
 	_language.tooltip_text = Tips.text("language", Assets.lang)
 	_language.add_theme_font_size_override("font_size", 16)
 	add_child(_language)
+	add_child(_continue_duel)
 	_layout()
 
 	Audio.stop_music()
 	_music.stream = MUSIC
 	_music.bus = Audio.LAUNCHER_MUSIC_BUS
 	_controls.changed.connect(_update_music_mute)
+	_controls.changed.connect(_continue_duel.refresh)
 	_update_music_mute()
 	_music.finished.connect(_start_music)
 	add_child(_music)
@@ -135,6 +139,8 @@ func _layout() -> void:
 	_language.size = Vector2(146, 38)
 	_resources.size = Vector2(275, 52)
 	_resources.position = Vector2((_screen.x - _resources.size.x) / 2.0, _origin.y + 471)
+	_continue_duel.size = Vector2(264, 58)
+	_continue_duel.position = Vector2((_screen.x - _continue_duel.size.x) / 2.0, _origin.y + 222)
 	queue_redraw()
 
 
@@ -180,7 +186,12 @@ func _available(index: int) -> bool:
 func _choose(index: int) -> void:
 	if _leaving or not _available(index):
 		return
+	_continue_duel.choose_game(_open_game.bind(index))
+
+
+func _open_game(index: int) -> void:
 	_leaving = true
+	_continue_duel.disabled = true
 	var cover := CanvasLayer.new()
 	cover.layer = 100
 	var black := ColorRect.new()

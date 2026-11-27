@@ -34,6 +34,11 @@ var _replay_seed := 0
 var _lan := false
 ## Cartel de espera del rival en red (Joey 456360).
 var _wait_label: DuelWaitLabel = null
+const Checkpoint := preload("res://scenes/duel/duel_checkpoint.gd")
+var checkpoint_enabled := false
+var checkpoint_to_resume := {}
+var _checkpoint_image := PackedByteArray()
+var _checkpoint_signature := []
 
 
 func _init(game_id: String, start_options := -1) -> void:
@@ -74,9 +79,59 @@ func _ready() -> void:
 	_log.visible = false
 	_duel = _create_duel()
 	if _duel == null:
+		if not checkpoint_to_resume.is_empty():
+			_show_resume_error()
+			return
 		_log.text = "Faltan los datos del motor de duelo."
 		_log.visible = true
 		return
+	if checkpoint_enabled:
+		_checkpoint_image = Checkpoint.image_id(_duel)
+	if checkpoint_to_resume.is_empty():
+		if not _start_duel():
+			return
+		if checkpoint_enabled:
+			var err := Checkpoint.save(self, true)
+			if err != OK:
+				push_warning("Duel checkpoint: " + error_string(err))
+	elif Checkpoint.restore_engine(_duel, checkpoint_to_resume, _checkpoint_image):
+		_replay_decks.assign(checkpoint_to_resume.decks)
+		_replay_options = checkpoint_to_resume.options
+		_replay_seed = checkpoint_to_resume.seed
+	else:
+		_duel = null
+		_show_resume_error()
+		return
+	_ph_p = _duel.options & 1
+	# Hoja con la que se comprueba el raton: pha_s_dr en Yugi, ph_b_dr (indice 0) en Kaiba.
+	var mask_tex := Assets.texture("kaiba/duel/phase/ph_b_dr.png" if game == "kaiba" else "%s/duel/phase/pha_s_dr.png" % game)
+	_phase_mask = mask_tex.get_image() if mask_tex != null else null
+	_duel.input_right_held_query = func() -> bool: return PlatformInput.mouse_pressed(MOUSE_BUTTON_RIGHT)
+	_setup_presentation(true)
+	if not checkpoint_to_resume.is_empty():
+		if not checkpoint_to_resume.initial:
+			Checkpoint.restore_board(self, checkpoint_to_resume)
+		checkpoint_to_resume = {}
+	_help = DuelHelp.new()
+	_help.setup(game)
+	add_child(_help)
+	Audio.play_music(preload("res://scenes/duel/duel_music.gd").path(game, Game.duel_mode, _shown_lp()))
+	_redraw()
+
+
+func _show_resume_error() -> void:
+	var dialog := AcceptDialog.new()
+	dialog.title = "Continuar" if Assets.lang == "s" else "Continue"
+	dialog.dialog_text = ("No se pudo cargar el duelo con los datos instalados." if Assets.lang == "s"
+			else "The duel could not be loaded with the installed game data.")
+	preload("res://scenes/launcher/dialog_theme.gd").apply(dialog)
+	add_child(dialog)
+	dialog.confirmed.connect(Game.open_launcher)
+	dialog.canceled.connect(Game.open_launcher)
+	dialog.popup_centered.call_deferred(Vector2i(480, 120))
+
+
+func _start_duel() -> bool:
 	# Deck.ydc y file/deck_y/k/j.txt convertidos por pocx; Joey no trae demos.ydr.
 	var decks: Array[Dictionary] = []
 	for name in ["starter_deck", "rival_deck"]:
@@ -85,7 +140,7 @@ func _ready() -> void:
 			push_error("Mazo original no encontrado: %s/file/%s.json" % [game, name])
 			_log.text = "Falta el mazo original de " + game + "."
 			_log.visible = true
-			return
+			return false
 		decks.append({"main": PackedInt32Array(original.get("main", [])), "side": PackedInt32Array(original.get("side", [])), "fusion": PackedInt32Array(original.get("fusion", []))})
 	# Mazo de Yugi elegido por 0x437c60 al entrar desde el menu (cpu*.ydc convertido a json).
 	var rival: Variant = Assets.read_json(Game.rival_deck) if Game.rival_deck != "" and Paths.cmdline_value("scenario") == "" else null
@@ -103,7 +158,7 @@ func _ready() -> void:
 		_log.text = "No se pudieron preparar los dos mazos del duelo."
 		_log.visible = true
 		set_process(false)
-		return
+		return false
 	# Herramienta de desarrollo: --scenario=<nombre> prepara mano y campo (ver DuelScenario).
 	var scenario: DuelScenario = null
 	var scenario_name := Paths.cmdline_value("scenario")
@@ -146,17 +201,33 @@ func _ready() -> void:
 	if scenario != null:
 		for warning in scenario.apply(_duel):
 			printerr("Escenario: ", warning)
-	_ph_p = _duel.options & 1
-	# Hoja con la que se comprueba el raton: pha_s_dr en Yugi, ph_b_dr (indice 0) en Kaiba.
-	var mask_tex := Assets.texture("kaiba/duel/phase/ph_b_dr.png" if game == "kaiba" else "%s/duel/phase/pha_s_dr.png" % game)
-	_phase_mask = mask_tex.get_image() if mask_tex != null else null
-	_duel.input_right_held_query = func() -> bool: return PlatformInput.mouse_pressed(MOUSE_BUTTON_RIGHT)
-	_setup_presentation(true)
-	_help = DuelHelp.new()
-	_help.setup(game)
-	add_child(_help)
-	Audio.play_music(preload("res://scenes/duel/duel_music.gd").path(game, Game.duel_mode, _shown_lp()))
-	_redraw()
+	return true
+
+
+func _notification(what: int) -> void:
+	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_WM_CLOSE_REQUEST]:
+		_save_checkpoint(true)
+
+
+func _save_checkpoint(force := false) -> void:
+	if not checkpoint_enabled or _finished or _visual == null or Game._screen != self:
+		return
+	if not _waiting_for_player() or not _duel.list_open.is_empty() or not _duel.dialog_open.is_empty() \
+			or not _duel.ui_pending.is_empty() or _duel.animation_request_pending() \
+			or not _visual.active.is_empty() or not _visual.pending.is_empty() \
+			or _visual.card_objects_busy(true):
+		return
+	var lp := _shown_lp()
+	if 0 in lp:
+		return
+	var signature := [_duel.executed, _duel.m.u16(0xa133f0), _duel.m.u16(0xa133f2), _ph_phase, lp]
+	if force or signature != _checkpoint_signature:
+		var err := Checkpoint.save(self)
+		if err == OK:
+			_checkpoint_signature = signature
+		else:
+			push_warning("Duel checkpoint: " + error_string(err))
+			_checkpoint_signature = signature
 
 func _process(_delta: float) -> void:
 	if _duel == null:
@@ -201,6 +272,7 @@ func _process(_delta: float) -> void:
 			_start_banner_ack = false
 			_press_bits = 0
 		return
+	_save_checkpoint()
 	if _finished:
 		# 53eda0 sin sesion (bit 4 de a133f2): el rival se fue; vuelta al titulo (escena 4).
 		if _lan and (_duel.m.u8(0xa133f2) & 0x10) != 0 and _duel.winner() == 0:
@@ -275,6 +347,7 @@ func _process(_delta: float) -> void:
 		return
 	if before != _duel.executed:
 		_redraw()
+	_save_checkpoint()
 
 
 ## 540af0/4600f0: un paso del objeto global por tick; el motor consulta el destino.
@@ -307,6 +380,10 @@ func make_replay() -> Ydr:
 func _start_result() -> void:
 	if _result != null or not _duel.unported_calls.is_empty() or _duel.winner() == 0:
 		return
+	if checkpoint_enabled:
+		var err := Checkpoint.Store.clear(Paths.save_dir)
+		if err != OK:
+			push_warning("Duel checkpoint: " + error_string(err))
 	var winner := _duel.winner()
 	# 0x53d9d0 -> 0x437440: resultado del duelo y, en match, el global.
 	Game.record_duel_result(winner)
@@ -342,6 +419,14 @@ func _help_pos(h: Dictionary) -> Vector2:
 ## El turno del humano espera su entrada: fase principal o de batalla sin comandos en curso.
 func _waiting_for_player() -> bool:
 	return (_duel.m.u16(0xa133f2) & 1) == 0 and not _duel.is_running() 			and _duel.m.u16(DuelMem.QUEUE_COUNT) == 0 and _duel.m.u8(0xa16180) >= 2 			and _duel.m.u8(0xa16180) < 8
+
+func _attackers_available() -> int:
+	var available := 0
+	var help := _duel.help_index
+	for zone in 5:
+		available += int(_duel.f571810(0, zone, 1) != 0)
+	_duel.help_index = help
+	return available
 
 
 ## Objeto bajo el cursor tal como lo ve el original: jugador, ubicacion, posicion y la carta
@@ -455,8 +540,8 @@ func _show_dialog() -> void:
 ## Texto del cuadro con las sustituciones del motor (DuelBase._dialog_subs): el nombre de una
 ## carta o el texto de otro mensaje en el primer "%s" (0x53fac0), un numero en el primer "%d"
 ## (0x53fb40) y "<BR>" + otro mensaje al final (0x53f9f0).
-func _dialog_text(d: Dictionary) -> String:
-	return preload("res://scenes/duel/duel_dialog_text.gd").format(_dialogs, d, true)
+func _dialog_text(d: Dictionary, keep_marks := true) -> String:
+	return preload("res://scenes/duel/duel_dialog_text.gd").format(_dialogs, d, keep_marks)
 
 
 func _answer_dialog(value: int) -> void:

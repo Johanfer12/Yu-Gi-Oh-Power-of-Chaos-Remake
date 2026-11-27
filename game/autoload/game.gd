@@ -21,7 +21,6 @@ var _window_shortcuts := WindowShortcuts.new()
 var _mobile_pointer: CanvasLayer
 
 const DUEL_VIEWER_PATH := "res://scenes/duel/replay_viewer.gd"
-
 const NORMAL_DUEL_PATH := "res://scenes/duel/normal_duel.gd"
 const JOEY_NORMAL_DUEL_PATH := "res://scenes/duel/joey_native_normal.gd"
 var _duel_script_requests := {}
@@ -313,7 +312,24 @@ func open_joey_demo() -> void:
 	open_normal_duel("joey", 1)
 
 
-func open_normal_duel(game: String, start_options := -1) -> void:
+func open_normal_duel(game: String, start_options := -1, checkpoint := false) -> void:
+	_show_normal_duel(game, start_options, checkpoint, {})
+
+
+func resume_duel(saved: Dictionary) -> void:
+	var game: String = saved.game
+	if not Paths.has_game(game):
+		return
+	duel_mode = saved.match[0]
+	match_duel = saved.match[1]
+	match_results = saved.match[2]
+	match_outcome = saved.match[3]
+	rival_deck = saved.match[4]
+	joey_demo = false
+	_show_normal_duel(game, saved.options, true, saved)
+
+
+func _show_normal_duel(game: String, start_options: int, checkpoint: bool, saved: Dictionary) -> void:
 	var path := JOEY_NORMAL_DUEL_PATH if game == "joey" else NORMAL_DUEL_PATH
 	var script: GDScript
 	var thread: Thread = _duel_script_requests.get(path)
@@ -328,10 +344,15 @@ func open_normal_duel(game: String, start_options := -1) -> void:
 	if script == null:
 		script = load(path)
 	current_game = game
+	var scene: Node
 	if game == "joey":
-		goto(script.new(start_options))
+		scene = script.new(start_options)
 	else:
-		goto(script.new(game, start_options))
+		scene = script.new(game, start_options)
+	scene.checkpoint_enabled = checkpoint and duel_mode in [0, 1] and not joey_demo \
+			and Paths.cmdline_value("scenario") == "" and Paths.cmdline_value("ui-replay") == ""
+	scene.checkpoint_to_resume = saved
+	goto(scene)
 
 
 func _prepare_normal_duel_script(game: String) -> void:
@@ -376,7 +397,7 @@ func open_janken(game: String) -> void:
 	# Joey 44b980: el janken va por red en el modo 3 (duelo LAN).
 	scene.lan = duel_mode == 3 and Lan.active()
 	scene.lost.connect(func() -> void: lan_lost(game), CONNECT_ONE_SHOT)
-	scene.finished.connect(func(options: int) -> void: open_normal_duel(game, options), CONNECT_ONE_SHOT)
+	scene.finished.connect(func(options: int) -> void: open_normal_duel(game, options, true), CONNECT_ONE_SHOT)
 	_prepare_normal_duel_script(game)
 	goto(scene)
 
