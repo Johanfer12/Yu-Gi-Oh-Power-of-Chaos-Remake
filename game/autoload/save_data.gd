@@ -421,6 +421,21 @@ func set_deck(game: String, deck_data: Dictionary) -> void:
 	data["decks"][game] = deck_data
 
 
+func deck_for_edit(game: String) -> Dictionary:
+	var active := deck(game)
+	return data.get("deck_drafts", {}).get(game, active)
+
+
+func set_edited_deck(game: String, deck_data: Dictionary, playable: bool) -> void:
+	var drafts: Dictionary = data.get_or_add("deck_drafts", {})
+	if playable:
+		set_deck(game, deck_data)
+		drafts.erase(game)
+		if drafts.is_empty(): data.erase("deck_drafts")
+	else:
+		drafts[game] = deck_data
+
+
 func _new_game(initial_game := "") -> Dictionary:
 	var fresh := {"version": VERSION, "collection": {}, "decks": {}, "stats": {}, "seen": {}}
 	for game in GAMES:

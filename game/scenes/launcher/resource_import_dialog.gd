@@ -4,8 +4,11 @@ signal voice_requested(game: String)
 
 const DialogTheme = preload("res://scenes/launcher/dialog_theme.gd")
 const Store = preload("res://core/save_store.gd")
-const REVIEW_SIZE := Vector2i(610, 370)
-const FORMATS := {"voice": "Voice.dat", "ydc": ".ydc", "ydr": ".ydr", "save": "system.dat / system.json"}
+const REVIEW_SIZE := Vector2i(610, 430)
+const FORMATS := {"voice": "Voice.dat", "ydc": ".ydc", "ydr": ".ydr", "save": "system.dat / system.json",
+	"background": "PNG / JPEG / WebP", "default_background": ""}
+const MAX_IMAGE_BYTES := 32 * 1024 * 1024
+const MAX_BACKGROUND_EDGE := 4096
 const LANGUAGES := ["s", "e", "g", "f", "i", "j"]
 const LABELS := {
 	"resources": ["Importar más recursos", "Import more resources", "Weitere Ressourcen importieren", "Importer plus de ressources", "Importa altre risorse", "リソースを追加でインポート"],
@@ -17,6 +20,11 @@ const LABELS := {
 	"ydc": ["Importar mazo", "Import deck", "Deck importieren", "Importer un deck", "Importa mazzo", "デッキをインポート"],
 	"ydr": ["Importar repetición", "Import replay", "Wiederholung importieren", "Importer une rediffusion", "Importa replay", "リプレイをインポート"],
 	"save": ["Importar partida", "Import save data", "Spielstand importieren", "Importer une sauvegarde", "Importa salvataggio", "セーブデータをインポート"],
+	"background": ["Importar fondo de duelo", "Import duel background", "Duellhintergrund importieren", "Importer un fond de duel", "Importa sfondo del duello", "デュエル背景をインポート"],
+	"default_background": ["Restaurar fondo original", "Restore default background", "Standardhintergrund laden", "Rétablir le fond par défaut", "Ripristina sfondo predefinito", "既定の背景に戻す"],
+	"background_name": ["el fondo personalizado", "the custom background", "den eigenen Hintergrund", "le fond personnalisé", "lo sfondo personalizzato", "カスタム背景"],
+	"background_applied": ["Fondo aplicado alrededor del tablero en modo Overlay.", "Background applied around the board in Overlay mode.", "Hintergrund im Overlay-Modus um das Spielfeld angewendet.", "Fond appliqué autour du plateau en mode Overlay.", "Sfondo applicato intorno al campo in modalità Overlay.", "オーバーレイモードで盤面の周囲に背景が適用されます。"],
+	"background_restored": ["Fondo original restaurado.", "Default background restored.", "Standardhintergrund wiederhergestellt.", "Fond d’origine rétabli.", "Sfondo predefinito ripristinato.", "既定の背景に戻しました。"],
 	"choose_replay": ["Elige el juego de esta repetición y vuelve a seleccionar el archivo.", "Choose this replay's game and select the file again.", "Wähle das Spiel und anschließend erneut die Datei.", "Sélectionne le jeu de la rediffusion, puis le fichier.", "Scegli il gioco del replay e seleziona di nuovo il file.", "リプレイのゲームを選んでから、もう一度ファイルを選択してください。"],
 	"replace": ["¿Reemplazar %s?", "Replace %s?", "%s ersetzen?", "Remplacer %s ?", "Sostituire %s?", "%s を置き換えますか？"],
 	"replace_save": ["Se reemplazarán la colección, los mazos activos y el progreso. Se guardará una copia de la partida anterior.", "The collection, active decks and progress will be replaced. A backup of your current save will be kept.", "Sammlung, aktive Decks und Fortschritt werden ersetzt. Der aktuelle Spielstand wird gesichert.", "La collection, les decks actifs et la progression seront remplacés. La sauvegarde actuelle sera conservée.", "La collezione, i mazzi attivi e i progressi verranno sostituiti. Il salvataggio attuale verrà conservato.", "コレクション、使用中のデッキ、進行状況を置き換えます。現在のデータはバックアップされます。"],
@@ -131,8 +139,9 @@ func _ready() -> void:
 	_voice = _buttons["voice"]
 	_voice.visible = not Paths.android_platform()
 	_voice.pressed.connect(_choose_voice)
-	for kind in ["ydc", "ydr", "save"]:
+	for kind in ["ydc", "ydr", "save", "background"]:
 		_buttons[kind].pressed.connect(_choose.bind(kind))
+	_buttons["default_background"].pressed.connect(_restore_background)
 	if Paths.android_platform():
 		_game.hide()
 		_box.add_child(_game_hint)
@@ -205,6 +214,7 @@ func _make_action(kind: String) -> Button:
 	_action_titles[kind] = title
 	var format := Label.new()
 	format.text = FORMATS[kind]
+	format.visible = not format.text.is_empty()
 	format.add_theme_font_size_override("font_size", 13)
 	format.add_theme_color_override("font_color", Color(DialogTheme.GOLD_LIGHT, 0.70))
 	labels.add_child(format)
@@ -237,7 +247,7 @@ func open(voice_games: Array[String]) -> void:
 		_action_titles[kind].text = title
 		_buttons[kind].accessibility_name = title
 		_buttons[kind].accessibility_description = FORMATS[kind]
-		_buttons[kind].disabled = Paths.storage_error or not Paths.has_data()
+		_buttons[kind].disabled = Paths.storage_error or (kind not in ["background", "default_background"] and not Paths.has_data())
 		_buttons[kind].modulate.a = 0.48 if _buttons[kind].disabled else 1.0
 	_update_voice()
 	_status.text = ""
@@ -262,10 +272,13 @@ func _choose(kind: String) -> void:
 	_selected_kind = kind
 	picker.title = text(kind)
 	picker.filters = PackedStringArray(["*.dat, *.json ; system.dat / system.json"] if kind == "save" else ["*.%s ; %s" % [kind, kind.to_upper()]])
+	if kind == "background":
+		picker.clear_filters()
+		picker.add_filter("*.png,*.jpg,*.jpeg,*.webp", FORMATS[kind], "image/png,image/jpeg,image/webp")
 	review.hide()
 	if OS.has_feature("android"):
 		# Binary save/deck formats can be reported as different MIME types by document providers.
-		picker.filters = PackedStringArray()
+		if kind != "background": picker.clear_filters()
 		picker.popup_file_dialog.call_deferred()
 	else:
 		picker.popup_centered_ratio.call_deferred(0.8)
@@ -276,6 +289,9 @@ func _return_to_review() -> void:
 
 
 func _show_review() -> void:
+	var restore: Button = _buttons["default_background"]
+	restore.disabled = Paths.storage_error or not FileAccess.file_exists(Paths.duel_background_path())
+	restore.modulate.a = 0.48 if restore.disabled else 1.0
 	_status.visible = not _status.text.is_empty()
 	var dialog_size := REVIEW_SIZE
 	if _status.visible:
@@ -309,6 +325,7 @@ func _selected(path: String) -> void:
 
 
 func _destination_label(plan: Dictionary) -> String:
+	if plan.kind == "background": return text("background_name")
 	return plan.target.get_file() if not plan.has("game") else "%s · %s" % [Game.TITLES[plan.game], plan.target.get_file()]
 
 
@@ -333,6 +350,10 @@ func _prepare(kind: String, path: String, selected_game: String, name := "") -> 
 	var filename := name.get_basename()
 	var extension := name.get_extension().to_lower()
 	match kind:
+		"background":
+			plan["raw"] = _background_bytes(path)
+			if plan.raw.is_empty(): return {}
+			target = Paths.duel_background_path()
 		"ydc":
 			if extension != "ydc": return {}
 			var deck := Ydc.load(path)
@@ -395,7 +416,42 @@ func _commit() -> void:
 	if not Paths.storage_error:
 		imported = _replace_save(plan) if plan.kind == "save" else _write_file(plan)
 	_status.text = text("done") % _destination_label(plan) if imported else text("invalid") % target.get_file()
+	if imported and plan.kind == "background":
+		LauncherSettings.aspect = "overlay"
+		LauncherSettings.save_preferences()
+		_status.text = text("background_applied")
 	_return_to_review()
+
+
+func _restore_background() -> void:
+	var target := Paths.duel_background_path()
+	var restored := not Paths.storage_error and DirAccess.remove_absolute(target) == OK
+	_status.text = text("background_restored") if restored else text("invalid") % target.get_file()
+	_show_review()
+
+
+func _background_bytes(path: String) -> PackedByteArray:
+	# Decode from bytes so Android providers can return extensionless content URIs.
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null: return PackedByteArray()
+	var bytes := file.get_buffer(mini(file.get_length(), MAX_IMAGE_BYTES + 1))
+	file.close()
+	if bytes.size() < 12 or bytes.size() > MAX_IMAGE_BYTES: return PackedByteArray()
+	var image := Image.new()
+	var error := ERR_FILE_UNRECOGNIZED
+	if bytes[0] == 0x89 and bytes.slice(1, 4).get_string_from_ascii() == "PNG":
+		error = image.load_png_from_buffer(bytes)
+	elif bytes[0] == 0xff and bytes[1] == 0xd8:
+		error = image.load_jpg_from_buffer(bytes)
+	elif bytes.slice(0, 4).get_string_from_ascii() == "RIFF" and bytes.slice(8, 12).get_string_from_ascii() == "WEBP":
+		error = image.load_webp_from_buffer(bytes)
+	if error != OK or image.is_empty(): return PackedByteArray()
+	var size := image.get_size()
+	var edge := maxi(size.x, size.y)
+	if edge > MAX_BACKGROUND_EDGE:
+		var fitted := Vector2i((Vector2(size) * MAX_BACKGROUND_EDGE / edge).round())
+		image.resize(maxi(1, fitted.x), maxi(1, fitted.y), Image.INTERPOLATE_LANCZOS)
+	return image.save_webp_to_buffer()
 
 
 func _replace_save(plan: Dictionary) -> bool:

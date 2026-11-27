@@ -42,7 +42,7 @@ var _joey_reward_ready := false
 var _joey_retry := false
 var _joey_wait := 0
 var _joey_counter := 0
-var _joey_saved := false
+var _pending_record_flags := -1
 var _joey_keys := 0
 var _joey_pressed := false
 var _joey_released := false
@@ -60,14 +60,14 @@ func setup(game_id: String, winner: int, duel_flags: int = 0, surrendered := fal
 	_surrendered = surrendered
 	z_index = 70
 	_lang = Assets.lang if Assets.exists("%s/duel/get/you_get_%s1.png" % [game, Assets.lang]) else "e"
-	_record(duel_flags)
+	_pending_record_flags = duel_flags
 	_state = 2
 	_match = Game.duel_mode == 1
 	_owns_banner = winner == 1 or _match
 	_outcome = Game.match_outcome if Game.duel_mode in [0, 1, 3] else winner
-	if _outcome == 1 and game != "joey":
-		_cards = _choose_cards(3 if _match else 1)   # 0x434ba0 en match
-		_save_cards()
+	if _offers_cards():
+		if game != "joey":
+			_cards = _choose_cards(3 if _match else 1)   # 0x434ba0 en match
 	else:
 		_save_progress()
 	# 435410 estado1, DAT_a114b4 bit8. Joey 447000 estado1: tras rendirse (a54e5c & 0x40)
@@ -138,6 +138,9 @@ func _save_cards() -> void:
 
 
 func _save_progress() -> void:
+	if _pending_record_flags >= 0:
+		_record(_pending_record_flags)
+		_pending_record_flags = -1
 	if SaveData.save():
 		CloudSync.sync_now(false)
 
@@ -346,6 +349,7 @@ func _step() -> void:
 				_sparks = _sparks.filter(func(s): return s["f"] < 0x100)
 				_spawn_sparks()
 				if _t >= (_cards.size() + 4) * 0x100 and _clicked:
+					_save_cards()
 					_state = 7
 		7:
 			for label in _names:
@@ -401,10 +405,9 @@ func _joey_focus(index: int) -> void:
 		get_viewport().warp_mouse(get_global_transform_with_canvas() * _joey_pointer)
 
 func _joey_accept() -> void:
-	if not _joey_saved:
+	if _state == 6:
 		SaveData.set_native_option_byte(0x10ed, _joey_counter)
 		_save_cards()
-		_joey_saved = true
 	_state = 7
 
 func _joey_reward_step() -> void:

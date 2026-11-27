@@ -93,6 +93,10 @@ func settings_path() -> String:
 	return storage_dir.path_join("content.cfg")
 
 
+func duel_background_path() -> String:
+	return storage_dir.path_join("duel-background.webp")
+
+
 func resources_path() -> String:
 	return storage_dir.path_join("resources")
 

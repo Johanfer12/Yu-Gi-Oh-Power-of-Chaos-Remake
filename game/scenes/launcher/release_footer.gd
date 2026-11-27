@@ -141,9 +141,11 @@ func _show_release() -> void:
 		else "Android will ask you to confirm installation.") if Paths.android_platform() else (
 		"El juego se reiniciará al instalar la actualización." if _spanish()
 		else "The game will restart to install the update.")
-	var notes: String = Updates.release_notes
-	_fill_notes(notes if not notes.is_empty() else ("GitHub no publicó notas para esta versión." if _spanish()
-		else "GitHub did not publish notes for this release."))
+	var empty_notes := "GitHub no publicó notas para esta versión." if _spanish() else "GitHub did not publish notes for this release."
+	var sections := PackedStringArray()
+	for release: Dictionary in Updates.release_history:
+		sections.append("## %s\n%s" % [release.tag, release.notes if not release.notes.is_empty() else empty_notes])
+	_fill_notes("\n\n".join(sections) if not sections.is_empty() else empty_notes)
 	_review.show()
 	_dialog.popup_centered_clamped(Vector2i(680, 460), 0.80)
 	_scroll.scroll_vertical = 0

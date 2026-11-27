@@ -23,6 +23,7 @@ func setup(game: String) -> void:
 	_game = game
 	_shown = -1
 	z_index = 60
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 
 
 ## Un fotograma del motor. `hover`: {p, loc, i, pos} de la carta bajo el cursor (vacio si no

@@ -7,6 +7,11 @@ esquina superior; el selector redundante del panel se ha retirado.
 - **Aspecto:** Estirado ocupa la ventana completa; Original sin fondo conserva 4:3
   con bandas negras; Overlay conserva 4:3 y las ilustraciones exteriores actuales
   de cada duelo. Los menús conservan su composición original en el modo Overlay.
+- **Fondo personalizado:** en **Importar más recursos**, elige **Importar fondo de
+  duelo** y selecciona un PNG, JPEG o WebP. Se activa Overlay y se usa la misma
+  imagen alrededor del tablero en los tres juegos. La imagen se escala con recorte
+  centrado y conserva sus proporciones. La copia queda en el dispositivo. Usa
+  **Restaurar fondo original** para recuperar las ilustraciones de cada juego.
 - **FPS:** 30, 60 o Display. Display consulta el monitor actual, usa sincronización
   vertical y actualiza el límite al cambiar de monitor; si no informa frecuencia,
   utiliza 60. Los límites 30/60 desactivan VSync para respetar la selección.

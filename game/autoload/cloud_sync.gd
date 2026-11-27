@@ -518,6 +518,10 @@ func _upload() -> String:
 	var content := FileAccess.get_file_as_bytes(SaveData.path())
 	if content.is_empty():
 		return "No se pudo leer la partida local. / Could not read the local save."
+	var digest := HashingContext.new()
+	digest.start(HashingContext.HASH_MD5)
+	digest.update(content)
+	var uploaded_md5 := digest.finish().hex_encode()
 	var properties := {"device": device_name(), "platform": OS.get_name()}
 	var response: Dictionary
 	if _sync.get("file_id", "") != "":
@@ -537,7 +541,8 @@ func _upload() -> String:
 		return _error_text(response, meta)
 	_sync["file_id"] = str(meta.id)
 	_remote = meta
-	_record(FileAccess.get_md5(SaveData.path()), str(meta.md5Checksum))
+	# Otro guardado puede reemplazar el archivo mientras Drive recibe estos bytes.
+	_record(uploaded_md5, str(meta.md5Checksum))
 	return ""
 
 

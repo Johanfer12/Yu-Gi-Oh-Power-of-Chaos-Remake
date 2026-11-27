@@ -917,7 +917,12 @@ func _redraw() -> void:
 		var deck_height := DuelCardTable.ClassicPile.visible_count(deck)
 		if deck_height > 0:
 			_pile_top_card(p, DuelMem.LOC_DECK, deck, _pile_position(p, DuelMem.LOC_DECK, deck_height))
-			_count(DuelGeometry.DECK[p], int(deck["count"]))
+			# El brillo giratorio del cementerio rival alcanza los dígitos del mazo.
+			var counter_layer := 0
+			if _visual != null and _visual.active.get("mode") == "card_effect" \
+					and _visual.active.get("loc") == DuelMem.LOC_GRAVE and _visual.active.get("p") == p:
+				counter_layer = _visual.z_index + 1
+			_count(DuelGeometry.DECK[p], int(deck["count"]), false, counter_layer)
 		var grave: Dictionary = table.piles[p][DuelMem.LOC_GRAVE]
 		if int(grave["count"]) > 0:
 			var grave_top := _pile_position(p, DuelMem.LOC_GRAVE, int(grave["count"]))
@@ -1012,7 +1017,7 @@ func _pile_position(p: int, loc: int, count: int) -> Vector2:
 	if game == "joey": return JoeyPile.draw(_board, textures, p, loc, count)
 	return preload("res://scenes/duel/classic_pile.gd").draw(_board, textures, p, loc, count)
 
-func _count(center: Vector2, n: int, centered := false) -> void:
+func _count(center: Vector2, n: int, centered := false, layer := 0) -> void:
 	var font := Assets.texture("%s/duel/font/duel_fonts.png" % game)
 	if font == null:
 		return
@@ -1027,6 +1032,7 @@ func _count(center: Vector2, n: int, centered := false) -> void:
 		x -= 7
 		var s := Sprite2D.new()
 		s.texture = font
+		s.z_index = layer
 		s.centered = false
 		s.region_enabled = true
 		s.region_rect = Rect2((v % 10) * glyph, 0, glyph, font.get_height())

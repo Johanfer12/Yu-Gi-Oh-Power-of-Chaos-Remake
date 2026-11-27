@@ -12,6 +12,7 @@ var version_code := 0
 var certificate := ""
 var available := ""
 var release_notes := ""
+var release_history: Array[Dictionary] = []
 var state := "idle"
 var detail := ""
 var _http := HTTPRequest.new()
@@ -59,6 +60,7 @@ func check() -> void:
 	if state in ["checking", "validating"]: return
 	available = ""
 	release_notes = ""
+	release_history.clear()
 	_state("checking")
 	_request(API, "releases")
 
@@ -95,10 +97,11 @@ func select_release(releases: Array, request_metadata := true) -> void:
 	release_notes = ""
 	_asset_url = ""
 	_metadata_url = ""
+	var history: Array[Dictionary] = []
 	for release: Variant in releases:
 		if not release is Dictionary or release.get("draft", false): continue
 		var tag := str(release.get("tag_name", ""))
-		if not newer(tag, current) or (available != "" and not newer(tag, available)): continue
+		if version_parts(tag).is_empty(): continue
 		if release.get("prerelease", false) and not "-" in current: continue
 		var apk := ""
 		var metadata := ""
@@ -111,11 +114,16 @@ func select_release(releases: Array, request_metadata := true) -> void:
 			if asset.get("name") == APK: apk = url
 			elif asset.get("name") == "ANDROID_RELEASE.json": metadata = url
 		if apk != "" and metadata != "":
-			available = tag
 			var body: Variant = release.get("body")
-			release_notes = body.strip_edges() if body is String else ""
+			var notes: String = body.strip_edges() if body is String else ""
+			history.append({"tag": tag, "notes": notes})
+			if not newer(tag, current) or (available != "" and not newer(tag, available)): continue
+			available = tag
+			release_notes = notes
 			_asset_url = apk
 			_metadata_url = metadata
+	history.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return newer(a.tag, b.tag))
+	release_history = history.slice(0, 3)
 	if available.is_empty():
 		_state("current")
 	else:

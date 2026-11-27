@@ -9,6 +9,7 @@ const HELPER = preload("res://core/update_helper.gd")
 var current := "v" + str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
 var available := ""
 var release_notes := ""
+var release_history: Array[Dictionary] = []
 var state := "idle"
 var detail := ""
 var _http := HTTPRequest.new()
@@ -48,6 +49,7 @@ func check() -> void:
 		return
 	available = ""
 	release_notes = ""
+	release_history.clear()
 	_state("checking")
 	_request(API, "releases")
 
@@ -94,11 +96,12 @@ func select_release(releases: Array) -> void:
 	release_notes = ""
 	_asset_url = ""
 	_checksum_url = ""
+	var history: Array[Dictionary] = []
 	for release: Variant in releases:
 		if not release is Dictionary or release.get("draft", false):
 			continue
 		var tag := str(release.get("tag_name", ""))
-		if not newer(tag, current) or (available != "" and not newer(tag, available)):
+		if version_parts(tag).is_empty():
 			continue
 		# Alpha installations follow previews; stable installations stay on stable releases.
 		if release.get("prerelease", false) and not "-" in current:
@@ -119,11 +122,17 @@ func select_release(releases: Array) -> void:
 			elif asset.get("name") == "PowerOfChaos.exe.sha256":
 				checksum = url
 		if exe != "" and checksum != "":
-			available = tag
 			var body: Variant = release.get("body")
-			release_notes = body.strip_edges() if body is String else ""
+			var notes: String = body.strip_edges() if body is String else ""
+			history.append({"tag": tag, "notes": notes})
+			if not newer(tag, current) or (available != "" and not newer(tag, available)):
+				continue
+			available = tag
+			release_notes = notes
 			_asset_url = exe
 			_checksum_url = checksum
+	history.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return newer(a.tag, b.tag))
+	release_history = history.slice(0, 3)
 	_state("available" if available != "" else "current")
 
 

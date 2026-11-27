@@ -11,13 +11,15 @@ static func valid(value: Variant) -> bool:
 	for key in ["collection", "decks", "stats"]:
 		if not value.get(key) is Dictionary:
 			return false
-	for game in value["decks"]:
-		var deck: Variant = value["decks"][game]
-		if not deck is Dictionary:
+	for decks in [value["decks"], value.get("deck_drafts", {})]:
+		if not decks is Dictionary:
 			return false
-		for zone in ["main", "fusion", "side"]:
-			if not deck.get(zone) is Array:
+		for deck in decks.values():
+			if not deck is Dictionary:
 				return false
+			for zone in ["main", "fusion", "side"]:
+				if not deck.get(zone) is Array:
+					return false
 	for row in value["stats"].values():
 		if not row is Dictionary:
 			return false

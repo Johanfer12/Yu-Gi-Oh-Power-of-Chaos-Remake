@@ -202,6 +202,8 @@ func _refresh() -> void:
 	var index := resource_index(action, pressed)
 	var path: String = "common/cursor/" + resource(index)
 	_sprite.texture = Assets.texture(path) if Assets.exists(path) else null
+	# Los iconos de acción llevan el texto en el sprite original.
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if index >= 3 else CanvasItem.TEXTURE_FILTER_NEAREST
 	var shown: Vector2 = _blend.at("pointer", pointer_position)
 	_sprite.position = (shown if _tick_driven else pointer_position) - hotspot(index)
 

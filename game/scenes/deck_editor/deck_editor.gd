@@ -331,7 +331,7 @@ func _ready() -> void:
 # --- datos ---------------------------------------------------------------------------------
 
 func _load_deck() -> void:
-	var saved := SaveData.deck(game)
+	var saved := SaveData.deck(game) if _swap else SaveData.deck_for_edit(game)
 	for zone in ["main", "side", "fusion"]:
 		var ids: Array = []
 		for id in saved.get(zone, []):
@@ -340,7 +340,7 @@ func _load_deck() -> void:
 		_deck_criteria[zone] = "default"
 	if not _swap:
 		# 458610 ->436e80: Deck.ydc activo tambien figura en el catalogo publico.
-		Ydc.save(_decks_dir().path_join("Deck.ydc"), _deck, SaveData.deck_file_header())
+		Ydc.save(_decks_dir().path_join("Deck.ydc"), SaveData.deck(game), SaveData.deck_file_header())
 	_sort_deck()
 
 
@@ -1331,23 +1331,35 @@ func _deck_valid(deck: Dictionary) -> bool:
 	return main >= MAIN_MIN and main <= MAIN_MAX and deck["side"].size() <= SIDE_MAX
 
 
+func _persist_edit(deck: Dictionary) -> void:
+	# El intercambio del match sólo es válido al confirmar el balance completo.
+	if _swap:
+		return
+	SaveData.set_edited_deck(game, deck.duplicate(true), _deck_valid(deck))
+	_dirty = not SaveData.save()
+	if not _dirty:
+		CloudSync.sync_now(false)
+
+
 func _leave() -> void:
 	if _swap:
 		if not _swap_valid():
 			_message("swapdeckerror", "dlg_text_ok")
 			return
 		SaveData.set_deck(game, _deck.duplicate(true))
-		SaveData.save()
+		if SaveData.save():
+			CloudSync.sync_now(false)
 		Audio.play_sfx("%s/voice/internal/decide.wav" % game)   # 0x10000001
 		Game.after_swap(game)
 		return
 	if not _deck_valid(_deck):
 		_message("deckerror", "dlg_ok_ok_derr")
 		return
-	if _dirty:
-		SaveData.set_deck(game, _deck.duplicate(true))
 	_save_settings()
-	SaveData.save()
+	if _dirty:
+		_persist_edit(_deck)
+	else:
+		SaveData.save()
 	Audio.play_sfx("%s/voice/internal/return.wav" % game)
 	Game.open_title(game, "deck")
 
@@ -1477,7 +1489,7 @@ func _drop(dest: int, by_mouse: bool, shift: bool) -> void:
 	_relayout()
 	if not shift:
 		_held = 0
-	_dirty = true
+	_persist_edit(_deck)
 	if _swap:
 		_swap_transition.set_balance(_swap_balance())
 	Audio.play_sfx("%s/voice/internal/card_move.wav" % game)
@@ -1569,7 +1581,7 @@ func _undo_step(redo: bool) -> void:
 			start = _pos.get(key, start)
 		_move_one(key, from, to, start, true)
 	_relayout()
-	_dirty = true
+	_persist_edit(_deck)
 	if _swap:
 		_swap_transition.set_balance(_swap_balance())
 
@@ -1784,7 +1796,7 @@ func _accept_import(deck: Dictionary) -> void:
 	_marks.clear()
 	_undo.clear()
 	_undo_at = 0
-	_dirty = true
+	_persist_edit(deck)
 	_deck_cursor = {"zone": "main", "index": 0}
 	Audio.play_sfx("%s/voice/internal/decide.wav" % game)
 

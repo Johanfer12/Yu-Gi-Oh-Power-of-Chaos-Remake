@@ -19,9 +19,16 @@ func _init(duel: Node) -> void:
 func _ready() -> void:
 	_window = get_tree().root
 	_window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
-	var path: String = BACKGROUNDS.get(_duel.game, "")
-	if path != "" and ResourceLoader.exists(path):
-		_background.texture = load(path)
+	var custom := Paths.duel_background_path()
+	if FileAccess.file_exists(custom):
+		var image := Image.load_from_file(custom)
+		if image != null and not image.is_empty():
+			_background.texture = ImageTexture.create_from_image(image)
+			_background.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	if _background.texture == null:
+		var path: String = BACKGROUNDS.get(_duel.game, "")
+		if path != "" and ResourceLoader.exists(path):
+			_background.texture = load(path)
 	_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE

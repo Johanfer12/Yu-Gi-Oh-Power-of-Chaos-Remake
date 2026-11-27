@@ -4,6 +4,13 @@
 
 For installation and updates, see the [Android update guide](docs/ANDROID_UPDATES.md#in-app-update).
 
+## v0.1.0-alpha.48
+
+- Import a PNG, JPEG, or WebP from **Import more resources** to set a custom background around the duel board. Overlay mode fills the window with a centered crop and preserves the image's proportions. The same menu restores the original backgrounds.
+- Defeats save as soon as the result screen opens. Victories with card rewards save when you accept the cards. With Google Drive connected, synchronization starts at those points.
+- The deck editor saves and syncs changes as they happen, including undo, redo, and accepted deck imports. Incomplete edits reopen as drafts while the last playable deck remains available for duels.
+- The launcher update dialog shows the last three compatible releases. Graveyard effects no longer cover the deck count, and cursor prompts scale with smoother edges.
+
 ## v0.1.0-alpha.47
 
 - On Windows and Android, **Continue** resumes a local duel against the CPU from its last saved point. The launcher shows both players’ LP and asks before discarding a saved duel.
