@@ -210,7 +210,7 @@ func _prepare_card(point: Vector2) -> void:
 	_preparing = false
 	var mask: int = Game._screen._duel.m.u16(0xa1340a)
 	var can_act := _has_right_action(point)
-	_right_available = can_act and mask != 0 and (mask & (mask - 1)) != 0
+	_right_available = can_act and mask != 0 and ((mask & (mask - 1)) != 0 or _mode() == "menu")
 	_actions.clear()
 	var scene: Node = Game._screen
 	# Con un único atacante legal, el primer toque ya elige Atacar.
@@ -218,6 +218,7 @@ func _prepare_card(point: Vector2) -> void:
 			and scene._visual._battle.state == 1 and scene._attackers_available() == 1:
 		_touch_card = ""
 		_selected_card = ""
+		_right_available = false  # el menu no se abre: se mantiene el toque directo
 	if _right_available:
 		var d = Game._screen._duel
 		var ordered: Array[int] = []
@@ -267,7 +268,7 @@ func _begin_drag(start: Vector2) -> void:
 
 func _show_at(point: Vector2) -> void:
 	_target = point
-	var count := maxi(2, _actions.size())
+	var count := _actions.size() if not _actions.is_empty() else 2
 	while _choices.size() < count:
 		var extra := Button.new()
 		extra.focus_mode = Control.FOCUS_NONE
@@ -515,6 +516,10 @@ func _card_identity(point: Vector2) -> String:
 	return ""
 
 func _finish_card_tap(point: Vector2) -> void:
+	if _touch_card.begins_with("duel:") and _right_available and not _actions.is_empty() and _mode() == "menu":
+		_selected_card = ""
+		_show_at(point)
+		return
 	if _selected_card != _touch_card:
 		_selected_card = _touch_card
 		var scene: Node = Game._screen

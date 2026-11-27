@@ -55,7 +55,7 @@ def portable_editor(engine: Path, cache: Path, work: Path, java: Path, sdk: Path
     return editor / engine.name
 
 
-def build(cache: Path, out: Path, keystore: Path | None) -> dict:
+def build(cache: Path, out: Path, keystore: Path | None, abi: str = "arm64") -> dict:
     out = out.resolve()
     if out.exists():
         raise ValueError("El destino debe ser nuevo")
@@ -75,9 +75,9 @@ def build(cache: Path, out: Path, keystore: Path | None) -> dict:
     godot = portable_editor(engine, cache, work, java, sdk, keystore.resolve())
     source = out / "source"
     prepare_android(ROOT, source)
-    apk = out / "PowerOfChaos-Android.apk"
+    apk = out / ("PowerOfChaos-Android.apk" if abi == "arm64" else "PowerOfChaos-Android-ARMv7.apk")
     subprocess.run([sys.executable, str(source / "tools/android/build_apk.py"), "--engine-only",
-                    "--release" if release else "--first-build", "--godot", str(godot), "--sdk", str(sdk),
+                    "--release" if release else "--first-build", "--abi", abi, "--godot", str(godot), "--sdk", str(sdk),
                     "--debug-keystore", str(keystore.resolve()), "--work", str(work / "build"),
                     "--output", str(apk)], check=True, env=env)
     shutil.copyfile(work / "build/ANDROID_RELEASE.json", out / "ANDROID_RELEASE.json")
@@ -92,5 +92,7 @@ if __name__ == "__main__":
     parser.add_argument("--engine-cache", type=Path, required=True)
     parser.add_argument("--keystore", type=Path, help="clave de firma publicada (secreto del repositorio)")
     parser.add_argument("--out", type=Path, required=True, help="directorio nuevo fuera del repositorio")
+    parser.add_argument("--abi", choices=("arm64", "armv7"), default="arm64",
+                        help="arm64 (official) or armv7 (32-bit ARM devices)")
     args = parser.parse_args()
-    build(args.engine_cache, args.out, args.keystore)
+    build(args.engine_cache, args.out, args.keystore, args.abi)

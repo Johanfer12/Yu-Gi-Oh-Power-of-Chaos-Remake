@@ -64,6 +64,8 @@ No hace falta clonar esta rama para usar **Crear APK** normalmente. Los desarrol
 
 Para actualizar una instalación personalizada, cambia `--first-build` por `--previous-apk <tu-anterior.apk>` y usa su clave original. El flujo normal de **Crear APK** entrega el APK público oficial.
 
+Para dispositivos con procesador ARM de 32 bits (armeabi-v7a), añade `--abi armv7` al mismo comando. Sólo cambia la copia de exportación temporal: el preset del repositorio y el APK público oficial siguen siendo de 64 bits (arm64-v8a). El actualizador de la app sólo conoce el APK público de 64 bits, así que actualiza las compilaciones de 32 bits manualmente con la misma clave de firma.
+
 Para preparar sólo el paquete privado de recursos basta con Godot:
 
     python tools/android/build_apk.py --content-only --godot <godot_console.exe> --data <tus-datos-compactos> --work <carpeta-nueva> --content-output <recursos-privados.pck>
