@@ -26,6 +26,17 @@ def release_version(root=ROOT):
     return "v" + re.search(r'config/version="([^"]+)"', text).group(1)
 
 
+def use_armv7(presets: Path) -> None:
+    """Export 32-bit ARM instead of 64-bit ARM in a staged copy; the repository preset stays arm64."""
+    text = presets.read_text(encoding="utf8")
+    for old, new in (("architectures/armeabi-v7a=false", "architectures/armeabi-v7a=true"),
+                     ("architectures/arm64-v8a=true", "architectures/arm64-v8a=false")):
+        if text.count(old) != 1:
+            raise RuntimeError(f"Cannot switch the export to ARMv7, preset line not found once: {old}")
+        text = text.replace(old, new)
+    presets.write_text(text, encoding="utf8", newline="\n")
+
+
 def android_version_code(root=ROOT):
     """versionCode of the Android Tablet export preset."""
     text = (root / "game/export_presets.cfg").read_text(encoding="utf8").split('name="Android Tablet"', 1)[1]
@@ -122,6 +133,8 @@ def main():
     parser.add_argument("--first-build", action="store_true", help="primera instalación con tu propia firma, sin APK previo")
     parser.add_argument("--release", action="store_true", help="APK público: exige el certificado publicado, sin APK previo")
     parser.add_argument("--engine-only", action="store_true", help="public APK without original game content")
+    parser.add_argument("--abi", choices=("arm64", "armv7"), default="arm64",
+                        help="CPU architecture to export: arm64 (default, official) or armv7 (32-bit ARM devices)")
     parser.add_argument("--content-only", action="store_true", help="export private content PCK, without building/signing an APK")
     parser.add_argument("--content-output", type=Path)
     args = parser.parse_args()
@@ -175,6 +188,8 @@ def main():
                                verify_signing_key(tools, args.previous_apk, args.debug_keystore))
     shutil.copytree(ROOT / "game", STAGE, ignore=shutil.ignore_patterns(
         ".godot", "tests", "temp", "artifacts", "unused", "*.uid", "share_smoke.gd"))
+    if args.abi == "armv7":
+        use_armv7(STAGE / "export_presets.cfg")
     validation = OUT / f"v{CODE}-validation"
     validation.mkdir(exist_ok=True)
     # El empaquetado solo necesita Paths, sin arrancar los autoloads del juego.
@@ -245,7 +260,9 @@ def main():
     (OUT / f'v{CODE}-build-manifest.json').write_text(json.dumps(report, indent=2), encoding='utf8')
     apk.with_suffix('.apk.sha256').write_text(digest(apk)+"  "+apk.name+"\n", encoding='ascii')
     if args.engine_only:
-        metadata = dict(package='org.porttesting.powerofchaos', apk='PowerOfChaos-Android.apk', version=TAG, version_code=CODE, sha256=digest(apk), signing_certificate_sha256=signing_certificate, original_game_data_included=False, content_format=1)
+        metadata = dict(package='org.porttesting.powerofchaos', apk='PowerOfChaos-Android.apk' if args.abi == 'arm64' else 'PowerOfChaos-Android-ARMv7.apk', version=TAG, version_code=CODE, sha256=digest(apk), signing_certificate_sha256=signing_certificate, original_game_data_included=False, content_format=1)
+        if args.abi != 'arm64':
+            metadata['abi'] = args.abi
         (OUT / 'ANDROID_RELEASE.json').write_text(json.dumps(metadata, indent=2), encoding='utf8')
     for temporary in [validation / 'pack-save', validation / 'bundle-save']:
         assert temporary.resolve().parent == validation.resolve()

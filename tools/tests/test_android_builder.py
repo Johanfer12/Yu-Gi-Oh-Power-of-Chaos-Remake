@@ -1,6 +1,7 @@
 """Contratos del puente Android: aislado, publicacion tras validar y fallos seguros."""
 import json
 import hashlib
+import importlib.util
 import os
 from pathlib import Path
 import tempfile
@@ -188,6 +189,43 @@ class AndroidBuilderTests(unittest.TestCase):
 
     def test_failure_does_not_publish_apk_or_change_pc(self):
         self._build(True)
+
+
+class AndroidArchitectureTests(unittest.TestCase):
+    """--abi armv7 solo cambia la copia de exportacion; el preset oficial sigue siendo arm64."""
+    ROOT = Path(__file__).resolve().parents[2]
+
+    def _build_apk(self):
+        spec = importlib.util.spec_from_file_location("build_apk_under_test", self.ROOT / "tools/android/build_apk.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_official_preset_stays_arm64_only(self):
+        text = (self.ROOT / "game/export_presets.cfg").read_text(encoding="utf8")
+        for line in ("architectures/arm64-v8a=true", "architectures/armeabi-v7a=false",
+                     "architectures/x86=false", "architectures/x86_64=false"):
+            self.assertEqual(text.count(line), 1, line)
+
+    def test_armv7_switch_changes_only_the_two_architecture_lines(self):
+        original = (self.ROOT / "game/export_presets.cfg").read_text(encoding="utf8")
+        with tempfile.TemporaryDirectory() as temporary:
+            presets = Path(temporary) / "export_presets.cfg"
+            presets.write_text(original, encoding="utf8", newline="\n")
+            self._build_apk().use_armv7(presets)
+            changed = presets.read_text(encoding="utf8")
+        before, after = original.splitlines(), changed.splitlines()
+        self.assertEqual(len(before), len(after))
+        self.assertEqual(sorted(f"{old} -> {new}" for old, new in zip(before, after) if old != new),
+                         ["architectures/arm64-v8a=true -> architectures/arm64-v8a=false",
+                          "architectures/armeabi-v7a=false -> architectures/armeabi-v7a=true"])
+
+    def test_armv7_switch_refuses_an_unexpected_preset(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            presets = Path(temporary) / "export_presets.cfg"
+            presets.write_text("architectures/armeabi-v7a=false\narchitectures/arm64-v8a=false\n", encoding="utf8")
+            with self.assertRaisesRegex(RuntimeError, "ARMv7"):
+                self._build_apk().use_armv7(presets)
 
 
 if __name__ == "__main__":

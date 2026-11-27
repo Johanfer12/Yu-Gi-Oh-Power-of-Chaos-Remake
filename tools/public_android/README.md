@@ -64,6 +64,8 @@ Cloning this branch is unnecessary for normal **Create APK** use. Developers can
 
 For a matching update to a custom installation, replace `--first-build` with `--previous-apk <your-previous.apk>` and use its original signing key. Normal users receive the official public APK through **Create APK**.
 
+For devices with a 32-bit ARM processor (armeabi-v7a), add `--abi armv7` to the same command. Only the staged export copy changes: the repository's export preset and the official public APK stay 64-bit (arm64-v8a). The in-app updater only knows the public 64-bit APK, so update 32-bit builds manually with the same signing key.
+
 To prepare only a private resource pack, Godot is sufficient:
 
     python tools/android/build_apk.py --content-only --godot <godot_console.exe> --data <your-compact-data> --work <new-work-directory> --content-output <private-resources.pck>
