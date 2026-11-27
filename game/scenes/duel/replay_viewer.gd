@@ -394,17 +394,27 @@ func _set_joey_detail_fonts() -> void:
 
 ## Eventos del motor que fijan la carta del panel de detalle (duelo normal y demo).
 func _detail_event(data: Dictionary) -> void:
-	if data.get("kind", "") == "detail":
+	var event_kind: String = data.get("kind", "")
+	var card_id: int
+	if event_kind == "detail":
 		# Joey 41b050: los comandos que ponen o activan una carta la muestran en el panel.
-		_set_preview(int(data["card"]))
+		card_id = int(data["card"])
 		_detail_this_tick = game == "joey"
 	# Yugi/Kaiba: 4029d0 (0x6e, 0x75, 0x76) y 405c10 (0x6f) ponen su carta en el panel con el metodo
 	# +0x24 del objeto de detalle (5af76c+0x38), como Joey 41b050; el nucleo los emite como "cmd".
 	# Los manejadores portados (0x1e, 0x71, 0x72, 0xa5, 0xdf) emiten "detail" ellos mismos.
-	if game in ["yugi", "kaiba"] and data.get("kind", "") == "cmd" and int(data.get("op", 0)) & 0x7fff in [0x6e, 0x6f, 0x75, 0x76]:
+	elif game in ["yugi", "kaiba"] and event_kind == "cmd" and int(data.get("op", 0)) & 0x7fff in [0x6e, 0x6f, 0x75, 0x76]:
 		var args: Array = data.get("args", [])
-		if not args.is_empty() and int(args[0]) > 0:
-			_set_preview(int(args[0]))
+		if args.is_empty() or int(args[0]) <= 0:
+			return
+		card_id = int(args[0])
+	else:
+		return
+	# Si el motor escribe el panel en el mismo tick que el puntero, volver a consultar
+	# el puntero quieto en el siguiente tick. Si se mueve, el contador empieza de nuevo.
+	if game in ["yugi", "kaiba"] and _preview_hover_ticks == 4:
+		_preview_hover_ticks = 3
+	_set_preview(card_id)
 
 func _set_preview(id: int, from_rival_hand := false) -> void:
 	_preview_from_rival_hand = from_rival_hand and id >= 0

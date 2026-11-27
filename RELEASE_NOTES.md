@@ -4,6 +4,13 @@
 
 For installation and updates, see the [Android update guide](docs/ANDROID_UPDATES.md#in-app-update).
 
+## v0.1.0-alpha.46
+
+- On Android, the duel engine loads in the background during the rival intro and rock-paper-scissors. This reduces the pause when entering the first duel of a session.
+- Yugi's Tribute Summon comic now shows the second line as the SUMMON banner appears (issue #20).
+- Yugi's duel effects skip voice waits when the voice is silenced, and the card detail panel refreshes when a duel event and a stationary pointer update it on the same tick.
+- In Joey, the field now marks Monster Zones blocked by an active effect.
+
 ## v0.1.0-alpha.45
 
 - Cards placed face down show their backs as soon as the placement animation ends.

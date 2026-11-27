@@ -6,15 +6,15 @@
 
 **English** | [Español](README.es.md)
 
-[![Download EXE for Windows](https://img.shields.io/badge/Download_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.45/PowerOfChaos.exe)
+[![Download EXE for Windows](https://img.shields.io/badge/Download_EXE-Windows-2ea44f?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.46/PowerOfChaos.exe)
 
-[![Download Android APK](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.45/PowerOfChaos-Android.apk)
+[![Download Android APK](https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge)](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.46/PowerOfChaos-Android.apk)
 
-**Direct download · Windows · v0.1.0-alpha.45 preview · No ZIP required**
+**Direct download · Windows · v0.1.0-alpha.46 preview · No ZIP required**
 
 **Bring your Power of Chaos games together in one modern Windows launcher.**
 
-**New in alpha.45.** Face-down cards appear immediately, Kaiba’s match results follow the original animation, and Joey’s comic reaction animates again. [Release notes](RELEASE_NOTES.md)
+**New in alpha.46.** Android prepares the duel engine during the rival intro and rock-paper-scissors. Yugi’s Tribute Summon comic shows both lines, and Joey’s field marks blocked Monster Zones. [Release notes](RELEASE_NOTES.md)
 
 ## Contents
 
@@ -117,7 +117,7 @@ You provide a compatible copy of the game you want to play. The launcher reads i
 
 ## Get started on Windows
 
-1. [Download **`PowerOfChaos.exe`** directly](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.45/PowerOfChaos.exe). Development builds are also available in [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
+1. [Download **`PowerOfChaos.exe`** directly](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/releases/download/v0.1.0-alpha.46/PowerOfChaos.exe). Development builds are also available in [Actions](https://github.com/Johanfer12/Yu-Gi-Oh-Power-of-Chaos-Remake/actions/workflows/build-windows.yml).
 2. Put the EXE in a folder where you want to keep the launcher and its saves, then open it.
 3. In **ADD YOUR RESOURCES**, move over the game you want to add and choose **ISO** or **Folder**.
 4. Select a compatible disc image or installed game folder, then click **Build** and wait for conversion to finish.

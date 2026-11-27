@@ -29,6 +29,12 @@ static func voice_ms(path: String) -> int:
 		_voice_ms[path] = int(stream.get_length() * 1000) if stream != null else 0
 	return int(_voice_ms[path] * maxf(1.0, Engine.time_scale))
 
+
+static func _voice_wait_ticks(path: String) -> int:
+	if Audio.level == 0 or Audio.voice_disabled(path):
+		return 0
+	return int(ceil(NativeClock.ticks(voice_ms(path) / 1000.0)))
+
 static func animation_index(code: int, group: int, frame: int, voice_duration_ms: int, tick: int) -> int:
 	var mode := code % 1000
 	var voice_ticks := voice_duration_ms / 33
@@ -569,8 +575,8 @@ static func _summon(d: Dictionary, duel: Duel) -> Dictionary:
 	var intro := "yugi/voice/internal/yugi_%02d.wav" % (4 + random % 3)
 	var second := "yugi/voice/internal/yugi_%02d.wav" % (8 if int(args[2]) == 1 else 7)
 	var final_voice := "yugi/voice/internal/yugi_%02d.wav" % (11 if int(args[0]) == 0x26 else 10 if int(args[0]) == 0x15 else 9)
-	var second_frame := maxi(65, 32 + int(ceil(NativeClock.ticks(voice_ms(intro) / 1000.0))))
-	var final_frame := second_frame + maxi(33, int(ceil(NativeClock.ticks(voice_ms(second) / 1000.0))))
+	var second_frame := maxi(65, 32 + _voice_wait_ticks(intro))
+	var final_frame := second_frame + maxi(33, _voice_wait_ticks(second))
 	d.merge({"mode": "summon_portrait", "random": random, "second_frame": second_frame, "final_frame": final_frame, "frames": final_frame + 33, "sound": "yugi/voice/stream/j_bm.wav", "sounds": [[32, intro], [second_frame, second], [final_frame, final_voice]]}, true)
 	return d
 
@@ -593,19 +599,22 @@ static func _gofu(d: Dictionary, duel: Duel) -> Dictionary:
 	var random := visual_rand(duel) & 1
 	var first := "yugi/voice/internal/yugi_%02d.wav" % (15 + random)
 	var second := "yugi/voice/internal/yugi_17.wav"
-	var second_frame := maxi(80, 15 + int(ceil(NativeClock.ticks(voice_ms(first) / 1000.0))))
-	var final_frame := second_frame + maxi(33, int(ceil(NativeClock.ticks(voice_ms(second) / 1000.0))))
+	# La pista de entrada arranca al crear el retrato. El contador del efecto
+	# empieza nueve ticks después, cuando suena gofuken (trazas Yugi 7 y 8).
+	var lead_in := 9
+	var second_frame := lead_in + maxi(80, 15 + _voice_wait_ticks(first))
+	var final_frame := second_frame + maxi(33, _voice_wait_ticks(second))
 	d.merge({"mode": "gofu_portrait", "random": random, "second_frame": second_frame,
-			"final_frame": final_frame, "frames": final_frame + 9,
+			"lead_in": lead_in, "final_frame": final_frame, "frames": final_frame + 9,
 			"sound": "yugi/voice/stream/j_hg.wav",
-			"sounds": [[0, "yugi/voice/internal/gofuken.wav"], [15, first], [second_frame, second]]}, true)
+			"sounds": [[lead_in, "yugi/voice/internal/gofuken.wav"], [lead_in + 15, first], [second_frame, second]]}, true)
 	return d
 
-## Contador del dibujo en el fotograma `frame` (0 = primer update, c = 4).
+## Contador del dibujo en el fotograma `frame` (primer update c = 4).
 static func gofu_counter(event: Dictionary, frame: int) -> int:
 	if frame >= int(event["final_frame"]): return 0x20000 + (frame - int(event["final_frame"])) * 4
 	if frame >= int(event["second_frame"]): return 0x10000 + (frame - int(event["second_frame"])) * 4
-	return (frame + 1) * 4
+	return maxi(0, frame - int(event.get("lead_in", 0)) + 1) * 4
 
 static func _render_gofu(owner: Node2D, event: Dictionary, frame: int) -> void:
 	_timed_sounds(event, frame)
@@ -686,8 +695,16 @@ static func _render_summon(owner: Node2D, event: Dictionary, frame: int) -> void
 				var index: int = [0, 6, 7, 6][mouth]
 				_sprite(owner, "yugi", layout.resource(index), origin + Vector2(layout.position(index)))
 	if counter > 127:
+		# 40db06: redibuja solo la parte del bocadillo inicial sobre el fondo azul.
+		# El segundo bocadillo permanece en la superficie por encima de ese recorte.
 		var speech := 8 + random % 3
-		_sprite(owner, "yugi", layout.resource(speech), Vector2(layout.position(speech)))
+		var foreground := _sprite(owner, "yugi", layout.resource(speech), Vector2(layout.position(speech)))
+		if foreground != null:
+			var top := maxf(0, layout.position(0).y - foreground.position.y)
+			var size := foreground.texture.get_size()
+			foreground.region_enabled = true
+			foreground.region_rect = Rect2(0, top, size.x, maxf(0, size.y - top))
+			foreground.position.y += top
 	if counter >= 0x20000 and counter < 0x20080:
 		var label := _sprite(owner, "yugi", layout.resource(1), Vector2.ZERO)
 		if label != null:

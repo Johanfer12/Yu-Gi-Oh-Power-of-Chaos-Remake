@@ -22,6 +22,10 @@ var _mobile_pointer: CanvasLayer
 
 const DUEL_VIEWER_PATH := "res://scenes/duel/replay_viewer.gd"
 
+const NORMAL_DUEL_PATH := "res://scenes/duel/normal_duel.gd"
+const JOEY_NORMAL_DUEL_PATH := "res://scenes/duel/joey_native_normal.gd"
+var _duel_script_requests := {}
+
 var current_game := ""
 ## Mazo del rival elegido al entrar al duelo desde el menu (0x437c60), "" = el de demo1.
 var rival_deck := ""
@@ -60,6 +64,12 @@ func _process(delta: float) -> void:
 	_ticks += steps
 	for _i in steps: native_blend.tick()
 	native_blend.fraction = _native_clock
+
+
+func _exit_tree() -> void:
+	for thread: Thread in _duel_script_requests.values():
+		thread.wait_to_finish()
+	_duel_script_requests.clear()
 
 
 func _input(event: InputEvent) -> void:
@@ -304,11 +314,36 @@ func open_joey_demo() -> void:
 
 
 func open_normal_duel(game: String, start_options := -1) -> void:
+	var path := JOEY_NORMAL_DUEL_PATH if game == "joey" else NORMAL_DUEL_PATH
+	var script: GDScript
+	var thread: Thread = _duel_script_requests.get(path)
+	if thread != null:
+		var previous_screen := _screen
+		while thread.is_alive():
+			await get_tree().process_frame
+			if _screen != previous_screen:
+				return
+		if _duel_script_requests.erase(path):
+			script = thread.wait_to_finish() as GDScript
+	if script == null:
+		script = load(path)
 	current_game = game
 	if game == "joey":
-		goto(load("res://scenes/duel/joey_native_normal.gd").new(start_options))
+		goto(script.new(start_options))
 	else:
-		goto(load("res://scenes/duel/normal_duel.gd").new(game, start_options))
+		goto(script.new(game, start_options))
+
+
+func _prepare_normal_duel_script(game: String) -> void:
+	if not Paths.android_platform():
+		return
+	var path := JOEY_NORMAL_DUEL_PATH if game == "joey" else NORMAL_DUEL_PATH
+	if _duel_script_requests.has(path) or ResourceLoader.has_cached(path):
+		return
+	# Compilar el script y sus dependencias en un solo hilo. La escena se crea en el principal.
+	var thread := Thread.new()
+	if thread.start(func() -> Resource: return ResourceLoader.load(path, "GDScript")) == OK:
+		_duel_script_requests[path] = thread
 
 
 ## Duelo desde el menu: en Yugi pasa antes por la entrada de Yugi (escena 6, DAT_005af6f8 = 0).
@@ -330,6 +365,7 @@ func start_normal_duel(game: String, mode := 0) -> void:
 	var script: GDScript = load("res://scenes/duel/bust_up_scene.gd") if game == "yugi" else load("res://scenes/duel/bust_up_rival.gd")
 	var scene: Node2D = script.new(game)
 	scene.finished.connect(open_janken.bind(game), CONNECT_ONE_SHOT)
+	_prepare_normal_duel_script(game)
 	goto(scene)
 
 
@@ -341,6 +377,7 @@ func open_janken(game: String) -> void:
 	scene.lan = duel_mode == 3 and Lan.active()
 	scene.lost.connect(func() -> void: lan_lost(game), CONNECT_ONE_SHOT)
 	scene.finished.connect(func(options: int) -> void: open_normal_duel(game, options), CONNECT_ONE_SHOT)
+	_prepare_normal_duel_script(game)
 	goto(scene)
 
 

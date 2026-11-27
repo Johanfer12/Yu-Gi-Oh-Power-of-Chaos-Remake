@@ -1,7 +1,7 @@
 extends Node2D
 ## Joey4497d0/449850: diez estados de3 bits; entrada1..7, dibujo chinka[q/2].
-## 569e10/569fc0 comprueban inutilizacion, nunca ocupacion. Se leen los vinculos
-## equivalentes del nucleo compartido Yugi, sin cambiar su memoria ni su RNG.
+## El adaptador de Joey consulta los bloqueos nativos con 569e10. Las repeticiones
+## con motor compartido leen las marcas y los vínculos de su propio estado.
 var states := PackedInt32Array()
 var _sprites: Array[Sprite2D] = []
 var _textures: Array[Texture2D] = []
@@ -20,6 +20,8 @@ func _ready() -> void:
 	for index in 4: _textures.append(Assets.texture("joey/duel/effect/chinka%d.yga" % (index + 1)))
 
 static func blocked(duel: Duel, p: int, z: int) -> bool:
+	if duel is JoeyPresentationAdapter:
+		return duel.engine.f569e10(p ^ duel.local_native_player, z) == 0
 	if (duel.m.u8(DuelMem.pl(p) + 0x12) & (1 << z)) != 0: return true
 	var at := DuelMem.zone(p, z)
 	for index in duel.m.u16(at + 0x88):
